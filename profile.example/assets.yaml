@@ -1,0 +1,79 @@
+# EXAMPLE PROFILE — anonymised. Fictional person, fictional companies.
+#
+# Differentiators and targeting. The scorer reads `differentiators` to decide
+# what a given application should lead with, and `target_roles` /
+# `target_filters` to triage inbound leads before a human looks at them.
+
+differentiators:
+  - id: founder_operator
+    label: Multiple-time co-founder with an exit
+    detail: >-
+      Built and sold a consumer marketplace; co-founder and CTO on an MVP that
+      supported a Series A; co-founder of an open-source platform now running
+      in production at an enterprise client. Early employee with retained
+      equity at a SaaS company currently in a sale process.
+    use_when: [startup, scaleup, gm_role, head_of_engineering, consulting]
+    strength: strong
+
+  - id: ai_in_production
+    label: AI adoption demonstrated, not described
+    detail: >-
+      Deployed agentic coding tooling into a 15-person team's production
+      workflow. Currently building two agentic systems end to end.
+    use_when: [ai_adoption, ai_enablement, engineering_manager, modern_eng_leadership]
+    strength: strong
+    note_for_scorer: >-
+      Most candidates claiming AI capability have used a chat interface. The
+      distinction worth drawing out is production deployment across a team,
+      including the parts that failed.
+
+  - id: sector_breadth
+    label: Sector breadth
+    detail: >-
+      Defence, banking, government, education, SaaS, manufacturing,
+      marketplace. Reduces onboarding risk in regulated or unfamiliar domains.
+    use_when: [government, fintech, regulated, consulting]
+    strength: moderate
+
+  - id: hands_on_leader
+    label: Leads teams without leaving the codebase
+    detail: TODO — needs a concrete recent example of being in the code.
+    use_when: [engineering_manager, team_lead, hands_on_role]
+    strength: weak
+
+# Target roles in priority order. The triage scorer weights leads against this
+# list before anything is surfaced for human review.
+target_roles:
+  - Engineering Manager
+  - Head of Engineering / GM Technology (small organisations)
+  - AI Adoption / AI Enablement Lead
+  - Technical Project Manager
+  - Solution Architect (selectively)
+
+target_filters:
+  location: Melbourne, or fully remote AU
+  max_commute_minutes: 45
+  max_commute_rationale: >-
+    Hard constraint. A previous role ended over commute load; treat a breach as
+    a skip regardless of how well the role scores otherwise.
+  min_salary_aud: 000000
+  work_types: [permanent, contract, fractional]
+  avoid:
+    - Roles requiring deep ML or data science (model training, feature engineering)
+    - Pure people-management with no technical involvement
+    - Stated on-site requirements beyond the commute limit
+    - Roles where the advertised salary band sits below min_salary_aud
+
+# Signals that should raise the score, drawn from past outcomes. Revisit after
+# the eval harness exists — these are currently intuition, not measurement.
+positive_signals:
+  - Recruiter-mediated rather than direct portal application
+  - Company between 20 and 200 engineers
+  - JD names a specific problem rather than listing technologies
+  - Contract or fixed-term, which historically converts faster
+
+negative_signals:
+  - Requires a technology as a hard must-have where evidence_strength is weak
+  - Job ad has been reposted repeatedly over months
+  - No salary band disclosed
+  - Seniority materially below target with no compensating factor

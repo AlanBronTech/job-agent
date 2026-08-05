@@ -1,0 +1,186 @@
+# EXAMPLE PROFILE — anonymised. Fictional person, fictional companies.
+#
+# The behavioural story bank. Generation and interview prep select from these
+# and may never invent. Where no story covers a question type, the correct
+# output is "no story available", not a plausible fabrication.
+#
+# Write each story as you would say it out loud. Prose that reads like a resume
+# bullet will sound rehearsed when spoken.
+#
+# `story_ids` are referenced from roles.yaml via `linked_story`. Keep them in
+# sync — the loader validates the references and fails on a dangling id.
+#
+# `question_types` drives matching against likely interview questions. Use
+# values from the controlled list below.
+
+question_type_vocabulary:
+  - technical_depth
+  - end_to_end_delivery
+  - architecture
+  - risk_management
+  - failure
+  - judgement
+  - quality
+  - disagreement
+  - influence
+  - stakeholder_management
+  - leadership
+  - difficult_people
+  - performance_management
+  - change_management
+  - ai_adoption
+  - initiative
+  - ambiguity
+
+stories:
+  - id: incremental_replatform
+    label: Incremental re-platform of a transaction-critical system
+    question_types: [technical_depth, end_to_end_delivery, risk_management, architecture]
+    strength: strong
+    situation: >-
+      A payments-adjacent SaaS platform serving thousands of institutions was
+      running on a legacy stack that could not be released safely. Releases
+      were manual, fortnightly at best, and frequently rolled back.
+    task: >-
+      Own the re-platform without an outage window. The business would not
+      accept a big-bang cutover on a system handling live transactions.
+    action: >-
+      Ran the new and legacy stacks side by side behind a routing layer,
+      migrating one bounded context at a time and keeping the legacy path live
+      as a fallback throughout. Chose incremental strangulation over a rewrite
+      specifically because the rollback story was cheaper — any single
+      migration could be reverted by flipping one route. Introduced GitFlow,
+      cloud CI/CD and automated regression testing before starting the
+      migration, on the argument that you cannot migrate safely onto a
+      foundation you cannot release from.
+    result: >-
+      Migration completed with no unplanned outage. Release cadence moved from
+      fragile fortnightly to confident continuous delivery.
+    what_id_do_differently: >-
+      Sequenced the observability work earlier. The first two migrations were
+      slower than they needed to be because failures were hard to attribute
+      between the old and new paths.
+    note_for_scorer: >-
+      Primary technical anchor. Contains engineering decisions with stated
+      trade-offs, which is what stops the candidate reading as a project
+      manager. Prefer this story for depth questions.
+
+  - id: scope_disagreement
+    label: Disagree and commit on premature scope
+    question_types: [disagreement, stakeholder_management, influence, leadership]
+    strength: strong
+    situation: >-
+      Stakeholders at an early-stage company wanted a full feature set built
+      ahead of any validated demand.
+    task: >-
+      Give an honest engineering assessment of the cost and risk, then deliver
+      whatever was decided.
+    action: >-
+      Argued for a narrower first release with instrumentation to test the
+      demand assumption, and put the cost difference in writing so the choice
+      was explicit rather than implied. Was overruled. Committed to the wider
+      scope without relitigating it in front of the team, and restructured
+      delivery to land the riskiest assumptions first so a course correction
+      would still be possible.
+    result: >-
+      Full platform delivered in 8 months on budget with a team of 6.
+    what_id_do_differently: >-
+      Framed the initial argument in commercial terms rather than engineering
+      ones. The cost case was correct but landed as an engineer being cautious.
+    note_for_scorer: >-
+      Reliable anchor for disagree-and-commit, influence without authority, and
+      stakeholder management questions.
+
+  - id: underperformer
+    label: Managing an underperformer
+    question_types: [difficult_people, performance_management, leadership]
+    strength: strong
+    situation: >-
+      A developer on a 15-person team was consistently missing commitments and
+      the surrounding engineers had started routing work around them.
+    task: >-
+      Address it without losing the person if it was salvageable, and without
+      letting the team absorb the cost indefinitely.
+    action: >-
+      Established a specific, written expectation with dates rather than
+      general feedback, met weekly, and separated capability problems from
+      motivation problems before choosing a response.
+    result: >-
+      TODO — state the outcome plainly, including if it ended in an exit.
+    what_id_do_differently: >-
+      Engage HR earlier. Waiting until the informal route had failed narrowed
+      the options that remained.
+
+  - id: quality_under_pressure
+    label: Compromised testing under deadline pressure
+    question_types: [failure, judgement, quality]
+    strength: moderate
+    situation: TODO
+    task: TODO
+    action: TODO
+    result: TODO
+    what_id_do_differently: TODO
+    note_for_scorer: >-
+      A failure story must contain a decision the candidate actually got wrong,
+      not a misfortune that happened to them. If it reads as bad luck, it will
+      not satisfy the question.
+
+  - id: ai_tooling_rollout
+    label: Rolling agentic coding tooling out to a 15-person team
+    question_types: [ai_adoption, change_management, leadership, technical_depth]
+    strength: strong
+    situation: >-
+      A 15-person team with a decade of accumulated technical debt and no prior
+      exposure to AI-assisted development.
+    task: >-
+      Move the team from first exposure to routine daily use without degrading
+      code quality or review standards.
+    action: >-
+      Defined which work was in scope for the tooling and which was not, set
+      review gates so generated code faced the same bar as any other, and
+      handled the two failure modes separately — engineers who refused to use
+      it and engineers who trusted it uncritically. Targeted the technical debt
+      backlog first because it was well-specified, low-risk and produced
+      visible wins early.
+    result: >-
+      TODO — this needs a number (adoption rate, throughput change, defect
+      rate, deployment frequency) or it is an anecdote rather than evidence.
+    what_id_do_differently: TODO
+
+  - id: research_agent_build
+    label: Literature-review agent for an academic researcher
+    question_types: [ai_adoption, technical_depth, initiative, architecture]
+    strength: moderate
+    situation: >-
+      A doctoral researcher was spending weeks manually screening abstracts
+      against inclusion criteria.
+    task: Automate the tedium without automating the judgement.
+    action: >-
+      TODO — architecture, model selection and how output quality was
+      evaluated. The evaluation answer matters most: anyone can wire up an LLM
+      call, and the follow-up question is always how you knew it was right.
+    result: TODO
+    what_id_do_differently: TODO
+
+# ---------------------------------------------------------------------------
+# Standing explanations. Not stories — canned honest answers that generation
+# and interview prep draw on for recurring awkward questions.
+# ---------------------------------------------------------------------------
+
+explanations:
+  employment_gap: >-
+    TODO — three sentences, factual, no grievance. State what happened and what
+    was done during the period. Do not editorialise about anyone's motives.
+  gap_answer_rules:
+    - Three sentences maximum. Length reads as defensiveness.
+    - >-
+      "They did not give me a detailed explanation" is a complete answer.
+    - Never characterise how the other party behaved.
+    - Never volunteer detail that reveals the sting, however true it is.
+  why_leaving_current: TODO
+  salary_expectation: TODO
+  stack_mismatch: >-
+    TODO — name the gap, then map across it with a specific case of moving
+    between stacks. Pre-empting this in writing converts better than waiting to
+    be asked, because stack fit is a screening objection rather than a hiring
+    one.

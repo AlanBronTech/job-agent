@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Secrets and local state
+client_secret.json
+gmail_token.json
+*.db
+*.db-journal
+runs.jsonl
+
+# Generated documents
+output/
+
+# IDE
+.idea/
+.DS_Store
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
+
+profile/
+*.local.yaml

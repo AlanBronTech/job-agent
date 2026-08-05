@@ -1,0 +1,490 @@
+# EXAMPLE PROFILE — anonymised. Fictional person, fictional companies.
+#
+# The real profile lives outside this repository at $PROFILE_DIR
+# (default: ~/.job-agent/profile). This directory exists to document the
+# schema and to give the loader something to validate against in tests.
+#
+# Keep this file schema-synchronised with the pydantic models whenever they
+# change. A stale example is worse than none.
+#
+# ---------------------------------------------------------------------------
+# AGE-SIGNAL POLICY — enforced here at the data layer, not by prompt instruction.
+#   - No graduation years, no date of birth, no "N+ years experience" anywhere.
+#   - Early-career roles carry no dates. They exist for the scorer's benefit
+#     and render as undated summary lines.
+#   - Rationale: data that must never appear in output should not exist in the
+#     input. A prompt instruction is a request to a probabilistic system and
+#     fails silently; an absent field cannot leak.
+#   - `visibility` controls rendering:
+#       full        -> title, company, dates, bullets
+#       summary     -> one condensed line, no dates
+#       scorer_only -> never rendered; context for fit scoring only
+#
+# EVIDENCE POLICY
+#   - Every bullet carries `evidence_strength: strong|moderate|weak`.
+#   - strong   = numbers attached; survives a 20-minute drill-down.
+#   - moderate = true and defensible, but thin on specifics.
+#   - weak     = you would be uncomfortable being challenged on it. The scorer
+#                treats weak claims as partial matches at best.
+#   - Generation may only select and reweight from this file. It may never
+#     invent. Where the profile lacks material for a requirement, the output
+#     reports a gap.
+# ---------------------------------------------------------------------------
+
+person:
+  name: Sam Rivera
+  location: Melbourne, VIC, Australia
+  email: sam.rivera@example.com
+  phone: "0400 000 000"
+  linkedin: https://www.linkedin.com/in/example/
+  github: https://github.com/example
+  headline: >-
+    Engineering leader and two-time co-founder. Builds products and the teams
+    that ship them. Current focus: applied AI and agentic systems in production
+    engineering.
+  positioning: >-
+    Founder-operator first, engineering manager second. Comfortable in an
+    executive review and in the codebase. Substantial contract and consulting
+    background, where influence has to be earned rather than assumed.
+  education:
+    - qualification: Bachelor of Engineering, Software
+      institution: Example University
+      # No year. Deliberate — see age-signal policy above.
+  certifications:
+    - name: Example AI Practitioner Certificate
+      issuer: Example Training Provider
+    - name: PRINCE2 Foundation
+      issuer: APM Group
+
+available_tags:
+  - leadership
+  - hiring
+  - ai_adoption
+  - agent_development
+  - founder
+  - replatforming
+  - cicd
+  - agile_transformation
+  - stakeholder_management
+  - delivery
+  - architecture
+  - full_stack
+  - government
+  - fintech
+  - payments
+  - saas
+  - manufacturing
+  - ecommerce
+  - data_governance
+  - contract_consulting
+  - regulated
+
+# ---------------------------------------------------------------------------
+# Founder / early-stage track record. Rendered as a dedicated section near the
+# top of the resume, ahead of chronological experience, when the JD rewards it.
+# ---------------------------------------------------------------------------
+
+founder_track_record:
+  - id: marketplace_venture
+    company: Example Marketplace
+    role: Co-founder and sole architect
+    visibility: full
+    bullets:
+      - text: >-
+          Designed and built the entire platform as sole architect and grew it
+          to 1M+ annual organic visitors.
+        tags: [founder, architecture, full_stack, ecommerce]
+        evidence_strength: strong
+      - text: >-
+          Sold following a competitive bidding process between two acquirers.
+        tags: [founder]
+        evidence_strength: strong
+
+  - id: early_saas
+    company: Example SaaS
+    role: Employee #5
+    visibility: full
+    bullets:
+      - text: >-
+          Led a 6-person team delivering an enterprise mobile application
+          platform.
+        tags: [leadership, saas, government]
+        evidence_strength: moderate
+      - text: >-
+          Retained equity; company currently in a sale process.
+        tags: [founder]
+        evidence_strength: strong
+
+  - id: oss_platform
+    company: Example OSS Platform
+    role: Co-founder and early architect
+    visibility: full
+    bullets:
+      - text: >-
+          Co-founder and early architect of an open-source enterprise data
+          governance platform — metadata management, catalogue, lineage
+          discovery and business ontology.
+        tags: [founder, data_governance, architecture]
+        evidence_strength: strong
+      - text: >-
+          In production at a large financial services client. GPLv3, five
+          contributors.
+        tags: [founder, data_governance]
+        evidence_strength: strong
+    note_for_scorer: >-
+      A co-founder set product direction; this candidate owns architecture.
+      Do not overstate ownership of product vision. `note_for_scorer` fields
+      are never rendered — they constrain the scorer only.
+
+  - id: mvp_venture
+    company: Example Ventures
+    role: Co-founder and CTO
+    visibility: full
+    bullets:
+      - text: >-
+          Delivered a cross-platform MVP (iOS, Android, web) in 18 months on a
+          $180K budget.
+        tags: [founder, delivery, full_stack]
+        evidence_strength: strong
+      - text: >-
+          The build directly supported a $650K Series A raise.
+        tags: [founder]
+        evidence_strength: strong
+
+# ---------------------------------------------------------------------------
+# AI capability. Its own section — typically the primary differentiator, and
+# the material that most changes how a reader dates the candidate.
+# ---------------------------------------------------------------------------
+
+ai_capability:
+  - id: agentic_coding_adoption
+    label: Production AI adoption
+    visibility: full
+    bullets:
+      - text: >-
+          Deployed agentic coding tooling into production across a 15-person
+          team — defined the use cases, prompting standards and review
+          practices that made adoption stick.
+        tags: [ai_adoption, leadership]
+        evidence_strength: strong
+      - text: >-
+          Applied it to a systematic technical debt programme with measurable
+          gains in code quality and deployment frequency.
+        tags: [ai_adoption, cicd, delivery]
+        evidence_strength: moderate
+        note_for_scorer: >-
+          "Measurable gains" carries no number. Expect an interviewer to ask
+          for one. Attach real figures or downgrade to weak.
+
+  - id: research_agent
+    label: Agent development
+    visibility: full
+    bullets:
+      - text: >-
+          Building an agentic system that automates academic literature
+          reviews — database searching, deduplication, LLM-based abstract
+          screening against inclusion criteria, structured output.
+        tags: [agent_development, ai_adoption, architecture]
+        evidence_strength: strong
+      - text: >-
+          Human-in-the-loop by design: the agent removes the tedium, the
+          expert keeps the judgement.
+        tags: [agent_development]
+        evidence_strength: strong
+
+  - id: ai_credentials
+    label: Credentials and tooling
+    visibility: full
+    bullets:
+      - text: >-
+          Completed a formal AI engineering certificate covering agent
+          development, LLM integration, prompt engineering and automation
+          workflow design.
+        tags: [ai_adoption]
+        evidence_strength: strong
+    caveats:
+      - >-
+        Retrieval-augmented generation is course knowledge only, with no
+        production build. Do not list as a skill. Verbal framing if asked:
+        covered through the certification, not yet built in production.
+
+  - id: legacy_ml
+    label: Applied ML background
+    visibility: scorer_only
+    bullets:
+      - text: >-
+          Built early machine learning expert systems for industrial process
+          control.
+        tags: [manufacturing, architecture]
+        evidence_strength: moderate
+    note_for_scorer: >-
+      Deliberately scorer_only. Genuine and useful for perspective, but
+      rendering long-superseded ML work as a current AI credential invites the
+      reader to date the career. Keep as a verbal talking point if an
+      interviewer probes depth of ML experience.
+
+# ---------------------------------------------------------------------------
+# Chronological experience.
+# ---------------------------------------------------------------------------
+
+roles:
+  - id: recent_manager
+    title: Software Development Manager
+    company: Example Manufacturing Co
+    location: Melbourne, VIC
+    start: 2025
+    end: 2026
+    sector: manufacturing / e-commerce
+    visibility: full
+    departure_reason: Unsustainable commute.
+    bullets:
+      - text: >-
+          Led a 15-person engineering team (12 developers, 3 QAs) across three
+          concurrent product lines; recruited and onboarded 9 people and ran
+          performance and career development.
+        tags: [leadership, hiring, delivery]
+        evidence_strength: strong
+      - text: >-
+          Introduced agentic coding tooling into production and led the team
+          through full adoption, applying it to systematic technical debt
+          remediation.
+        tags: [ai_adoption, leadership]
+        evidence_strength: strong
+      - text: >-
+          Transitioned the team from ad-hoc Kanban to structured Scrum,
+          introducing sprint cadence, code review standards and CI/CD
+          practices.
+        tags: [agile_transformation, cicd, leadership]
+        evidence_strength: strong
+
+  - id: consultancy_lead
+    title: Team Lead & Consultant (Contract)
+    company: Example Consultancy
+    location: Melbourne, VIC
+    start: 2024
+    end: 2025
+    sector: enterprise software
+    visibility: full
+    bullets:
+      - text: >-
+          Led an enterprise LMS re-platform for a global end client — came in
+          cold on an unfamiliar legacy codebase and was productive within
+          weeks.
+        tags: [replatforming, contract_consulting, architecture]
+        evidence_strength: moderate
+      - text: >-
+          Owned technical specification, cross-team dependencies and the
+          client relationship.
+        tags: [stakeholder_management, delivery]
+        evidence_strength: moderate
+
+  - id: startup_em
+    title: Engineering Manager (Contract)
+    company: Example Startup
+    location: Melbourne, VIC
+    start: 2023
+    end: 2024
+    sector: startup
+    visibility: full
+    bullets:
+      - text: >-
+          Recruited, trained and led a distributed team of 6; delivered a full
+          platform build in 8 months on budget.
+        tags: [leadership, hiring, delivery, contract_consulting]
+        evidence_strength: strong
+      - text: >-
+          Advised against over-scoping ahead of validated demand, then
+          committed and delivered when the stakeholders chose otherwise.
+        tags: [stakeholder_management, leadership]
+        evidence_strength: strong
+        linked_story: scope_disagreement
+
+  - id: bank_contracts
+    title: Contract Roles
+    company: Example Bank & Example Platform Co
+    location: Melbourne, VIC
+    start: 2021
+    end: 2022
+    sector: banking / platform
+    visibility: full
+    bullets:
+      - text: >-
+          Example Bank: full-stack delivery on cloud automation tooling
+          (Java/Spring Boot, React) inside a tightly governed financial
+          services environment.
+        tags: [full_stack, fintech, regulated, contract_consulting]
+        evidence_strength: strong
+      - text: >-
+          Example Platform Co: led 12 engineers through a platform
+          transformation as an external contractor — restructured into two
+          squads and introduced Scrum from scratch, entirely through influence.
+        tags: [leadership, agile_transformation, stakeholder_management]
+        evidence_strength: strong
+
+  - id: payments_lead
+    title: Technical Team Lead / Project Manager
+    company: Example EdTech / Example Payments
+    location: Melbourne, VIC
+    start: 2018
+    end: 2021
+    sector: education SaaS / payments
+    visibility: full
+    anchor_story: true
+    bullets:
+      - text: >-
+          Led two squads (PHP and C#/.NET) delivering fortnightly releases on a
+          high-volume, transaction-critical SaaS platform serving thousands of
+          institutions.
+        tags: [leadership, saas, payments, delivery]
+        evidence_strength: strong
+      - text: >-
+          Re-platformed the legacy .NET stack to Angular and .NET Core
+          incrementally — no big-bang cutover — while introducing GitFlow,
+          cloud CI/CD and automated testing.
+        tags: [replatforming, cicd, architecture]
+        evidence_strength: strong
+        linked_story: incremental_replatform
+      - text: >-
+          Held delivery and production stability through an acquisition,
+          managing stakeholder alignment across multiple business units.
+        tags: [stakeholder_management, delivery]
+        evidence_strength: strong
+
+  - id: pos_build
+    title: Full Stack Developer (Contract)
+    company: Example Hospitality Group
+    location: Melbourne, VIC
+    start: 2017
+    end: 2018
+    sector: hospitality / retail
+    visibility: full
+    bullets:
+      - text: >-
+          Designed and built a restaurant POS and in-store self-service
+          ordering system end to end, plus an eCommerce platform.
+        tags: [full_stack, ecommerce, architecture]
+        evidence_strength: strong
+        note_for_scorer: >-
+          Directly relevant to retail POS roles. Surface when the JD mentions
+          POS, checkout or in-store systems.
+
+# ---------------------------------------------------------------------------
+# Earlier career. Undated by policy. Rendered as one condensed line each.
+# ---------------------------------------------------------------------------
+
+earlier_career:
+  - id: super_platform
+    company: Example Wealth Management
+    role: Senior Engineer
+    visibility: summary
+    summary: >-
+      Superannuation platform upgrades (Java/Spring Boot) in a regulated
+      financial services environment.
+    tags: [fintech, regulated, full_stack]
+    evidence_strength: strong
+
+  - id: gov_systems
+    company: Example State Transport Authority
+    role: Team Lead
+    visibility: summary
+    summary: >-
+      Team Lead on a metropolitan traffic control system, subsequently
+      deployed internationally.
+    tags: [government, leadership, architecture]
+    evidence_strength: strong
+
+  - id: pricing_systems
+    company: Example Pricing Software
+    role: Development Lead
+    visibility: summary
+    summary: >-
+      Led 9 developers on a national rail pricing system; delivered on time
+      and on budget.
+    tags: [leadership, delivery]
+    evidence_strength: strong
+
+  - id: industrial_research
+    company: Example Industrial Research
+    role: Engineer
+    visibility: summary
+    summary: >-
+      Machine learning expert systems for process control; C++ firmware for
+      industrial sensors.
+    tags: [manufacturing, architecture]
+    evidence_strength: moderate
+
+  - id: defence_engineering
+    company: Example Defence Systems
+    role: Professional Engineer
+    visibility: summary
+    summary: >-
+      Jet engine test facilities and allied defence systems.
+    tags: [government, architecture]
+    evidence_strength: moderate
+
+# ---------------------------------------------------------------------------
+
+skills:
+  leadership:
+    - Team leadership (up to 15)
+    - Hiring end-to-end
+    - Performance and career development
+    - Mentoring and coaching
+    - Scrum/Agile transformation
+    - PRINCE2 Foundation
+  ai_and_automation:
+    - Agent development
+    - Prompt engineering
+    - Workflow automation
+    - LLM integration
+    - AI-assisted development practices
+  backend_and_apis:
+    - Java/Spring Boot
+    - Python
+    - Node.js
+    - TypeScript
+    - PHP/Laravel/Symfony
+    - C#/.NET Core
+    - REST APIs
+    - Microservices
+    - Async messaging
+  frontend:
+    - React
+    - Angular
+    - Vue
+    - TypeScript
+    - JavaScript
+  cloud_and_devops:
+    - AWS
+    - Azure
+    - GCP
+    - Docker
+    - CI/CD (Azure Pipelines, Jenkins, Bitbucket Pipelines, GitLab)
+    - GitFlow
+    - Infrastructure as code
+    - Observability
+  data:
+    - PostgreSQL
+    - MySQL
+    - SQL Server
+    - MongoDB
+    - Data governance
+    - Metadata management
+    - Catalogue and lineage
+  delivery:
+    - SDLC ownership
+    - Milestone planning
+    - Capacity management
+    - Technical risk
+    - Budget and vendor management
+    - Executive and stakeholder reporting
+
+# Skills deliberately withheld, with the reason. The scorer reads this to avoid
+# recommending them, and it is a useful record of why a decision was made.
+excluded_skills:
+  - skill: RAG (Retrieval Augmented Generation)
+    reason: Course knowledge only, no production build. Would not survive a drill-down.
+  - skill: Machine Learning (as a current skill tag)
+    reason: >-
+      Attracts data science and MLOps searches (model training, feature
+      engineering) which is not the target. Real, but historical.
