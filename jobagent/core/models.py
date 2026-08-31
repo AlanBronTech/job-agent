@@ -17,6 +17,7 @@ Two policies are enforced structurally rather than by prose:
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from enum import Enum
 from typing import Annotated
 
@@ -293,3 +294,80 @@ class Profile(_Base):
     stories: StoriesFile
     assets: AssetsFile
     voice: str
+
+
+# --------------------------------------------------------------------------- #
+# Job descriptions (Phase 2)
+# --------------------------------------------------------------------------- #
+
+
+class WorkType(str, Enum):
+    """Employment basis. ``unknown`` is a first-class value, not a failure.
+
+    Kept aligned with ``assets.yaml`` target_filters.work_types so a JD can be
+    matched against Alan's stated preferences without a translation layer. A JD
+    that doesn't say gets ``unknown`` rather than a guess.
+    """
+
+    permanent = "permanent"
+    contract = "contract"
+    fixed_term = "fixed_term"
+    unknown = "unknown"
+
+
+class WorkArrangement(str, Enum):
+    """Where the work happens.
+
+    Not in the BUILD_PLAN field list, but Alan's hardest filter is a commute
+    ceiling that applies differently to hybrid and on-site roles
+    (``target_filters.max_commute_basis``). Without this the scorer cannot
+    apply that constraint at all.
+    """
+
+    onsite = "onsite"
+    hybrid = "hybrid"
+    remote = "remote"
+    unknown = "unknown"
+
+
+class SalaryRange(_Base):
+    """Advertised salary. ``raw`` preserves the JD's own wording.
+
+    Split into numbers because ``min_salary_aud`` filtering needs them, and
+    kept alongside the original text because ranges are advertised in wildly
+    inconsistent forms (packages, inc. super, day rates, "competitive").
+    """
+
+    min_aud: int | None = None
+    max_aud: int | None = None
+    includes_super: bool | None = None
+    raw: str | None = None
+
+
+class JobDescription(_Base):
+    """A parsed job ad.
+
+    ``id`` is assigned by the store on insert; an unsaved JD has none.
+    ``raw_text`` is never discarded — every downstream claim must be checkable
+    against the source, and re-parsing after a prompt change needs the original.
+    """
+
+    id: int | None = None
+
+    title: str
+    company: str | None = None
+    location: str | None = None
+    work_type: WorkType = WorkType.unknown
+    work_arrangement: WorkArrangement = WorkArrangement.unknown
+    salary_range: SalaryRange | None = None
+    seniority: str | None = None
+
+    must_haves: list[str] = Field(default_factory=list)
+    nice_to_haves: list[str] = Field(default_factory=list)
+    tech_stack: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+    red_flags: list[str] = Field(default_factory=list)
+
+    source: str | None = None
+    raw_text: str
+    ingested_at: datetime

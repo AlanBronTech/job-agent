@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import typer
 
+from jobagent.cli import config as config_cli
+from jobagent.cli import jd as jd_cli
 from jobagent.cli import profile as profile_cli
 
 app = typer.Typer(
@@ -12,6 +14,8 @@ app = typer.Typer(
 )
 
 app.add_typer(profile_cli.app, name="profile")
+app.add_typer(config_cli.app, name="config")
+app.add_typer(jd_cli.app, name="jd")
 
 
 if __name__ == "__main__":
