@@ -67,14 +67,56 @@ no `typer` imports, no `sys.exit` inside `core/`.
 Keep the dependency list short. Alan's Python is his weakest recent language;
 readable stdlib beats clever abstractions.
 
-## Document format (non-negotiable — matches existing resumes)
+## Document format (non-negotiable)
 
-- Body text 11pt, Calibri
-- Line spacing 1.15
-- 6pt spacing after every paragraph and table row
-- Name heading 16pt bold; section headings 12pt bold, dark blue (#1F3864)
-- Margins 1.5cm all round
-- Single page target for cover letters; two pages max for resumes
+Source of truth: `~/Documents/AlanBronResumeMaster2026.docx`, written Aug 2026.
+Every value below was measured from that file, not chosen. The earlier version
+of this section was wrong on all six values — if a future spec and the master
+disagree, the master wins, and this section gets corrected.
+
+### Typography
+
+- Body text **10.5pt Calibri**; line spacing **1.1** throughout
+- Name **26pt bold**, `#1B3A6B`; tagline 10.5pt `#2258A5`; contact line
+  9.5pt `#595959`
+- Section headings **11.5pt bold `#1B3A6B`**, all caps, 11.5pt before /
+  5.5pt after
+- Role headings 11.5pt bold, near-black, 9pt before / 1pt after
+- Bullets 10.5pt, 1.5pt before / 3.6pt after
+- Margins **1.68cm left/right, 1.32cm top, 1.23cm bottom** on A4
+- Spacing is deliberately tight and varies by element. There is no global
+  "6pt after every paragraph" rule.
+
+### Resume structure
+
+Section order, exactly:
+
+1. **Name / tagline / contact** — contact on one line, `·` separated
+2. **PROFILE** — two short paragraphs, no heading bullet
+3. **CAREER HIGHLIGHTS** — 5 bullets, each opening with a bold label then
+   an em dash (`AI in production — ...`)
+4. **CORE SKILLS** — borderless 4×2 table, 8 labelled categories, label in
+   caps above a comma-separated list
+5. **EXPERIENCE** — reverse chronological, 1–4 bullets per role
+6. **EARLIER CAREER** — one condensed bullet each, undated
+7. **EDUCATION & CERTIFICATIONS** — one line each, certifications first
+
+Role heading format is `Title  ·  Company` with the date range right-aligned
+on a tab stop at **16.93cm**.
+
+### Dates
+
+- Roles render as **years only** (`2025 – 2026`), current role as
+  `2026 – Present`. `roles.yaml` stores `YYYY-MM`; the renderer truncates.
+- Founder entries in EARLIER CAREER **do** show years, including pre-2017
+  (`2006–16`). See the age-signal policy in `profile/roles.yaml` — dates are
+  shown, career length is never computed.
+- `earlier_career` entries stay undated.
+
+### Length
+
+- Cover letters: one page, under 350 words (see `profile/voice.md`)
+- Resumes: two pages max
 
 ## LLM usage
 
