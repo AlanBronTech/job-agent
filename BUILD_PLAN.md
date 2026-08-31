@@ -16,10 +16,12 @@ downstream output is only as good as this.
 
 Checklist:
 - [ ] Every role has correct dates, company, title
-- [ ] Every achievement bullet has a number in it or is deleted
+- [ ] Every *achievement* bullet has a number in it or is deleted. Bullets
+      that state a fact rather than claim an achievement (a certification, an
+      equity position, a sale) are exempt — a number would be noise.
 - [ ] Every bullet is tagged with at least one theme
 - [ ] Story bank has situation/action/result written out in full, in your voice
-- [ ] `voice.md` has 3 real cover letters you were happy with, pasted in full
+- [ ] `voice.md` has 2 real cover letters you were happy with, pasted in full
 
 **Exit criterion:** you'd be comfortable if an interviewer read the YAML.
 

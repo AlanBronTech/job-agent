@@ -180,3 +180,160 @@ def test_unknown_key_is_rejected(profile_factory) -> None:
         load_profile(profile_factory(mutate))
 
     assert "titel" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# Role periods: bare year, year-month, and the `present` sentinel
+# --------------------------------------------------------------------------- #
+
+
+def test_bare_year_period_normalises_to_string(example_dir: Path) -> None:
+    # profile.example uses bare ints; YAML hands them over as int, and they
+    # must come out as strings so callers never have to handle both.
+    profile = load_profile(example_dir)
+
+    assert profile.roles.roles[0].start == "2025"
+    assert profile.roles.roles[0].end == "2026"
+
+
+def test_year_month_period_is_preserved(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        def change(data: dict) -> None:
+            data["roles"][0]["start"] = "2017-07"
+            data["roles"][0]["end"] = "2018-10"
+
+        edit_yaml(d / "roles.yaml", change)
+
+    profile = load_profile(profile_factory(mutate))
+
+    assert profile.roles.roles[0].start == "2017-07"
+    assert profile.roles.roles[0].end == "2018-10"
+
+
+def test_present_is_accepted_as_end(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["roles"][0].__setitem__("end", "present"),
+        )
+
+    profile = load_profile(profile_factory(mutate))
+
+    assert profile.roles.roles[0].end == "present"
+
+
+def test_present_is_rejected_as_start(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["roles"][0].__setitem__("start", "present"),
+        )
+
+    with pytest.raises(ProfileError) as excinfo:
+        load_profile(profile_factory(mutate))
+
+    assert "start" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("bad", ["July 2017", "2017-13", "17-07", "2017-7"])
+def test_malformed_period_is_rejected(profile_factory, bad: str) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["roles"][0].__setitem__("start", bad),
+        )
+
+    with pytest.raises(ProfileError) as excinfo:
+        load_profile(profile_factory(mutate))
+
+    assert bad in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# Optional fields added for the real profile
+# --------------------------------------------------------------------------- #
+
+
+def test_citizenship_is_optional(example_dir: Path) -> None:
+    # profile.example omits it entirely.
+    assert load_profile(example_dir).roles.person.citizenship is None
+
+
+def test_citizenship_is_preserved(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["person"].__setitem__(
+                "citizenship", "Dual Australian and Canadian — no sponsorship."
+            ),
+        )
+
+    profile = load_profile(profile_factory(mutate))
+
+    assert profile.roles.person.citizenship is not None
+    assert "no sponsorship" in profile.roles.person.citizenship
+
+
+def test_role_tech_defaults_to_empty(example_dir: Path) -> None:
+    assert load_profile(example_dir).roles.roles[0].tech == []
+
+
+def test_role_tech_is_preserved(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["roles"][0].__setitem__(
+                "tech", ["C#/.NET", "Angular 5+", "MS SQL Server"]
+            ),
+        )
+
+    profile = load_profile(profile_factory(mutate))
+
+    assert profile.roles.roles[0].tech == ["C#/.NET", "Angular 5+", "MS SQL Server"]
+
+
+def test_max_commute_basis_is_optional(example_dir: Path) -> None:
+    assert load_profile(example_dir).assets.target_filters.max_commute_basis is None
+
+
+def test_narrative_defaults_to_empty(example_dir: Path) -> None:
+    narrative = load_profile(example_dir).assets.narrative
+
+    assert narrative.spine is None
+    assert narrative.threads == []
+    assert narrative.consistency_rules == []
+
+
+def test_narrative_is_preserved(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "assets.yaml",
+            lambda data: data.__setitem__(
+                "narrative",
+                {
+                    "spine": "One story, told the same way.",
+                    "threads": ["Industry depth", "Startup building"],
+                    "consistency_rules": ["Departure reasons are canonical."],
+                },
+            ),
+        )
+
+    narrative = load_profile(profile_factory(mutate)).assets.narrative
+
+    assert narrative.spine == "One story, told the same way."
+    assert len(narrative.threads) == 2
+    assert narrative.consistency_rules == ["Departure reasons are canonical."]
+
+
+def test_role_note_for_scorer_is_preserved(profile_factory) -> None:
+    def mutate(d: Path) -> None:
+        edit_yaml(
+            d / "roles.yaml",
+            lambda data: data["roles"][0].__setitem__(
+                "note_for_scorer", "Title understates the scope."
+            ),
+        )
+
+    profile = load_profile(profile_factory(mutate))
+
+    assert profile.roles.roles[0].note_for_scorer == "Title understates the scope."
