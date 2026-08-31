@@ -39,6 +39,9 @@ class Config(BaseSettings):
     )
 
     anthropic_api_key: str | None = None
+    # Required only for identity-linked Anthropic keys, which are rejected
+    # without an anthropic-workspace-id header. Workspace-scoped keys ignore it.
+    anthropic_workspace_id: str | None = None
     gemini_api_key: str | None = None
 
     # Per-call-type routing. Each is a "provider:model" string; see

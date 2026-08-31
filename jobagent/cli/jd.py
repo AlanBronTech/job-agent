@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.mhtml import MHTMLError, extract_ad, looks_like_mhtml
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.jd import JDError, parse_jd
@@ -38,12 +39,34 @@ def add(
         None, "--source", help="Where it came from, e.g. 'seek', 'recruiter email'."
     ),
 ) -> None:
-    """Parse a job description and save it. Opens $EDITOR if no input is given."""
-    try:
-        raw_text = _read_input(file=file, stdin=stdin)
-    except JDError as exc:
-        err_console.print(f"[bold red]{exc}[/]")
-        raise typer.Exit(code=2)
+    """Parse a job description and save it. Opens $EDITOR if no input is given.
+
+    A saved web-page archive (.mhtml) is detected and unwrapped automatically.
+    """
+    source_url: str | None = None
+    source_metadata: str | None = None
+
+    if file is not None and not stdin and looks_like_mhtml(file):
+        try:
+            ad = extract_ad(file)
+        except MHTMLError as exc:
+            err_console.print(f"[bold red]{exc}[/]")
+            raise typer.Exit(code=2)
+        raw_text = ad.text
+        source_url = ad.source_url
+        source_metadata = ad.posting_metadata
+        console.print(
+            f"[dim]Saved page: {len(ad.full_text):,} chars → "
+            f"{len(ad.text):,} after removing platform furniture.[/]"
+        )
+        if source_metadata:
+            console.print(f"[dim]Posting: {source_metadata}[/]")
+    else:
+        try:
+            raw_text = _read_input(file=file, stdin=stdin)
+        except JDError as exc:
+            err_console.print(f"[bold red]{exc}[/]")
+            raise typer.Exit(code=2)
 
     config = get_config()
 
@@ -57,6 +80,8 @@ def add(
     with console.status("Parsing…"):
         try:
             jd = parse_jd(raw_text, client=client, source=source)
+            jd.source_url = source_url
+            jd.source_metadata = source_metadata
         except JDError as exc:
             err_console.print(f"[bold red]Could not parse the job description.[/]")
             err_console.print(str(exc))
@@ -170,6 +195,10 @@ def _render_jd(jd: JobDescription) -> None:
     header.add_row("salary", _format_salary(jd))
     if jd.source:
         header.add_row("source", jd.source)
+    if jd.source_metadata:
+        header.add_row("posting", f"[yellow]{jd.source_metadata}[/]")
+    if jd.source_url:
+        header.add_row("url", f"[dim]{jd.source_url}[/]")
 
     title = f"JD {jd.id} · {jd.title}" if jd.id else jd.title
     console.print(Panel(header, title=title, title_align="left"))

@@ -250,10 +250,14 @@ class TargetFilters(_Base):
     location: str
     max_commute_minutes: int
     # What the commute ceiling is measured against (e.g. "hybrid"). The limit
-    # is meaningless to the scorer without it — see max_commute_rationale,
-    # which records that no on-site-only figure has been confirmed.
+    # is meaningless to the scorer without it.
     max_commute_basis: str | None = None
     max_commute_rationale: str
+    # Fully on-site roles are filtered by location, not by commute minutes —
+    # five days a week is a different constraint from two, so the ceiling above
+    # does not apply. An empty list means no on-site role passes.
+    onsite_locations: list[str] = Field(default_factory=list)
+    onsite_rationale: str | None = None
     min_salary_aud: int
     work_types: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
@@ -369,5 +373,13 @@ class JobDescription(_Base):
     red_flags: list[str] = Field(default_factory=list)
 
     source: str | None = None
+    # The ad's own URL, kept opaque. Never fetched — scraping Seek and
+    # LinkedIn is a hard rule. It exists so a human can reopen the page.
+    source_url: str | None = None
+    # What the platform said about the posting itself, verbatim: how long it
+    # has been live, how many have applied. Not part of the advertisement, but
+    # an ad open five months with 100+ applicants is a signal the text never
+    # carries. Left unparsed — two samples is not enough to know its shape.
+    source_metadata: str | None = None
     raw_text: str
     ingested_at: datetime

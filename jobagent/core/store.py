@@ -31,7 +31,18 @@ from pydantic import ValidationError
 
 from jobagent.core.models import JobDescription
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
+# table that already exists, so additive changes are applied explicitly. This is
+# not a migration framework and is not pretending to be one: it handles the only
+# kind of change that is safe to make without one.
+_ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "job_descriptions": [
+        ("source_url", "TEXT"),
+        ("source_metadata", "TEXT"),
+    ],
+}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -54,6 +65,8 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     responsibilities TEXT NOT NULL DEFAULT '[]',
     red_flags        TEXT NOT NULL DEFAULT '[]',
     source           TEXT,
+    source_url       TEXT,
+    source_metadata  TEXT,
     raw_text         TEXT NOT NULL,
     ingested_at      TEXT NOT NULL
 );
@@ -110,14 +123,26 @@ def init_schema(conn: sqlite3.Connection) -> None:
     """Create tables if absent and stamp the schema version."""
     try:
         conn.executescript(_SCHEMA)
+        _apply_added_columns(conn)
         conn.execute(
             "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
-            "ON CONFLICT(key) DO NOTHING",
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (str(SCHEMA_VERSION),),
         )
         conn.commit()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not initialise schema: {exc}") from exc
+
+
+def _apply_added_columns(conn: sqlite3.Connection) -> None:
+    """Add any column introduced after the table was first created."""
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {
+            row["name"] for row in conn.execute(f"PRAGMA table_info({table})")
+        }
+        for name, sql_type in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
 
 
 # --------------------------------------------------------------------------- #
@@ -134,8 +159,9 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
             INSERT INTO job_descriptions (
                 title, company, location, work_type, work_arrangement,
                 salary_json, seniority, must_haves, nice_to_haves, tech_stack,
-                responsibilities, red_flags, source, raw_text, ingested_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                responsibilities, red_flags, source, source_url,
+                source_metadata, raw_text, ingested_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 jd.title,
@@ -151,6 +177,8 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
                 json.dumps(jd.responsibilities),
                 json.dumps(jd.red_flags),
                 jd.source,
+                jd.source_url,
+                jd.source_metadata,
                 jd.raw_text,
                 _to_iso(jd.ingested_at),
             ),
@@ -216,6 +244,8 @@ def _row_to_jd(row: sqlite3.Row) -> JobDescription:
         "salary_range": json.loads(row["salary_json"]) if row["salary_json"] else None,
         "seniority": row["seniority"],
         "source": row["source"],
+        "source_url": row["source_url"],
+        "source_metadata": row["source_metadata"],
         "raw_text": row["raw_text"],
         "ingested_at": row["ingested_at"],
     }

@@ -11,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from jobagent.adapters import llm as llm_module
 from jobagent.adapters.llm import (
+    RETRY_ATTEMPTS,
+    RETRY_BASE_DELAY,
     AnthropicClient,
     CallType,
     GeminiClient,
@@ -19,6 +22,7 @@ from jobagent.adapters.llm import (
     LLMError,
     LLMResponse,
     Provider,
+    RetryableLLMError,
     estimate_cost,
     get_client,
     resolve_route,
@@ -223,3 +227,78 @@ def test_get_client_builds_provider_specific_client():
     assert isinstance(prep_client, GeminiClient)
     assert prep_client.model == "gemini-2.5-flash"
     assert prep_client._api_key == "key-g"
+
+
+# --------------------------------------------------------------------------- #
+# Retry on transient provider failures
+#
+# Gemini 2.5 Flash returned sustained 503s mid-batch on 2026-08-31. Without
+# retry, one overloaded response loses whatever ad was being parsed.
+# --------------------------------------------------------------------------- #
+
+
+class FlakyClient(LLMClient):
+    """Fails with the given exceptions, then succeeds."""
+
+    provider = Provider.anthropic
+
+    def __init__(self, failures):
+        super().__init__(model="fake-model")
+        self._failures = list(failures)
+        self.attempts = 0
+
+    def _complete(self, *, system, prompt, max_tokens):
+        self.attempts += 1
+        if self._failures:
+            raise self._failures.pop(0)
+        return LLMResponse(
+            text="ok",
+            provider=self.provider,
+            model=self.model,
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(llm_module.time, "sleep", slept.append)
+    return slept
+
+
+def test_transient_failure_is_retried_until_it_succeeds(no_sleep) -> None:
+    client = FlakyClient([RetryableLLMError("503"), RetryableLLMError("503")])
+
+    assert client.complete(prompt="hi").text == "ok"
+    assert client.attempts == 3
+
+
+def test_backoff_grows_between_attempts(no_sleep) -> None:
+    client = FlakyClient([RetryableLLMError("503")] * 2)
+    client.complete(prompt="hi")
+
+    assert no_sleep == [RETRY_BASE_DELAY, RETRY_BASE_DELAY * 2]
+
+
+def test_retries_are_bounded(no_sleep) -> None:
+    client = FlakyClient([RetryableLLMError("503")] * 99)
+
+    with pytest.raises(RetryableLLMError):
+        client.complete(prompt="hi")
+    assert client.attempts == RETRY_ATTEMPTS
+
+
+def test_permanent_failure_is_not_retried(no_sleep) -> None:
+    # A bad key or malformed request must fail immediately, not four times.
+    client = FlakyClient([LLMError("401 unauthorized")])
+
+    with pytest.raises(LLMError, match="401"):
+        client.complete(prompt="hi")
+    assert client.attempts == 1
+    assert no_sleep == []
+
+
+def test_retryable_error_is_an_llm_error() -> None:
+    # Callers catching LLMError must still catch the transient subclass.
+    assert issubclass(RetryableLLMError, LLMError)

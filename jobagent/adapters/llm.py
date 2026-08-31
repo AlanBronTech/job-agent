@@ -43,6 +43,19 @@ class LLMError(Exception):
     """Any failure talking to a provider, or resolving which one to talk to."""
 
 
+class RetryableLLMError(LLMError):
+    """A transient provider failure: overloaded, rate limited, or a network
+    blip. Worth trying again; a bad key or a malformed request is not."""
+
+
+# Statuses worth a second attempt. 529 is Anthropic's "overloaded"; 503 is what
+# Gemini returns under load, which it does often enough to stall a batch.
+_RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, 529})
+
+RETRY_ATTEMPTS = 4
+RETRY_BASE_DELAY = 2.0
+
+
 class Provider(str, Enum):
     anthropic = "anthropic"
     gemini = "gemini"
@@ -138,14 +151,36 @@ class LLMClient(ABC):
         max_tokens: int = DEFAULT_MAX_TOKENS,
         label: str | None = None,
     ) -> LLMResponse:
-        """One completion. ``label`` is the prompt name, recorded in the run log."""
-        response = self._complete(system=system, prompt=prompt, max_tokens=max_tokens)
+        """One completion. ``label`` is the prompt name, recorded in the run log.
+
+        Transient provider failures are retried with exponential backoff. A
+        single overloaded response should not lose a batch of job ads midway.
+        """
+        response = self._complete_with_retry(
+            system=system, prompt=prompt, max_tokens=max_tokens
+        )
         response.label = label
         response.cost_usd = estimate_cost(
             response.model, response.input_tokens, response.output_tokens
         )
         self._log_run(response)
         return response
+
+    def _complete_with_retry(
+        self, *, system: str | None, prompt: str, max_tokens: int
+    ) -> LLMResponse:
+        delay = RETRY_BASE_DELAY
+        for attempt in range(1, RETRY_ATTEMPTS + 1):
+            try:
+                return self._complete(
+                    system=system, prompt=prompt, max_tokens=max_tokens
+                )
+            except RetryableLLMError:
+                if attempt == RETRY_ATTEMPTS:
+                    raise
+                time.sleep(delay)
+                delay *= 2
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def complete_json(
         self,
@@ -231,15 +266,31 @@ def _parse_json(text: str) -> dict:
 class AnthropicClient(LLMClient):
     provider = Provider.anthropic
 
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        runs_log_path: Path | None = None,
+        workspace_id: str | None = None,
+    ) -> None:
+        super().__init__(model, api_key=api_key, runs_log_path=runs_log_path)
+        # Identity-linked keys (the kind issued to a user rather than to a
+        # workspace) are rejected without an anthropic-workspace-id header.
+        # Workspace-scoped keys ignore it, so sending it when set is safe.
+        self._workspace_id = workspace_id
+
     def _sdk(self):
         if self._sdk_client is None:
             import anthropic
 
-            self._sdk_client = (
-                anthropic.Anthropic(api_key=self._api_key)
-                if self._api_key
-                else anthropic.Anthropic()
-            )
+            kwargs: dict = {}
+            if self._api_key:
+                kwargs["api_key"] = self._api_key
+            if self._workspace_id:
+                kwargs["default_headers"] = {
+                    "anthropic-workspace-id": self._workspace_id
+                }
+            self._sdk_client = anthropic.Anthropic(**kwargs)
         return self._sdk_client
 
     def _complete(
@@ -257,6 +308,17 @@ class AnthropicClient(LLMClient):
         try:
             message = self._sdk().messages.create(**kwargs)
         except anthropic.APIError as exc:
+            if getattr(exc, "status_code", None) in _RETRYABLE_STATUS:
+                raise RetryableLLMError(
+                    f"Anthropic transient failure ({self.model}): {exc}"
+                ) from exc
+            if "anthropic-workspace-id" in str(exc) and not self._workspace_id:
+                raise LLMError(
+                    f"Anthropic rejected the call ({self.model}): this is an "
+                    "identity-linked API key, which must name a workspace. Set "
+                    "ANTHROPIC_WORKSPACE_ID in .env (Console → Settings → "
+                    "Workspaces), or issue a workspace-scoped key instead."
+                ) from exc
             raise LLMError(f"Anthropic call failed ({self.model}): {exc}") from exc
 
         text = "".join(
@@ -301,6 +363,10 @@ class GeminiClient(LLMClient):
                 model=self.model, contents=prompt, config=config
             )
         except genai_errors.APIError as exc:
+            if getattr(exc, "code", None) in _RETRYABLE_STATUS:
+                raise RetryableLLMError(
+                    f"Gemini transient failure ({self.model}): {exc}"
+                ) from exc
             raise LLMError(f"Gemini call failed ({self.model}): {exc}") from exc
 
         usage = result.usage_metadata
@@ -385,13 +451,15 @@ def get_client(call_type: CallType, config: "Config | None" = None) -> LLMClient
         config = get_config()
 
     route = resolve_route(config, call_type)
-    api_key = (
-        config.anthropic_api_key
-        if route.provider is Provider.anthropic
-        else config.gemini_api_key
-    )
+    if route.provider is Provider.anthropic:
+        return AnthropicClient(
+            model=route.model,
+            api_key=config.anthropic_api_key,
+            runs_log_path=config.runs_log_path,
+            workspace_id=config.anthropic_workspace_id,
+        )
     return _CLIENTS[route.provider](
         model=route.model,
-        api_key=api_key,
+        api_key=config.gemini_api_key,
         runs_log_path=config.runs_log_path,
     )
