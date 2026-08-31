@@ -55,7 +55,10 @@ class Config(BaseSettings):
     anthropic_model: str | None = None
     anthropic_triage_model: str | None = None
 
-    runs_log_path: Path = Field(default=Path("runs.jsonl"))
+    # Anchored, not relative. A bare "runs.jsonl" resolves against the current
+    # working directory, so the eval harness's cost/token history would scatter
+    # across whatever directories the CLI happened to be run from.
+    runs_log_path: Path = Field(default=_REPO_ROOT / "runs.jsonl")
 
     profile_dir: Path | None = None
     drive_resume_folder_id: str | None = None
