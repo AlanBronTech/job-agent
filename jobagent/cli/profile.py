@@ -28,6 +28,12 @@ def validate(
 ) -> None:
     """Validate the profile and print a summary. Exits non-zero on any error."""
     profile_dir = dir or get_config().profile_dir
+    if profile_dir is None:
+        err_console.print(
+            "[bold red]No profile directory.[/] "
+            "Set PROFILE_DIR in .env, or pass --dir."
+        )
+        raise typer.Exit(code=2)
 
     try:
         profile = load_profile(profile_dir)
