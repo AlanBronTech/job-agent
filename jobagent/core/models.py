@@ -219,6 +219,7 @@ class Explanations(_Base):
     gap_2025: str | None = None
     gap_answer_rules: list[str] = Field(default_factory=list)
     why_leaving_current: str | None = None
+    outside_interests: str | None = None
     salary_expectation: str | None = None
     stack_mismatch: str | None = None
     quality_under_pressure: str | None = None
