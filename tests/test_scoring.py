@@ -362,3 +362,24 @@ def test_unexpected_keys_are_dropped_not_fatal(profile_factory) -> None:
     fit = score_fit(make_jd(), make_profile(profile_factory), client=FakeClient(payload))
 
     assert fit.overall_score == 78
+
+
+def test_a_fractional_score_is_rounded_not_rejected(profile_factory) -> None:
+    """A model that answers 62.0 means 62. Rejecting it loses the whole
+    assessment over a decimal point, which is what happened to two eval cases
+    the first time the scorer ran against Gemini."""
+    payload = dict(MODEL_ANSWER, overall_score=62.0, recruiter_screen_score=48.5)
+
+    fit = score_fit(make_jd(), make_profile(profile_factory), client=FakeClient(payload))
+
+    assert fit.overall_score == 62
+    assert fit.recruiter_screen_score == 48
+
+
+def test_the_prompt_states_the_score_range(profile_factory) -> None:
+    """It did not, in v2, and a weaker model duly scored out of ten."""
+    client = FakeClient()
+
+    score_fit(make_jd(), make_profile(profile_factory), client=client)
+
+    assert "0 to 100" in client.prompt

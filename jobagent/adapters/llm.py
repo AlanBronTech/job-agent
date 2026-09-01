@@ -43,6 +43,15 @@ class LLMError(Exception):
     """Any failure talking to a provider, or resolving which one to talk to."""
 
 
+class QuotaExhaustedError(LLMError):
+    """A quota that will not clear inside this run — a daily free-tier cap.
+
+    Distinct from a rate limit, which backing off does fix. Retrying a daily
+    cap spends the remaining allowance faster and delays the failure by a
+    minute per attempt.
+    """
+
+
 class RetryableLLMError(LLMError):
     """A transient provider failure: overloaded, rate limited, or a network
     blip. Worth trying again; a bad key or a malformed request is not."""
@@ -379,6 +388,14 @@ class GeminiClient(LLMClient):
                 model=self.model, contents=prompt, config=config
             )
         except genai_errors.APIError as exc:
+            if _is_daily_quota(exc):
+                raise QuotaExhaustedError(
+                    f"{self.model} has used up its free-tier allowance for "
+                    "today. Backing off will not clear it — a daily cap resets "
+                    "on Google's clock, not after a wait. Either switch "
+                    "BUDGET_MODEL to another model, or drop --budget and pay "
+                    "for the run."
+                ) from exc
             if getattr(exc, "code", None) in _RETRYABLE_STATUS:
                 raise RetryableLLMError(
                     f"Gemini transient failure ({self.model}): {exc}"
@@ -393,6 +410,18 @@ class GeminiClient(LLMClient):
             input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
             output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
         )
+
+
+def _is_daily_quota(exc: Exception) -> bool:
+    """True for a per-day free-tier cap, as opposed to a per-minute limit.
+
+    Matched on the quota id Google returns rather than on the status code:
+    429 covers both, and only one of them is worth retrying.
+    """
+    if getattr(exc, "code", None) != 429:
+        return False
+    text = str(exc)
+    return "PerDay" in text or "per day" in text.lower()
 
 
 _CLIENTS: dict[Provider, type[LLMClient]] = {
@@ -428,11 +457,20 @@ def _parse_route(raw: str) -> CallRoute:
 def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
     """Pick the provider+model for a call type, in priority order:
 
+    0. ``BUDGET_MODE``, which overrides everything — see below
     1. the ``LLM_<CALLTYPE>`` config field, if set
     2. ``LLM_DEFAULT``, if set
     3. the legacy anthropic model fallback (triage → ``ANTHROPIC_TRIAGE_MODEL``,
        everything else → ``ANTHROPIC_MODEL``)
+
+    Budget mode sits above the per-call routing rather than beside it on
+    purpose: a half-applied budget mode — cheap parsing, expensive scoring —
+    is the shape of an unwelcome bill, and the point of the switch is that one
+    setting covers every call the tool makes.
     """
+    if config.budget_mode:
+        return _parse_route(config.budget_model)
+
     per_call = {
         CallType.triage: config.llm_triage,
         CallType.parse_jd: config.llm_parse,

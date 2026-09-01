@@ -54,6 +54,13 @@ class Config(BaseSettings):
     llm_generate: str | None = None
     llm_prep: str | None = None
 
+    # Budget mode: route every call to a model on a free tier, overriding the
+    # per-call routing above. For when the API bill matters more than the
+    # answer quality — which it sometimes does, and the eval harness can say
+    # by how much rather than leaving it to a guess.
+    budget_mode: bool = False
+    budget_model: str = "gemini:gemini-2.5-flash"
+
     # Legacy fallbacks, still honoured when the llm_* routes are unset.
     anthropic_model: str | None = None
     anthropic_triage_model: str | None = None

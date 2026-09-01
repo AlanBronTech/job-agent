@@ -8,7 +8,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.llm import (
+    CallType,
+    LLMError,
+    QuotaExhaustedError,
+    get_client,
+)
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.evals import (
@@ -82,16 +87,25 @@ def run(
             err_console.print(f"[bold red]No case with id {only!r}.[/]")
             raise typer.Exit(code=1)
 
-    estimate = len(cases) * COST_PER_CASE_USD
-    console.print(
-        f"Scoring {len(cases)} case(s). Estimated cost "
-        f"[bold]${estimate:.2f}[/] [dim](~${COST_PER_CASE_USD:.2f} each; the "
-        f"whole profile is sent with every call)[/]"
-    )
+    config = get_config()
+    if config.budget_mode:
+        console.print(
+            f"Scoring {len(cases)} case(s) in [bold yellow]budget mode[/] via "
+            f"[bold]{config.budget_model}[/] — free tier, so the run costs "
+            "nothing but the answers will be worse. `eval diff` afterwards "
+            "says by how much."
+        )
+    else:
+        estimate = len(cases) * COST_PER_CASE_USD
+        console.print(
+            f"Scoring {len(cases)} case(s). Estimated cost "
+            f"[bold]${estimate:.2f}[/] [dim](~${COST_PER_CASE_USD:.2f} each; the "
+            f"whole profile is sent with every call)[/] "
+            "[dim]— `--budget` runs it free on Gemini instead.[/]"
+        )
     if not yes and not typer.confirm("Continue?", default=False):
         raise typer.Exit(code=1)
 
-    config = get_config()
     if config.profile_dir is None:
         err_console.print("[bold red]No profile directory.[/] Set PROFILE_DIR in .env.")
         raise typer.Exit(code=2)
@@ -117,6 +131,13 @@ def run(
                 except ScoringError as exc:
                     failures.append((case.id, str(exc)))
                     console.print(f"{label} [red]failed[/]")
+                    if isinstance(exc.__cause__, QuotaExhaustedError):
+                        err_console.print(
+                            f"\n[bold yellow]Stopping.[/] {exc.__cause__} "
+                            f"\n[dim]{len(results)} case(s) scored before the "
+                            "allowance ran out; they are saved.[/]"
+                        )
+                        break
                     continue
                 assessment.id = store.add_assessment(conn, assessment)
             style = _VERDICT_STYLE[assessment.verdict]
@@ -274,6 +295,7 @@ def _render_cases(report: EvalReport) -> None:
     table.add_column("worth")
     table.add_column("outcome", style="dim")
     table.add_column("")
+    table.add_column("model", style="dim")
 
     for result in report.results:
         assessment = result.assessment
@@ -294,6 +316,7 @@ def _render_cases(report: EvalReport) -> None:
             worth,
             result.case.outcome.value,
             f"[{_AGREEMENT_STYLE[agreement]}]{agreement}[/]",
+            (assessment.model_used or "—") if assessment else "—",
         )
     console.print(table)
 

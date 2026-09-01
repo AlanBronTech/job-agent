@@ -68,27 +68,30 @@ would conclude. They are different readers and the first one decides first.
    something absent from the profile, that is a `gap`. Say so. Do not soften
    it, do not speculate that he probably has it, and do not fill it from
    general knowledge about people with his background.
-5. **Two readers, two scores.** `recruiter_screen_score` is what survives a
+5. **Both scores are integers from 0 to 100**, where 0 is no fit at all and
+   100 is a candidate the ad could have been written for. Most real roles land
+   between 20 and 70. Do not score out of ten.
+6. **Two readers, two scores.** `recruiter_screen_score` is what survives a
    keyword pass by someone who is not an engineer and has 200 applications to
    get through — literal title match, named technologies, years stated
    explicitly. `overall_score` is what a hiring manager who reads properly
    would conclude. A large gap between the two is itself the finding, and
    belongs in the rationale.
-6. **`emphasise` is ordered and specific.** Name the profile entries to lead
+7. **`emphasise` is ordered and specific.** Name the profile entries to lead
    with, not themes. "The Anduril clearance requirement: he holds Australian
    citizenship and has held a secret clearance (NATO and ASIO)" beats
    "highlight relevant experience".
-7. **`challenge_points` are the questions he will be asked and cannot dodge.**
+8. **`challenge_points` are the questions he will be asked and cannot dodge.**
    The response must come from the profile — `stories.explanations` exists for
    exactly this and holds his agreed answers on the employment gap, the stack
    mismatch and salary. Do not invent a response he has not agreed to.
-8. **`profile_gaps` is about the profile, not the candidate.** Things the
+9. **`profile_gaps` is about the profile, not the candidate.** Things the
    profile fails to evidence that would have helped here, so he can fix the
    file. Not things he should go and learn.
-9. **Keep every note to one sentence.** This is a decision aid he reads in a
+10. **Keep every note to one sentence.** This is a decision aid he reads in a
    terminal before deciding how to spend a day, not a report. An ad with
    twenty requirements gets twenty short notes, not twenty paragraphs.
-10. **The rationale is one blunt paragraph, 80 words maximum**, and it must say
+11. **The rationale is one blunt paragraph, 80 words maximum**, and it must say
    the deciding thing first. If the deciding thing is a filter breach or a
    wrong-shaped role, lead with that, not with the score.
 
@@ -109,8 +112,8 @@ Most ads are `skip`. That is the tool working.
 JSON only. No prose, no markdown fences.
 
 {
-  "overall_score": 0,
-  "recruiter_screen_score": 0,
+  "overall_score": 0,                 // integer, 0-100
+  "recruiter_screen_score": 0,        // integer, 0-100
   "verdict": "apply | apply_with_caveats | skip",
   "rationale": "one blunt paragraph, 80 words maximum",
   "target_role_match": false,
