@@ -36,6 +36,7 @@ from jobagent.adapters.adtext import (
     find_posting_metadata,
     isolate_ad,
     looks_truncated,
+    normalise,
 )
 
 PDF_SUFFIXES = {".pdf"}
@@ -117,7 +118,7 @@ def _strip_print_furniture(pages: list[str]) -> tuple[list[str], str | None]:
 
     for page in pages:
         for raw in page.splitlines():
-            line = re.sub(r"[ \t]+", " ", raw).strip()
+            line = re.sub(r"[ \t]+", " ", normalise(raw)).strip()
             if not line:
                 continue
             if _PRINT_HEADER.match(line):

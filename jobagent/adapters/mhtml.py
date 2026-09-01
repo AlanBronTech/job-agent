@@ -24,6 +24,7 @@ from jobagent.adapters.adtext import (
     find_posting_metadata,
     isolate_ad,
     looks_truncated,
+    normalise,
 )
 
 MHTML_SUFFIXES = {".mhtml", ".mht"}

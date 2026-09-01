@@ -305,3 +305,107 @@ def test_reaches_past_a_hiring_team_block_for_the_chips(tmp_path: Path) -> None:
     assert "On-site Full-time" in ad.text
     assert "The Onset" in ad.text
     assert "No longer accepting applications" in ad.text
+
+
+# --------------------------------------------------------------------------- #
+# Seek
+# --------------------------------------------------------------------------- #
+
+SEEK_HEADER = [
+    "Open app",
+    "Senior IT Project Manager",
+    "Harvey Robinson Pty Ltd 3.8 View all jobs",
+    "Sydney NSW (Hybrid)",
+    "Programme & Project Management (Information & Communication Technology)",
+    "Contract/Temp",
+    "Exceptional Daily Rate",
+    "Posted 26d ago High application volume",
+    "You applied on 7 Aug 2026",
+    "How you match",
+    "Show all",
+]
+
+SEEK_FOOTER = [
+    "Be careful",
+    "Don't provide your bank or credit card details when applying for jobs.",
+    "What can I earn as an IT Project Manager",
+    "Job seekers Employers",
+    "SEEK acknowledges the Traditional Custodians of the lands on which it operates",
+    "Terms & conditions",
+]
+
+
+@pytest.fixture
+def seek_pdf(tmp_path: Path) -> Path:
+    return write_pdf(
+        tmp_path / "seek.pdf",
+        [
+            SEEK_HEADER
+            + [
+                "Our client is expanding and they're looking for an experienced PM.",
+                "A proven track record delivering complex IT projects.",
+            ]
+            + SEEK_FOOTER
+            + [_footer(1, 1)]
+        ],
+    )
+
+
+def test_keeps_a_seek_ad_that_has_no_heading(seek_pdf: Path) -> None:
+    """Seek ads usually start straight into the copy — there is no
+    "About the job" to anchor on."""
+    ad = extract_ad(seek_pdf)
+
+    assert "Our client is expanding" in ad.text
+    assert "A proven track record delivering complex IT projects." in ad.text
+
+
+def test_stops_at_the_seek_scam_warning(seek_pdf: Path) -> None:
+    """Without an end anchor the model was handed Seek's whole footer, down to
+    the acknowledgement of country."""
+    ad = extract_ad(seek_pdf)
+
+    assert "Be careful" not in ad.text
+    assert "Traditional Custodians" not in ad.text
+    assert "Terms & conditions" not in ad.text
+
+
+def test_reads_the_seek_posting_line(seek_pdf: Path) -> None:
+    """Seek states the posting age without LinkedIn's separator, and adds its
+    own applicant-volume flag."""
+    ad = extract_ad(seek_pdf)
+
+    assert ad.posting_metadata == "Posted 26d ago High application volume"
+
+
+def test_strips_the_rating_and_link_from_a_seek_company_line(seek_pdf: Path) -> None:
+    ad = extract_ad(seek_pdf)
+
+    assert "Harvey Robinson Pty Ltd" in ad.text
+    assert "View all jobs" not in ad.text
+    assert "Harvey Robinson Pty Ltd 3.8" not in ad.text
+
+
+def test_keeps_a_body_line_ending_in_a_decimal(tmp_path: Path) -> None:
+    """The rating strip is scoped to the company line. An ordinary sentence
+    that happens to end in a decimal is left alone."""
+    path = write_pdf(
+        tmp_path / "decimal.pdf",
+        [["Lifted the platform from version 2.9 to 3.4", "Be careful", _footer(1, 1)]],
+    )
+
+    assert "2.9 to 3.4" in extract_ad(path).text
+
+
+def test_reaches_past_a_deep_seek_header(tmp_path: Path) -> None:
+    """A Seek header is six lines deep before the posting line, where a
+    LinkedIn one is two."""
+    path = write_pdf(
+        tmp_path / "deep.pdf",
+        [SEEK_HEADER + ["About the role", "You will own delivery end to end.", _footer(1, 1)]],
+    )
+    ad = extract_ad(path)
+
+    assert "Senior IT Project Manager" in ad.text
+    assert "Harvey Robinson Pty Ltd" in ad.text
+    assert "Contract/Temp" in ad.text
