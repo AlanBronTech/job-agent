@@ -31,3 +31,10 @@ output/
 
 profile/
 *.local.yaml
+
+# The eval case set is Alan's application history — outcomes, and his own
+# candid reasoning about named employers. The repository is public. The store
+# is the source of truth and this file is only an export, so nothing is lost
+# by keeping it local: `jobagent eval report` still runs and still proves the
+# claim. Regenerate it any time with `jobagent eval export`.
+evals/cases.yaml

@@ -333,7 +333,7 @@ tight, not as the default.
 | `~/.job-agent/jobagent.db` | The store — ads, assessments, applications. |
 | `profile/` | You, as data. Everything generated is built from this. |
 | `prompts/` | The prompts, versioned as files so they can be diffed. |
-| `evals/cases.yaml` | An exported snapshot of the eval set. |
+| `evals/cases.yaml` | An exported snapshot of the eval set. Local only — it is your application history, and this repository is public. |
 | `runs.jsonl` | Every model call: prompt, tokens, cost. |
 
 Back up `~/.job-agent/jobagent.db` and `profile/` and you have lost nothing
