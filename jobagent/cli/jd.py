@@ -13,6 +13,7 @@ from rich.table import Table
 from jobagent.adapters import mhtml, pdf
 from jobagent.adapters.adtext import ExtractedAd
 from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.cli import paths
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.jd import JDError, parse_jd
@@ -33,7 +34,13 @@ _EDITOR_TEMPLATE = """
 @app.command()
 def add(
     file: Path | None = typer.Option(
-        None, "--file", "-f", help="Read the JD from a file."
+        None,
+        "--file",
+        "-f",
+        help="A path, or a fragment of a filename in the JD drop folder.",
+    ),
+    latest: bool = typer.Option(
+        False, "--latest", help="Take the most recently saved ad in the drop folder."
     ),
     stdin: bool = typer.Option(False, "--stdin", help="Read the JD from stdin."),
     source: str | None = typer.Option(
@@ -44,9 +51,23 @@ def add(
 
     A saved job page — .mhtml archive or printed .pdf — is detected and
     unwrapped automatically.
+
+    `--file` takes a path, or enough of a saved ad's name to identify it:
+    `--file ebury` beats quoting 'Engineering Manager (L5_L6) ... .pdf'.
     """
     source_url: str | None = None
     source_metadata: str | None = None
+
+    config = get_config()
+    try:
+        file = _resolve_file(
+            file=file, latest=latest, stdin=stdin, jd_dir=config.jd_dir
+        )
+    except (JDError, paths.AdNotFound) as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=2)
+    if file is not None and not stdin:
+        console.print(f"[dim]Reading {file.name}[/]")
 
     ad = _extract_saved_page(file) if file is not None and not stdin else None
     if ad is not None:
@@ -75,8 +96,6 @@ def add(
         except JDError as exc:
             err_console.print(f"[bold red]{exc}[/]")
             raise typer.Exit(code=2)
-
-    config = get_config()
 
     try:
         client = get_client(CallType.parse_jd, config)
@@ -182,6 +201,25 @@ def _extract_saved_page(file: Path) -> ExtractedAd | None:
     except error as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=2)
+
+
+def _resolve_file(
+    *, file: Path | None, latest: bool, stdin: bool, jd_dir: Path
+) -> Path | None:
+    """Work out which file `add` should read, if any.
+
+    Resolution is skipped when --stdin is set so that the conflicting-input
+    error comes from `_read_input`, which words it for the pair given.
+    """
+    if latest and file is not None:
+        raise JDError("Pass either --file or --latest, not both.")
+    if stdin:
+        return file
+    if latest:
+        return paths.latest_ad(jd_dir)
+    if file is None:
+        return None
+    return paths.resolve_ad(file, jd_dir)
 
 
 def _read_input(*, file: Path | None, stdin: bool) -> str:

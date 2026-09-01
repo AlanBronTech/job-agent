@@ -6,6 +6,8 @@ are exactly where wiring mistakes hide.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from typer.testing import CliRunner
 
@@ -20,8 +22,12 @@ runner = CliRunner()
 
 @pytest.fixture
 def wired(tmp_path, monkeypatch):
-    """Point the CLI at a temp database and a fake model."""
-    config = Config(_env_file=None, db_path=tmp_path / "jobagent.db")
+    """Point the CLI at a temp database, a temp drop folder and a fake model."""
+    drop = tmp_path / "jds"
+    drop.mkdir()
+    config = Config(
+        _env_file=None, db_path=tmp_path / "jobagent.db", jd_dir=drop
+    )
     monkeypatch.setattr(jd_cli, "get_config", lambda: config)
 
     client = FakeClient()
@@ -116,3 +122,108 @@ def test_show_unknown_id_exits_nonzero(wired) -> None:
 
     assert result.exit_code == 1
     assert "No job description with id 42" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# Naming the file. The saved ads have spaces and parentheses in their names,
+# so anything that requires typing one exactly gets typed wrong.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def drop_folder(tmp_path):
+    """The drop folder the `wired` config points at."""
+    return tmp_path / "jds"
+
+
+def _save_ad(drop_folder, name: str, mtime: float | None = None):
+    path = drop_folder / name
+    path.write_text(SAMPLE_TEXT, encoding="utf-8")
+    if mtime is not None:
+        os.utime(path, (mtime, mtime))
+    return path
+
+
+def test_add_expands_a_tilde_path(wired, jd_file, monkeypatch) -> None:
+    """zsh leaves `~` alone inside quotes; the CLI has to expand it itself."""
+    monkeypatch.setenv("HOME", str(jd_file.parent))
+
+    result = runner.invoke(app, ["jd", "add", "--file", f"~/{jd_file.name}"])
+
+    assert result.exit_code == 0, result.output
+    assert "Saved as JD 1" in result.output
+
+
+def test_add_matches_a_fragment_of_a_saved_name(wired, drop_folder) -> None:
+    _save_ad(drop_folder, "Engineering Manager (L5_L6) _ Ebury _ LinkedIn.txt")
+
+    result = runner.invoke(app, ["jd", "add", "--file", "ebury"])
+
+    assert result.exit_code == 0, result.output
+    assert "Ebury" in result.output
+    assert "Saved as JD 1" in result.output
+
+
+def test_an_ambiguous_fragment_is_an_error_not_a_guess(wired, drop_folder) -> None:
+    _save_ad(drop_folder, "Engineering Manager _ Xero.txt")
+    _save_ad(drop_folder, "Engineering Manager _ Ebury.txt")
+
+    result = runner.invoke(app, ["jd", "add", "--file", "Engineering Manager"])
+
+    assert result.exit_code == 2
+    assert "Xero" in result.output and "Ebury" in result.output
+
+
+def test_an_existing_path_wins_over_fragment_matching(wired, drop_folder, jd_file) -> None:
+    """A real path is never reinterpreted as a fragment."""
+    _save_ad(drop_folder, f"decoy {jd_file.name}")
+
+    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+
+    assert result.exit_code == 0, result.output
+    assert "decoy" not in result.output
+
+
+def test_a_fragment_matching_nothing_says_so(wired, drop_folder) -> None:
+    result = runner.invoke(app, ["jd", "add", "--file", "atlassian"])
+
+    assert result.exit_code == 2
+    assert "atlassian" in result.output
+
+
+def test_latest_takes_the_most_recently_saved_ad(wired, drop_folder) -> None:
+    _save_ad(drop_folder, "old _ Xero.txt", mtime=1_000_000)
+    _save_ad(drop_folder, "new _ Ebury.txt", mtime=2_000_000)
+
+    result = runner.invoke(app, ["jd", "add", "--latest"])
+
+    assert result.exit_code == 0, result.output
+    assert "new _ Ebury.txt" in result.output
+
+
+def test_latest_ignores_the_folder_furniture(wired, drop_folder) -> None:
+    """The README and outcomes.yaml live in the drop folder and are not ads."""
+    _save_ad(drop_folder, "ad _ Ebury.txt", mtime=1_000_000)
+    (drop_folder / "outcomes.yaml").write_text("- {}\n", encoding="utf-8")
+    os.utime(drop_folder / "outcomes.yaml", (2_000_000, 2_000_000))
+
+    result = runner.invoke(app, ["jd", "add", "--latest"])
+
+    assert result.exit_code == 0, result.output
+    assert "ad _ Ebury.txt" in result.output
+
+
+def test_latest_with_an_empty_drop_folder_says_so(wired, drop_folder) -> None:
+    result = runner.invoke(app, ["jd", "add", "--latest"])
+
+    assert result.exit_code == 2
+    assert "No saved ad" in result.output
+
+
+def test_file_and_latest_together_is_an_error(wired, drop_folder) -> None:
+    _save_ad(drop_folder, "ad _ Ebury.txt")
+
+    result = runner.invoke(app, ["jd", "add", "--file", "ebury", "--latest"])
+
+    assert result.exit_code == 2
+    assert "not both" in result.output

@@ -72,6 +72,11 @@ class Config(BaseSettings):
 
     profile_dir: Path | None = None
 
+    # The drop folder Alan saves job ads into. Defaulted, unlike profile_dir,
+    # because a wrong value here cannot silently succeed: `jd add` either
+    # finds the named ad or says it did not.
+    jd_dir: Path = Field(default=Path("~/job-agent-jds"))
+
     # Where generated documents are written, one folder per application.
     # Google Drive upload was dropped on 2026-09-01 in favour of a local
     # folder Alan copies from when it suits him; see BUILD_PLAN.md.
@@ -79,7 +84,9 @@ class Config(BaseSettings):
 
     db_path: Path = Field(default=Path("~/.job-agent/jobagent.db"))
 
-    @field_validator("profile_dir", "db_path", "runs_log_path", "output_dir", mode="after")
+    @field_validator(
+        "profile_dir", "db_path", "runs_log_path", "output_dir", "jd_dir", mode="after"
+    )
     @classmethod
     def _expand_user(cls, value: Path | None) -> Path | None:
         return None if value is None else Path(value).expanduser()

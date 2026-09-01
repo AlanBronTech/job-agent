@@ -14,6 +14,7 @@ from jobagent.adapters.llm import (
     QuotaExhaustedError,
     get_client,
 )
+from jobagent.cli import paths
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.evals import (
@@ -61,7 +62,9 @@ _AGREEMENT_STYLE = {
 
 @app.command("report")
 def report(
-    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+    cases_path: Path | None = typer.Option(
+        None, "--cases", help="Case set to read.", callback=paths.expand
+    ),
     model: str | None = typer.Option(
         None,
         "--model",
@@ -82,7 +85,9 @@ def report(
 
 @app.command("run")
 def run(
-    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+    cases_path: Path | None = typer.Option(
+        None, "--cases", help="Case set to read.", callback=paths.expand
+    ),
     only: str | None = typer.Option(None, "--only", help="Score one case by id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the cost confirmation."),
 ) -> None:
@@ -167,7 +172,10 @@ def run(
 @app.command("export")
 def export(
     to: Path = typer.Option(
-        Path("evals/cases.yaml"), "--to", help="Where to write the snapshot."
+        Path("evals/cases.yaml"),
+        "--to",
+        help="Where to write the snapshot.",
+        callback=paths.expand,
     ),
 ) -> None:
     """Write the case set out as YAML — a reviewable, diffable snapshot."""
@@ -197,7 +205,9 @@ def export(
 
 @app.command("diff")
 def diff(
-    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+    cases_path: Path | None = typer.Option(
+        None, "--cases", help="Case set to read.", callback=paths.expand
+    ),
 ) -> None:
     """Compare the two most recent scoring runs. Free.
 

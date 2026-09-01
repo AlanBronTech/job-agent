@@ -17,6 +17,7 @@ from jobagent.adapters.docx_writer import (
     write_resume,
 )
 from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.cli import paths
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.generate import (
@@ -42,6 +43,7 @@ def generate(
         None,
         "--answers",
         help="File of application questions, one per line, to answer.",
+        callback=paths.expand,
     ),
     force: bool = typer.Option(
         False,

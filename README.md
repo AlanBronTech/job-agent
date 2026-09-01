@@ -28,8 +28,12 @@ description whether or not the "…more" toggle was expanded, and it keeps the
 URL, the posting age and the applicant count.
 
 ```
-jobagent jd add --file "~/job-agent-jds/Engineering Manager _ Acme.pdf" --source seek
+jobagent jd add --latest --source seek
 ```
+
+`--latest` takes the ad you just saved. To pick an older one, give `--file`
+enough of its name to be unambiguous — `--file acme` — rather than typing a
+filename full of spaces and parentheses. A real path still works.
 
 **What you get back:** the ad parsed into structure — title, company, location,
 work type, salary, requirements, red flags — and a JD id at the end:
@@ -209,8 +213,12 @@ a case is recorded but cannot be marked.
 
 `jd add` options:
 
-- `--file, -f <path>` — the saved ad. `.pdf`, `.mhtml`/`.mht`, or plain `.txt`;
-  the format is detected, you do not declare it.
+- `--file, -f <path or name fragment>` — the saved ad. `.pdf`, `.mhtml`/`.mht`,
+  or plain `.txt`; the format is detected, you do not declare it. A path that
+  exists is used as given; anything else is matched case-insensitively against
+  the filenames in `JD_DIR` (default `~/job-agent-jds`). Two matches is an
+  error listing both, never a guess.
+- `--latest` — the most recently saved ad in `JD_DIR`.
 - `--stdin` — read the ad from a pipe instead.
 - `--source <text>` — free text, e.g. `seek`, `linkedin`, `recruiter email`.
 - With neither `--file` nor `--stdin`, it opens `$EDITOR` to paste into.

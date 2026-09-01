@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from jobagent.cli import paths
 from jobagent.config import get_config
 from jobagent.core.profile import ProfileError, load_profile, summarize_profile
 
@@ -24,6 +25,7 @@ def validate(
         "--dir",
         "-d",
         help="Profile directory to validate (defaults to PROFILE_DIR).",
+        callback=paths.expand,
     ),
 ) -> None:
     """Validate the profile and print a summary. Exits non-zero on any error."""
