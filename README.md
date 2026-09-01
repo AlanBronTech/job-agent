@@ -230,6 +230,12 @@ a case is recorded but cannot be marked.
 | `jobagent score <jd_id>` | Assess one ad against the profile. **Costs ~$0.20.** |
 | `jobagent score <jd_id> --last` | Show the last saved assessment. Free. |
 
+An ad under 800 characters is refused before the call is made — that is
+almost always a description that was collapsed when the page was saved,
+and the scorer will read two sentences with the confidence it reads a
+whole ad. Expand the description, save the page again, re-add it.
+`--force` scores it anyway.
+
 ### Generating
 
 `jobagent generate <jd_id>` with at least one of:

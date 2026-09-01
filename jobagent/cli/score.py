@@ -49,6 +49,11 @@ def score(
         "--last",
         help="Show the most recent saved assessment instead of scoring again.",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Score even when the ad is too short to conclude anything from.",
+    ),
 ) -> None:
     """Assess one job description against the profile and say whether to apply."""
     config = get_config()
@@ -71,6 +76,21 @@ def score(
             raise typer.Exit(code=1)
         _render(jd.title, jd.company, previous)
         return
+
+    if jd.thin and not force:
+        err_console.print(
+            f"[bold red]JD {jd_id} holds only {len(jd.raw_text):,} characters "
+            "of ad text[/] — too little to score."
+        )
+        err_console.print(
+            "[dim]This is usually a description that was collapsed when the "
+            "page was saved. Expand it, save again, and re-add the ad. The "
+            "scorer will otherwise read two sentences with the confidence it "
+            "reads a whole ad: on JD 23 it assessed five requirements the ad "
+            "never stated.[/]"
+        )
+        err_console.print("[dim]`--force` scores it anyway, for $0.20.[/]")
+        raise typer.Exit(code=2)
 
     if config.profile_dir is None:
         err_console.print(
