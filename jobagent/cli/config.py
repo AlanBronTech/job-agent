@@ -108,6 +108,7 @@ def check() -> None:
     paths.add_row("db_path", str(config.db_path))
     paths.add_row("runs_log_path", str(config.runs_log_path))
     paths.add_row("output_dir", str(config.output_dir))
+    paths.add_row("jd_dir", str(config.jd_dir))
     console.print(paths)
 
     if unusable:
