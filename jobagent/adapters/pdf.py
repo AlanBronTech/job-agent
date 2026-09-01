@@ -26,6 +26,7 @@ would also break CareGP, LinkedIn and JavaScript.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -41,7 +42,9 @@ PDF_SUFFIXES = {".pdf"}
 _MAGIC = b"%PDF-"
 
 # Chrome's print header: "01/09/2026, 10:14   Engineering Manager | Xero | LinkedIn".
-_PRINT_HEADER = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4},\s*\d{1,2}:\d{2}\b")
+# No trailing \b: a body line clipped by the top margin fuses onto the
+# timestamp ("01/09/2026, 10:13g g Engineering Lead | Kira | LinkedIn").
+_PRINT_HEADER = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4},\s*\d{1,2}:\d{2}")
 
 # Chrome's print footer: the source URL, then "2/6". Both halves can be fused
 # with whatever the page clipped at the bottom margin, so the URL is matched
@@ -108,13 +111,9 @@ def extract_ad(path: Path) -> ExtractedAd:
 
 
 def _strip_print_furniture(pages: list[str]) -> tuple[list[str], str | None]:
-    """Drop the browser's per-page header and footer, keeping the source URL.
-
-    The URL is taken from the first footer that carries one; every page repeats
-    the same address.
-    """
+    """Drop the browser's per-page header and footer, keeping the source URL."""
     kept: list[str] = []
-    source_url: str | None = None
+    urls: list[str] = []
 
     for page in pages:
         for raw in page.splitlines():
@@ -125,18 +124,28 @@ def _strip_print_furniture(pages: list[str]) -> tuple[list[str], str | None]:
                 continue
             found = _PRINT_FOOTER_URL.search(line)
             if found and _PAGE_NUMBER.search(line):
-                source_url = source_url or _clean_url(found.group())
+                urls.append(found.group())
                 continue
             if _PAGE_NUMBER.fullmatch(line):
                 continue
             kept.append(line)
 
-    return kept, source_url
+    return kept, _source_url(urls)
 
 
-def _clean_url(url: str) -> str:
-    """Trim what the bottom margin fused onto the end of the footer URL."""
-    return url.rstrip("/").split("?")[0]
+def _source_url(urls: list[str]) -> str | None:
+    """The ad's own address, from the footer every page repeats.
+
+    Taken by majority rather than from the first page: a body line clipped by
+    the bottom margin fuses onto the URL, and on the CareGP ad that turned
+    page one's footer into ".../4395924490/O". Five clean copies outvote it.
+    A single-page print has no such vote and keeps whatever it has.
+    """
+    if not urls:
+        return None
+    ranked = Counter(url.split("?")[0].rstrip("/") for url in urls)
+    best = max(ranked.items(), key=lambda item: (item[1], -len(item[0])))
+    return best[0]
 
 
 def _page_title(reader: PdfReader) -> str | None:

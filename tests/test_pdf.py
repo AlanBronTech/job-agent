@@ -206,3 +206,102 @@ def test_rejects_a_pdf_with_no_text(tmp_path: Path) -> None:
     with pytest.raises(PDFError) as excinfo:
         extract_ad(path)
     assert "scanned" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# Page shapes that broke the first version
+# --------------------------------------------------------------------------- #
+
+
+def test_drops_a_header_a_clipped_line_fused_onto(tmp_path: Path) -> None:
+    """A body line clipped by the top margin lands on the timestamp:
+    "01/09/2026, 10:13g g Engineering Lead | Kira | LinkedIn"."""
+    path = write_pdf(
+        tmp_path / "clipped.pdf",
+        [
+            ["About the job", "The Engineering Lead owns technical direction.", _footer(1, 2)],
+            [
+                "01/09/2026, 10:13g g Engineering Lead | Kira | LinkedIn",
+                "7+ years of software engineering experience.",
+                _footer(2, 2),
+            ],
+        ],
+    )
+    ad = extract_ad(path)
+
+    assert "7+ years of software engineering experience." in ad.text
+    assert "01/09/2026" not in ad.text
+
+
+def test_takes_the_source_url_by_majority(tmp_path: Path) -> None:
+    """The same clipping fuses onto the footer URL. Four clean copies outvote
+    the one that came back as ".../4417048804/O"."""
+    path = write_pdf(
+        tmp_path / "fused.pdf",
+        [
+            ["About the job", "Lead two squads.", _footer(1, 4).replace("/   1/4", "/O hit t  1/4")],
+            ["Own the roadmap.", _footer(2, 4)],
+            ["Coach engineers.", _footer(3, 4)],
+            ["Set alert for similar jobs", _footer(4, 4)],
+        ],
+    )
+
+    assert extract_ad(path).source_url == "https://www.linkedin.com/jobs/view/4417048804"
+
+
+def test_stops_at_the_job_alert_heading(tmp_path: Path) -> None:
+    """An agency ad has no "similar jobs" rail. Without this anchor a thousand
+    characters of applicant charts ran into the parsed text."""
+    path = write_pdf(
+        tmp_path / "agency.pdf",
+        [
+            [
+                "About the job",
+                "You will lead two engineering squads.",
+                "This job alert is on",
+                "Engineering Manager, Greater Sydney Area On",
+                "Applicants for this job",
+                "43Applicants",
+                _footer(1, 1),
+            ]
+        ],
+    )
+    ad = extract_ad(path)
+
+    assert "You will lead two engineering squads." in ad.text
+    assert "43Applicants" not in ad.text
+
+
+def test_reaches_past_a_hiring_team_block_for_the_chips(tmp_path: Path) -> None:
+    """The employment-type chip is the only place a LinkedIn page states
+    full-time or contract. A twelve-line reach-back missed it whenever a
+    "meet the hiring team" block sat between it and the description."""
+    path = write_pdf(
+        tmp_path / "hiring-team.pdf",
+        [
+            [
+                "The Onset",
+                "Engineering Manager",
+                "Greater Sydney Area·1 month ago·43 applicants",
+                "On-site Full-time",
+                "No longer accepting applications",
+                "People you can reach out to",
+                "Ruby and others in your network Show all",
+                "Meet the hiring team",
+                "Sean McCartan • 2nd",
+                "CEO/Founder I Onset Message",
+                "Job poster",
+                "Some other line",
+                "And another",
+                "And one more",
+                "About the job",
+                "You will lead two engineering squads.",
+                _footer(1, 1),
+            ]
+        ],
+    )
+    ad = extract_ad(path)
+
+    assert "On-site Full-time" in ad.text
+    assert "The Onset" in ad.text
+    assert "No longer accepting applications" in ad.text

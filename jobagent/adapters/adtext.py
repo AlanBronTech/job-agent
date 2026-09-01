@@ -19,13 +19,21 @@ from dataclasses import dataclass
 # Where the advertisement starts, on the platforms Alan uses.
 BODY_ANCHORS = ("About the job", "Job description", "About the role")
 
-# Where it stops and the platform's own furniture resumes.
+# Where it stops and the platform's own furniture resumes. Which of these
+# appears depends on the ad: an agency posting with no "similar jobs" rail ran
+# a thousand characters of applicant charts into the parsed text before the
+# job-alert and comparison headings were added here.
 END_ANCHORS = (
     "Set alert for similar jobs",
+    "This job alert is on",
     "Insights about this job",
+    "Exclusive Job Seeker Insights",
     "People also viewed",
     "Similar jobs",
     "More jobs",
+    "Put your best foot forward",
+    "See how you compare to other applicants",
+    "Applicants for this job",
 )
 
 # Navigation and applicant-flow chrome that sits between the anchors.
@@ -79,6 +87,11 @@ class ExtractedAd:
     """The capture ends at a "…more" toggle: the ad is only partly present."""
 
 
+# How far above "About the job" the posting line may sit and still be taken as
+# the start of the ad. A "meet the hiring team" block pushes it well back.
+_MAX_HEAD_REACH = 40
+
+
 def isolate_ad(lines: list[str]) -> str:
     """Trim to the advertisement. Returns everything if the anchors miss —
     a degraded parse beats refusing the file."""
@@ -86,10 +99,26 @@ def isolate_ad(lines: list[str]) -> str:
     if anchor is None:
         return "\n".join(drop_junk(lines))
 
-    # Reach back for the company, title and posting line above "About the job".
-    head = drop_junk(lines[max(0, anchor - 12) : anchor])
+    head = drop_junk(lines[_head_start(lines, anchor) : anchor])
     end = index_of(lines, END_ANCHORS, after=anchor) or len(lines)
     return "\n".join(head + lines[anchor:end])
+
+
+def _head_start(lines: list[str], anchor: int) -> int:
+    """Where to start reaching back for company, title and posting line.
+
+    The posting line is the reliable marker. Directly above it sit the company
+    and the title; directly below it the "Hybrid · Full-time" chips, which are
+    a LinkedIn page's only statement of employment type. A fixed twelve-line
+    window missed all of that on a page carrying a "meet the hiring team"
+    block, so reach back past the posting line as well when it is close enough
+    to be this ad's rather than a neighbouring one's.
+    """
+    default = anchor - 12
+    posting = posting_metadata_index(lines)
+    if posting is not None and 0 < anchor - posting <= _MAX_HEAD_REACH:
+        return max(0, min(default, posting - 3))
+    return max(0, default)
 
 
 def index_of(lines: list[str], needles: tuple[str, ...], after: int = -1) -> int | None:
@@ -115,12 +144,17 @@ def drop_junk(lines: list[str]) -> list[str]:
 
 
 def find_posting_metadata(lines: list[str]) -> str | None:
-    for line in lines[:60]:
+    index = posting_metadata_index(lines)
+    return None if index is None else lines[index]
+
+
+def posting_metadata_index(lines: list[str]) -> int | None:
+    for index, line in enumerate(lines[:60]):
         if "·" not in line:
             continue
         lowered = line.lower()
         if any(signal in lowered for signal in _META_SIGNALS):
-            return line
+            return index
     return None
 
 
