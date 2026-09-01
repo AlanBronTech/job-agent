@@ -21,12 +21,12 @@ from jobagent.core.evals import (
     EvalCase,
     EvalError,
     EvalReport,
-    Worth,
     build_report,
+    cases_from_applications,
     diff_runs,
     load_cases,
 )
-from jobagent.core.models import Verdict
+from jobagent.core.models import Verdict, Worth
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.scoring import ScoringError, score_fit
 from jobagent.core.store import StoreError
@@ -62,9 +62,16 @@ _AGREEMENT_STYLE = {
 @app.command("report")
 def report(
     cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Grade the latest run from this model, e.g. 'claude-sonnet-5'. "
+        "Without it, whatever was scored last wins — including a cheap "
+        "comparison run.",
+    ),
 ) -> None:
     """Grade the stored assessments against the recorded outcomes. Free."""
-    cases, results = _load(cases_path)
+    cases, results = _load(cases_path, model=model)
     if not any(result.scored for result in results):
         err_console.print(
             "[bold yellow]No case has been scored yet.[/] Run `jobagent eval run`."
@@ -155,6 +162,37 @@ def run(
     if results:
         console.print()
         _render_report(build_report(results))
+
+
+@app.command("export")
+def export(
+    to: Path = typer.Option(
+        Path("evals/cases.yaml"), "--to", help="Where to write the snapshot."
+    ),
+) -> None:
+    """Write the case set out as YAML — a reviewable, diffable snapshot."""
+    import yaml
+
+    cases, _ = _load(None)
+    payload = [
+        {
+            "id": case.id,
+            "jd_id": case.jd_id,
+            "outcome": case.outcome.value,
+            "worth_applying": case.worth_applying.value,
+            "why": case.why,
+        }
+        for case in cases
+    ]
+    to.parent.mkdir(parents=True, exist_ok=True)
+    to.write_text(
+        "# Snapshot of the eval set, exported from the pipeline.\n"
+        "# The store is the source of truth; this file is for review and for\n"
+        "# replaying a fixed set with `jobagent eval report --cases`.\n"
+        + yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    console.print(f"{len(cases)} case(s) → {to}")
 
 
 @app.command("diff")
@@ -333,20 +371,41 @@ def _delta(value: int) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _load(cases_path: Path | None) -> tuple[list[EvalCase], list[CaseResult]]:
+def _load(
+    cases_path: Path | None, *, model: str | None = None
+) -> tuple[list[EvalCase], list[CaseResult]]:
+    """Build the case set, from the pipeline unless a file was named.
+
+    The store is the source: recording an outcome with `jobagent outcome` is
+    how a case enters the eval set, so the set cannot go stale through neglect.
+    `--cases` reads a file instead, which is how a snapshot is replayed.
+    """
     try:
-        cases = load_cases(cases_path)
+        with store.open_store(get_config().db_path) as conn:
+            if cases_path is not None:
+                cases = load_cases(cases_path)
+            else:
+                titles = {jd.id: jd.title for jd in store.list_jds(conn) if jd.id}
+                cases = cases_from_applications(store.list_applications(conn), titles)
+            results = [
+                CaseResult(
+                    case=case,
+                    assessment=store.latest_assessment(conn, case.jd_id, model=model),
+                )
+                for case in cases
+            ]
     except EvalError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
-
-    try:
-        with store.open_store(get_config().db_path) as conn:
-            results = [
-                CaseResult(case=case, assessment=store.latest_assessment(conn, case.jd_id))
-                for case in cases
-            ]
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    if not cases:
+        err_console.print(
+            "[bold yellow]No finished applications to grade.[/] "
+            "Record outcomes with `jobagent outcome <jd_id> <status> --worth ...`, "
+            "or replay a snapshot with --cases."
+        )
         raise typer.Exit(code=1)
     return cases, results

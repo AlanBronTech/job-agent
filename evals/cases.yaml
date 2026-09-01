@@ -1,171 +1,98 @@
-# Eval cases — real applications with recorded outcomes.
-#
-# `outcome` is what happened. `worth_applying` is the retrospective judgment:
-# knowing what he knows now, was that day well spent. **The scorer is graded
-# against the second, not the first**, and one case forces the distinction:
-# Alan was offered the Easy Signs job and worked there, and the scorer says
-# skip — because the Smeaton Grange commute is an absolute filter in his own
-# profile and is the reason the role ended. Graded on "would they hire him"
-# that is a miss, and tuning it away would teach the scorer to stop raising
-# the constraint that actually mattered.
-#
-# `label_derived: true` means the label was read out of the reasoning already
-# recorded in ~/job-agent-jds/outcomes.yaml, not stated by Alan. Those are
-# counted separately in the report and are the first thing to correct — the
-# headline metric depends on them.
-#
-# `worth_applying: unsure` is honest and costs nothing: an unlabelled case is
-# reported but not graded.
-#
-# Quote "yes" and "no". YAML 1.1 reads them as booleans unquoted, which is the
-# same trap CLAUDE.md flags for the profile files. The loader coerces them
-# back rather than failing, but the quotes say what is meant.
-
-- id: caregp
+# Snapshot of the eval set, exported from the pipeline.
+# The store is the source of truth; this file is for review and for
+# replaying a fixed set with `jobagent eval report --cases`.
+- id: 8_software_engineering_lead_foundi
   jd_id: 8
-  file: Software Engineering Lead (Founding Team) _ Care GP _ LinkedIn.pdf
   outcome: applied_no_reply
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    3-6 years behind a Lead title, on-site with no suburb named, seed-stage
-    equity against a $170k expectation. outcomes.yaml already says the scorer
-    should have said skip and the effort should never have been spent.
-
-- id: united_fasteners
+  worth_applying: 'no'
+  why: 3-6 years behind a Lead title, on-site with no suburb named, seed-stage equity
+    against a $170k expectation. outcomes.yaml already says the scorer should have
+    said skip and the effort should never have been spent.
+- id: 9_it_manager
   jd_id: 9
-  file: IT Manager Job in Sydney NSW - SEEK.pdf
   outcome: applied_no_reply
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    Internal IT ownership at an industrial distributor, reporting to the CFO.
-    Not engineering leadership and not on target_roles at all.
-
-- id: findex
+  worth_applying: 'no'
+  why: Internal IT ownership at an industrial distributor, reporting to the CFO. Not
+    engineering leadership and not on target_roles at all.
+- id: 10_ai_digital_tools_adoption_lead
   jd_id: 10
-  file: AI & Digital Tools Adoption Lead Job in Sydney NSW - SEEK.pdf
   outcome: rejected_screen
-  worth_applying: "yes"
-  label_derived: true
-  why: >-
-    The only one of the fourteen aimed squarely at a listed target role, and
-    the only one a human demonstrably read — eleven days to a decision. Worth
-    the day even though the answer was no.
-
-- id: easy_signs
+  worth_applying: 'yes'
+  why: The only one of the fourteen aimed squarely at a listed target role, and the
+    only one a human demonstrably read — eleven days to a decision. Worth the day
+    even though the answer was no.
+- id: 11_software_engineering_manager
   jd_id: 11
-  file: EasySignsSoftwareEngineeringManagerJob.pdf
   outcome: offer
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    He got this job and did it, and it ended over the Smeaton Grange commute —
-    the absolute filter in his own assets.yaml. **This is the case that
-    defines what the harness measures.** Graded on the offer it is a miss;
-    graded on whether the day was well spent, the scorer is right.
-
-- id: toshiba
+  worth_applying: 'no'
+  why: He got this job and did it, and it ended over the Smeaton Grange commute —
+    the absolute filter in his own assets.yaml. **This is the case that defines what
+    the harness measures.** Graded on the offer it is a miss; graded on whether the
+    day was well spent, the scorer is right.
+- id: 12_engineering_manager
   jd_id: 12
-  file: Engineering-Manager-JD-Toshiba.pdf
   outcome: interview_2
-  worth_applying: "yes"
-  label_derived: true
+  worth_applying: 'yes'
   why: Two interviews on a genuine Engineering Manager role. Clearly worth it.
-
-- id: dius
+- id: 13_lead_software_engineering_consul
   jd_id: 13
-  file: DiUSLeadSoftwareConsultantJDProcess.pdf
   outcome: interview_2
-  worth_applying: "yes"
-  label_derived: true
-  why: >-
-    Two interviews. The scorer said skip at 32/100, calling it business
-    development wearing an engineering title. The outcome says otherwise, and
-    this is the disagreement most worth understanding.
-
-- id: nuix
-  jd_id: 14
-  file: Engineering Manager-AI Team-Nuix-LinkedIn.mhtml
-  outcome: rejected_screen
-  worth_applying: unsure
-  why: >-
-    Engineering Manager on an AI team, on target — but rejected inside two
-    days by what was almost certainly an automated screen, and the profile has
-    real gaps against it (no Kubernetes, thin on-prem plus SaaS delivery).
-    Needs Alan's call.
-
-- id: xero
-  jd_id: 15
-  file: Engineering Manager - Multiple Roles _ Xero _ LinkedIn.pdf
-  outcome: rejected_screen
-  worth_applying: unsure
-  why: >-
-    Fit is good and the role is on target; the ad is an umbrella posting for
-    unnamed positions with 100+ applicants, and it is the second Xero
-    rejection of the same shape. Fit says apply, channel says do not. Alan's
-    call.
-
-- id: onset
-  jd_id: 16
-  file: Engineering Manager _ The Onset _ LinkedIn.pdf
-  outcome: applied_no_reply
-  worth_applying: unsure
-  why: >-
-    The strongest technical match of the fourteen — Java to Node/React/TS,
-    two squads — behind an agency blind ad, on-site in an unnamed part of
-    Greater Sydney. assets.yaml says ask the suburb before scoring it. Worth
-    applying *after* that question, not before.
-
-- id: kira
+  worth_applying: 'yes'
+  why: Two interviews. The scorer said skip at 32/100, calling it business development
+    wearing an engineering title. The outcome says otherwise, and this is the disagreement
+    most worth understanding.
+- id: 17_engineering_lead
   jd_id: 17
-  file: Engineering Lead _ Kira _ LinkedIn.pdf
   outcome: applied_no_reply
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    A hands-on principal IC role at a Southeast Asian fintech, not management.
+  worth_applying: 'no'
+  why: A hands-on principal IC role at a Southeast Asian fintech, not management.
     outcomes.yaml already calls it a weak fit and probably a skip.
-
-- id: anduril
-  jd_id: 18
-  file: Manager, Software Engineering _ Anduril Industries _ LinkedIn.pdf
-  outcome: applied_no_reply
-  worth_applying: unsure
-  why: >-
-    The clearance requirement is a genuine differentiator — Australian
-    citizen, held secret clearance in Canadian defence — but the team builds
-    embedded vehicle and mission software and the profile is enterprise, web
-    and applied AI. Alan's call.
-
-- id: harvey_robinson
+- id: 19_senior_it_project_manager
   jd_id: 19
-  file: Senior IT Project Manager Job in Sydney NSW - SEEK.pdf
   outcome: applied_no_reply
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    IT project delivery — networks, devices, procurement, go-live — behind an
-    agency blind ad. The operational end of a role that is already fourth on
-    target_roles.
-
-- id: sustain_recruit
+  worth_applying: 'no'
+  why: IT project delivery — networks, devices, procurement, go-live — behind an agency
+    blind ad. The operational end of a role that is already fourth on target_roles.
+- id: 20_senior_project_manager_data_plat
   jd_id: 20
-  file: Senior Project Manager - Data Platform Transformation Job in Sydney NSW - SEEK.pdf
   outcome: applied_no_reply
-  worth_applying: "no"
-  label_derived: true
-  why: >-
-    Senior project management of a data platform migration, asking for 5-10
-    years of exactly that plus formal PM certification. Not a track Alan has.
-
-- id: quickli
+  worth_applying: 'no'
+  why: Senior project management of a data platform migration, asking for 5-10 years
+    of exactly that plus formal PM certification. Not a track Alan has.
+- id: 21_saas_product_engineer_award_winn
   jd_id: 21
-  file: SaaS Product Engineer - Award Winning Fintech Scaleup Job in Bondi Junction, Sydney NSW - SEEK.pdf
   outcome: recruiter_call
   worth_applying: unsure
-  why: >-
-    The closest content match in the set — the ad asks for hands-on Claude
-    Code use with critical review of the output — but it is a senior IC role
-    off the management track, and the band straddles the salary floor. Alan's
+  why: The closest content match in the set — the ad asks for hands-on Claude Code
+    use with critical review of the output — but it is a senior IC role off the management
+    track, and the band straddles the salary floor. Alan's call.
+- id: 18_manager_software_engineering
+  jd_id: 18
+  outcome: applied_no_reply
+  worth_applying: unsure
+  why: The clearance requirement is a genuine differentiator — Australian citizen,
+    held secret clearance in Canadian defence — but the team builds embedded vehicle
+    and mission software and the profile is enterprise, web and applied AI. Alan's
     call.
+- id: 16_engineering_manager
+  jd_id: 16
+  outcome: applied_no_reply
+  worth_applying: unsure
+  why: The strongest technical match of the fourteen — Java to Node/React/TS, two
+    squads — behind an agency blind ad, on-site in an unnamed part of Greater Sydney.
+    assets.yaml says ask the suburb before scoring it. Worth applying *after* that
+    question, not before.
+- id: 15_engineering_manager_multiple_rol
+  jd_id: 15
+  outcome: rejected_screen
+  worth_applying: unsure
+  why: Fit is good and the role is on target; the ad is an umbrella posting for unnamed
+    positions with 100+ applicants, and it is the second Xero rejection of the same
+    shape. Fit says apply, channel says do not. Alan's call.
+- id: 14_engineering_manager_ai_team
+  jd_id: 14
+  outcome: rejected_screen
+  worth_applying: unsure
+  why: Engineering Manager on an AI team, on target — but rejected inside two days
+    by what was almost certainly an automated screen, and the profile has real gaps
+    against it (no Kubernetes, thin on-prem plus SaaS delivery). Needs Alan's call.

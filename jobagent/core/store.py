@@ -29,15 +29,18 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from jobagent.core.models import FitAssessment, JobDescription
+from jobagent.core.models import Application, FitAssessment, JobDescription
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
 # not a migration framework and is not pretending to be one: it handles the only
 # kind of change that is safe to make without one.
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "applications": [
+        ("worth_derived", "INTEGER NOT NULL DEFAULT 0"),
+    ],
     "job_descriptions": [
         ("source_url", "TEXT"),
         ("source_metadata", "TEXT"),
@@ -104,6 +107,20 @@ CREATE TABLE IF NOT EXISTS fit_assessments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fit_jd ON fit_assessments (jd_id);
+
+CREATE TABLE IF NOT EXISTS applications (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    jd_id          INTEGER NOT NULL UNIQUE REFERENCES job_descriptions (id)
+                       ON DELETE CASCADE,
+    status         TEXT NOT NULL,
+    applied_on     TEXT,
+    channel        TEXT,
+    notes          TEXT NOT NULL DEFAULT '',
+    worth_applying TEXT NOT NULL DEFAULT 'unsure',
+    worth_why      TEXT NOT NULL DEFAULT '',
+    worth_derived  INTEGER NOT NULL DEFAULT 0,
+    updated_at     TEXT NOT NULL
+);
 """
 
 _LIST_COLUMNS = (
@@ -365,15 +382,22 @@ def add_assessment(conn: sqlite3.Connection, assessment: FitAssessment) -> int:
 
 
 def latest_assessment(
-    conn: sqlite3.Connection, jd_id: int
+    conn: sqlite3.Connection, jd_id: int, *, model: str | None = None
 ) -> FitAssessment | None:
-    """The most recent assessment for one JD, or None."""
+    """The most recent assessment for one JD, or None.
+
+    ``model`` narrows it to runs from one model. Without it, a cheap run made
+    to compare providers becomes the report's headline the moment it finishes,
+    and the numbers change under the reader with nothing saying why.
+    """
+    sql = "SELECT * FROM fit_assessments WHERE jd_id = ?"
+    params: tuple = (jd_id,)
+    if model:
+        sql += " AND model_used LIKE ?"
+        params += (f"%{model}%",)
+    sql += " ORDER BY scored_at DESC, id DESC LIMIT 1"
     try:
-        row = conn.execute(
-            "SELECT * FROM fit_assessments WHERE jd_id = ? "
-            "ORDER BY scored_at DESC, id DESC LIMIT 1",
-            (jd_id,),
-        ).fetchone()
+        row = conn.execute(sql, params).fetchone()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not read assessments for JD {jd_id}: {exc}") from exc
     return _row_to_assessment(row) if row is not None else None
@@ -393,8 +417,104 @@ def list_assessments(conn: sqlite3.Connection, jd_id: int) -> list[FitAssessment
 
 
 # --------------------------------------------------------------------------- #
+# Applications
+# --------------------------------------------------------------------------- #
+
+
+def save_application(conn: sqlite3.Connection, application: Application) -> int:
+    """Insert or update the application for one JD, and return its id.
+
+    One row per JD, replaced rather than appended: unlike an assessment, an
+    application has one current truth. The history that matters — what the
+    scorer said, and when — lives in ``fit_assessments``.
+    """
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO applications (
+                jd_id, status, applied_on, channel, notes, worth_applying,
+                worth_why, worth_derived, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(jd_id) DO UPDATE SET
+                status = excluded.status,
+                applied_on = excluded.applied_on,
+                channel = excluded.channel,
+                notes = excluded.notes,
+                worth_applying = excluded.worth_applying,
+                worth_why = excluded.worth_why,
+                worth_derived = excluded.worth_derived,
+                updated_at = excluded.updated_at
+            """,
+            (
+                application.jd_id,
+                application.status.value,
+                application.applied_on.isoformat() if application.applied_on else None,
+                application.channel,
+                application.notes,
+                application.worth_applying.value,
+                application.worth_why,
+                int(application.worth_derived),
+                _to_iso(application.updated_at),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save the application: {exc}") from exc
+
+    if cursor.lastrowid:
+        return cursor.lastrowid
+    existing = get_application(conn, application.jd_id)
+    if existing is None or existing.id is None:  # pragma: no cover - defensive
+        raise StoreError("Upsert succeeded but the row could not be read back")
+    return existing.id
+
+
+def get_application(conn: sqlite3.Connection, jd_id: int) -> Application | None:
+    try:
+        row = conn.execute(
+            "SELECT * FROM applications WHERE jd_id = ?", (jd_id,)
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not read the application for JD {jd_id}: {exc}") from exc
+    return _row_to_application(row) if row is not None else None
+
+
+def list_applications(conn: sqlite3.Connection) -> list[Application]:
+    """Every application, most recently updated first."""
+    try:
+        rows = conn.execute(
+            "SELECT * FROM applications ORDER BY updated_at DESC, id DESC"
+        ).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list applications: {exc}") from exc
+    return [_row_to_application(row) for row in rows]
+
+
+# --------------------------------------------------------------------------- #
 # Row mapping
 # --------------------------------------------------------------------------- #
+
+
+def _row_to_application(row: sqlite3.Row) -> Application:
+    data = {
+        "id": row["id"],
+        "jd_id": row["jd_id"],
+        "status": row["status"],
+        "applied_on": row["applied_on"],
+        "channel": row["channel"],
+        "notes": row["notes"],
+        "worth_applying": row["worth_applying"],
+        "worth_why": row["worth_why"],
+        "worth_derived": bool(row["worth_derived"]),
+        "updated_at": row["updated_at"],
+    }
+    try:
+        return Application.model_validate(data)
+    except ValidationError as exc:
+        raise StoreError(
+            f"Row {row['id']} in applications no longer matches the model. "
+            f"The schema changed without a migration.\n{exc}"
+        ) from exc
 
 
 def _row_to_assessment(row: sqlite3.Row) -> FitAssessment:

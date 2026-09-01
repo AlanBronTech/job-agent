@@ -205,11 +205,15 @@ def test_a_withdrawn_case_is_left_out_of_the_correlation() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_the_real_case_set_loads() -> None:
+def test_the_shipped_snapshot_parses() -> None:
+    """`evals/cases.yaml` is an export of Alan's pipeline, so its contents are
+    his data and change as he records outcomes. All this asserts is that the
+    file in the repository still loads — the Easy Signs *shape* is tested
+    synthetically above, where it cannot go stale."""
     cases = load_cases()
 
-    assert len(cases) >= 14
-    assert any(c.id == "easy_signs" and c.worth_applying is Worth.no for c in cases)
+    assert cases
+    assert all(case.jd_id > 0 for case in cases)
 
 
 def test_unquoted_yaml_booleans_are_tolerated(tmp_path: Path) -> None:
@@ -290,3 +294,74 @@ def test_an_identical_rerun_shows_no_change() -> None:
     change = diff_runs("toshiba", [assessment(), assessment()])
 
     assert change.changed is False
+
+
+# --------------------------------------------------------------------------- #
+# Building the case set from the pipeline
+# --------------------------------------------------------------------------- #
+
+
+def application(jd_id: int, **overrides):
+    from datetime import datetime, timezone
+
+    from jobagent.core.models import Application, ApplicationStatus
+
+    data = {
+        "jd_id": jd_id,
+        "status": ApplicationStatus.interview_2,
+        "worth_applying": Worth.yes,
+        "worth_why": "Two interviews.",
+        "updated_at": datetime(2026, 9, 1, tzinfo=timezone.utc),
+    }
+    data.update(overrides)
+    return Application(**data)
+
+
+def test_a_finished_application_becomes_a_case() -> None:
+    from jobagent.core.evals import cases_from_applications
+
+    cases = cases_from_applications(
+        [application(12)], {12: "Engineering Manager"}
+    )
+
+    assert len(cases) == 1
+    assert cases[0].jd_id == 12
+    assert cases[0].outcome is Outcome.interview_2
+    assert cases[0].worth_applying is Worth.yes
+    assert cases[0].id == "12_engineering_manager"
+
+
+def test_an_application_still_in_flight_is_left_out() -> None:
+    """Grading a scorer on a case that has not finished happening rewards it
+    for nothing."""
+    from jobagent.core.evals import cases_from_applications
+    from jobagent.core.models import ApplicationStatus
+
+    cases = cases_from_applications(
+        [
+            application(1, status=ApplicationStatus.identified),
+            application(2, status=ApplicationStatus.applied),
+            application(3, status=ApplicationStatus.applied_no_reply),
+        ],
+        {},
+    )
+
+    assert [case.jd_id for case in cases] == [3]
+
+
+def test_the_derived_marker_carries_into_the_case() -> None:
+    from jobagent.core.evals import cases_from_applications
+
+    cases = cases_from_applications([application(12, worth_derived=True)], {})
+
+    assert cases[0].label_derived is True
+
+
+def test_a_case_id_survives_an_awkward_title() -> None:
+    from jobagent.core.evals import cases_from_applications
+
+    cases = cases_from_applications(
+        [application(9)], {9: "Manager, Software Engineering (Client-Facing)!!"}
+    )
+
+    assert cases[0].id == "9_manager_software_engineering_cli"
