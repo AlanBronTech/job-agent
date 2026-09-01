@@ -21,7 +21,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 
 class Visibility(str, Enum):
@@ -520,6 +520,19 @@ class FitAssessment(_Base):
 
     overall_score: int = Field(ge=0, le=100)
     recruiter_screen_score: int = Field(ge=0, le=100)
+
+    @field_validator("overall_score", "recruiter_screen_score", mode="before")
+    @classmethod
+    def _round_a_float(cls, value: object) -> object:
+        """A model that answers 62.0, or 62.5, means 62.
+
+        Rejecting it loses the whole assessment over a decimal point — which
+        is exactly what happened to two eval cases the first time the scorer
+        was run against Gemini.
+        """
+        if isinstance(value, float):
+            return round(value)
+        return value
     verdict: Verdict
     rationale: str
 

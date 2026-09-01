@@ -346,3 +346,87 @@ def test_the_truncation_message_names_the_budget() -> None:
 
     with pytest.raises(LLMError, match="max_tokens=4,096"):
         client.complete_json(prompt="parse this", max_tokens=4096)
+
+
+# --------------------------------------------------------------------------- #
+# Budget mode
+# --------------------------------------------------------------------------- #
+
+
+def test_budget_mode_overrides_every_call_type() -> None:
+    """A half-applied budget mode — cheap parsing, expensive scoring — is the
+    shape of an unwelcome bill."""
+    from jobagent.config import Config
+
+    config = Config(
+        budget_mode=True,
+        llm_parse="anthropic:claude-sonnet-5",
+        llm_score="anthropic:claude-sonnet-5",
+        llm_default="anthropic:claude-sonnet-5",
+    )
+
+    for call_type in CallType:
+        route = resolve_route(config, call_type)
+        assert route.provider is Provider.gemini
+        assert route.model == "gemini-2.5-flash"
+
+
+def test_budget_mode_off_leaves_routing_alone() -> None:
+    from jobagent.config import Config
+
+    config = Config(budget_mode=False, llm_parse="anthropic:claude-sonnet-5")
+
+    route = resolve_route(config, CallType.parse_jd)
+
+    assert route.provider is Provider.anthropic
+    assert route.model == "claude-sonnet-5"
+
+
+def test_the_budget_model_is_configurable() -> None:
+    from jobagent.config import Config
+
+    config = Config(budget_mode=True, budget_model="gemini:gemini-2.0-flash")
+
+    assert resolve_route(config, CallType.score).model == "gemini-2.0-flash"
+
+
+class _FakeGeminiError(Exception):
+    """Shaped like the SDK's APIError: a code, and Google's quota detail."""
+
+    def __init__(self, code: int, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def test_a_daily_free_tier_cap_is_not_treated_as_transient() -> None:
+    """Backing off does not clear a daily cap — it spends the rest of the
+    allowance and delays the failure by a minute per attempt."""
+    from jobagent.adapters.llm import _is_daily_quota
+
+    error = _FakeGeminiError(
+        429,
+        "429 RESOURCE_EXHAUSTED. quotaId: "
+        "'GenerateRequestsPerDayPerProjectPerModel-FreeTier', quotaValue: '20'",
+    )
+
+    assert _is_daily_quota(error) is True
+
+
+def test_a_per_minute_rate_limit_is_still_retried() -> None:
+    from jobagent.adapters.llm import _is_daily_quota
+
+    error = _FakeGeminiError(429, "429 RESOURCE_EXHAUSTED. Requests per minute exceeded.")
+
+    assert _is_daily_quota(error) is False
+
+
+def test_other_failures_are_not_mistaken_for_a_quota() -> None:
+    from jobagent.adapters.llm import _is_daily_quota
+
+    assert _is_daily_quota(_FakeGeminiError(503, "overloaded")) is False
+
+
+def test_quota_exhausted_is_an_llm_error() -> None:
+    from jobagent.adapters.llm import QuotaExhaustedError
+
+    assert issubclass(QuotaExhaustedError, LLMError)

@@ -61,6 +61,14 @@ def check() -> None:
     keys.add_row("GEMINI_API_KEY", _mask(config.gemini_api_key))
     console.print(keys)
 
+    if config.budget_mode:
+        console.print(
+            "\n[bold yellow]BUDGET MODE[/] — every call routes to "
+            f"[bold]{config.budget_model}[/], overriding the routing below. "
+            "[dim]Free tier; the answers are worse. Unset BUDGET_MODE, or drop "
+            "--budget, to go back.[/]"
+        )
+
     console.print("\n[bold]Routing[/] [dim](LLM_<CALLTYPE> → LLM_DEFAULT → legacy)[/]")
     routes = Table(show_header=True, box=None, pad_edge=False)
     routes.add_column("call type", style="cyan")
