@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import typer
@@ -25,7 +25,7 @@ from jobagent.core.generate import (
     build_cover_letter,
     build_resume,
 )
-from jobagent.core.models import JobDescription, Verdict
+from jobagent.core.models import Application, JobDescription, Verdict
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.store import StoreError
 from jobagent.core.validation import Severity, ValidationIssue
@@ -76,6 +76,9 @@ def generate(
             "assessment."
         )
         raise typer.Exit(code=2)
+
+    if assessment.verdict is Verdict.skip and force:
+        _record_override(config, jd_id)
 
     if assessment.verdict is Verdict.skip and not force:
         err_console.print(
@@ -209,6 +212,27 @@ def _report(folder: Path, written: list[Path], issues: list[ValidationIssue]) ->
             "[dim]An unsupported number means the claim is either invented or "
             "missing from the profile — check which before editing.[/]"
         )
+
+
+def _record_override(config, jd_id: int) -> None:
+    """Note that Alan generated documents against a `skip`.
+
+    Recorded rather than merely permitted, because the interesting question is
+    not whether he can overrule the scorer — he obviously can — but who turns
+    out to be right, and that is only answerable if the disagreements are
+    counted.
+    """
+    try:
+        with store.open_store(config.db_path) as conn:
+            application = store.get_application(conn, jd_id) or Application(
+                jd_id=jd_id, updated_at=datetime.now(timezone.utc)
+            )
+            application.overrode_scorer = True
+            application.updated_at = datetime.now(timezone.utc)
+            store.save_application(conn, application)
+    except StoreError as exc:
+        # Never let bookkeeping stop the documents being written.
+        err_console.print(f"[yellow]Could not record the override: {exc}[/]")
 
 
 def _read_questions(path: Path) -> list[str]:

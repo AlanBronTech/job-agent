@@ -310,6 +310,29 @@ def _render_report(report: EvalReport) -> None:
             f"Signs case scores badly here and is right.[/]"
         )
 
+    if report.overrides:
+        settled = [
+            result for result in report.overrides
+            if result.case.worth_applying is not Worth.unsure
+        ]
+        console.print(
+            f"\n[bold]Overrides[/] — you generated against a skip "
+            f"[bold]{len(report.overrides)}[/] time(s)"
+        )
+        if settled:
+            console.print(
+                f"  of the {len(settled)} since settled, you were right "
+                f"[bold]{report.overrides_vindicated}[/] time(s)"
+            )
+            console.print(
+                "  [dim]This is the standing disagreement settling on evidence. "
+                "A run of overrides you were right about is the case for "
+                "loosening the verdict threshold; a run you were wrong about is "
+                "the case for leaving it alone.[/]"
+            )
+        else:
+            console.print("  [dim]none of them have an outcome yet.[/]")
+
     notes = []
     if report.unlabelled:
         notes.append(f"{report.unlabelled} case(s) unlabelled")

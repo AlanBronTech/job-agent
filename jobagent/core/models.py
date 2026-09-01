@@ -633,6 +633,14 @@ class Application(_Base):
     # judgment when it is someone else's inference.
     worth_derived: bool = False
 
+    # Set when Alan generated documents against a `skip` verdict. The scorer's
+    # four disagreements across the first fourteen cases were all in one
+    # direction — it said skip where he judged the role worth applying to —
+    # and the way to find out who is right is to record the overrides and see
+    # what becomes of them, not to tune the prompt on fourteen cases and one
+    # retrospective opinion.
+    overrode_scorer: bool = False
+
     updated_at: datetime
 
 

@@ -83,6 +83,8 @@ class EvalCase(BaseModel):
     # than stated by Alan. Reported separately so a metric is never quoted as
     # his judgment when it is a reading of his notes.
     label_derived: bool = False
+    # Alan generated documents against a `skip` verdict for this one.
+    overrode_scorer: bool = False
     file: str = ""
 
     @field_validator("worth_applying", mode="before")
@@ -151,6 +153,12 @@ class EvalReport:
     # The secondary, noisier measure.
     outcome_correlation: float | None = None
     derived_labels: int = 0
+
+    # Cases where Alan generated documents against a `skip`. Counted so the
+    # standing disagreement between him and the scorer settles on evidence
+    # rather than on whoever argued last.
+    overrides: list[CaseResult] = field(default_factory=list)
+    overrides_vindicated: int = 0
 
     @property
     def labelled(self) -> int:
@@ -221,6 +229,7 @@ def cases_from_applications(
                 worth_applying=application.worth_applying,
                 why=application.worth_why,
                 label_derived=application.worth_derived,
+                overrode_scorer=application.overrode_scorer,
             )
         )
     return cases
@@ -257,6 +266,10 @@ def build_report(results: list[CaseResult]) -> EvalReport:
             report.agree += 1
         if result.case.label_derived:
             report.derived_labels += 1
+        if result.case.overrode_scorer:
+            report.overrides.append(result)
+            if result.case.worth_applying is Worth.yes:
+                report.overrides_vindicated += 1
 
     worth = [
         r.assessment.overall_score
