@@ -121,6 +121,27 @@ class ExtractedAd:
     truncated: bool = False
     """The capture ends at a "…more" toggle: the ad is only partly present."""
 
+    @property
+    def thin(self) -> bool:
+        """Too little text to be a whole advertisement.
+
+        The "…more" guard needs that literal marker, and a print-to-PDF of a
+        collapsed LinkedIn description does not always carry one: the Mattox
+        capture (JD 23) ended cleanly at a sentence boundary with 565
+        characters, no requirements, and nothing to score against. Length is
+        the signal the marker missed.
+
+        A warning, not a refusal, because a genuine two-sentence agency stub
+        exists and is worth recording as one.
+        """
+        return len(self.text) < THIN_AD_CHARS
+
+
+# Under this, a capture is far more likely to be a collapsed description than
+# a short ad. Measured over the fifteen ads in the drop folder: the collapsed
+# Mattox capture yields 565 characters, the shortest whole ad (Care GP) 1,340.
+# The gap is wide enough that the threshold does not need to be clever.
+THIN_AD_CHARS = 800
 
 # How far above "About the job" the posting line may sit and still be taken as
 # the start of the ad. A "meet the hiring team" block pushes it well back.
