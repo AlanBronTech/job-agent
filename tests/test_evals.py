@@ -365,3 +365,42 @@ def test_a_case_id_survives_an_awkward_title() -> None:
     )
 
     assert cases[0].id == "9_manager_software_engineering_cli"
+
+
+# --------------------------------------------------------------------------- #
+# Overrides — the standing disagreement, counted
+# --------------------------------------------------------------------------- #
+
+
+def test_an_override_is_counted() -> None:
+    """Whether Alan can overrule the scorer is not the question — he
+    obviously can. Who turns out to be right is, and that needs counting."""
+    report = build_report(
+        [
+            result({"id": "a", "overrode_scorer": True, "worth_applying": Worth.yes},
+                   {"verdict": Verdict.skip}),
+            result({"id": "b", "overrode_scorer": True, "worth_applying": Worth.no},
+                   {"verdict": Verdict.skip}),
+            result({"id": "c"}),
+        ]
+    )
+
+    assert len(report.overrides) == 2
+    assert report.overrides_vindicated == 1
+
+
+def test_an_unsettled_override_is_counted_but_not_scored() -> None:
+    report = build_report(
+        [result({"overrode_scorer": True, "worth_applying": Worth.unsure})]
+    )
+
+    assert len(report.overrides) == 1
+    assert report.overrides_vindicated == 0
+
+
+def test_the_override_flag_carries_from_the_pipeline() -> None:
+    from jobagent.core.evals import cases_from_applications
+
+    cases = cases_from_applications([application(12, overrode_scorer=True)], {})
+
+    assert cases[0].overrode_scorer is True

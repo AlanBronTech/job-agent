@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from jobagent.core.models import Application, FitAssessment, JobDescription
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -40,6 +40,7 @@ SCHEMA_VERSION = 6
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "applications": [
         ("worth_derived", "INTEGER NOT NULL DEFAULT 0"),
+        ("overrode_scorer", "INTEGER NOT NULL DEFAULT 0"),
     ],
     "job_descriptions": [
         ("source_url", "TEXT"),
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS applications (
     worth_applying TEXT NOT NULL DEFAULT 'unsure',
     worth_why      TEXT NOT NULL DEFAULT '',
     worth_derived  INTEGER NOT NULL DEFAULT 0,
+    overrode_scorer INTEGER NOT NULL DEFAULT 0,
     updated_at     TEXT NOT NULL
 );
 """
@@ -433,8 +435,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
             """
             INSERT INTO applications (
                 jd_id, status, applied_on, channel, notes, worth_applying,
-                worth_why, worth_derived, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?)
+                worth_why, worth_derived, overrode_scorer, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(jd_id) DO UPDATE SET
                 status = excluded.status,
                 applied_on = excluded.applied_on,
@@ -443,6 +445,7 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 worth_applying = excluded.worth_applying,
                 worth_why = excluded.worth_why,
                 worth_derived = excluded.worth_derived,
+                overrode_scorer = excluded.overrode_scorer,
                 updated_at = excluded.updated_at
             """,
             (
@@ -454,6 +457,7 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 application.worth_applying.value,
                 application.worth_why,
                 int(application.worth_derived),
+                int(application.overrode_scorer),
                 _to_iso(application.updated_at),
             ),
         )
@@ -506,6 +510,7 @@ def _row_to_application(row: sqlite3.Row) -> Application:
         "worth_applying": row["worth_applying"],
         "worth_why": row["worth_why"],
         "worth_derived": bool(row["worth_derived"]),
+        "overrode_scorer": bool(row["overrode_scorer"]),
         "updated_at": row["updated_at"],
     }
     try:
