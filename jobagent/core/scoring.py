@@ -50,8 +50,10 @@ PROMPT_NAME = "score_fit"
 # An assessment is several times the size of a parsed ad: one entry per
 # requirement with a note against each, plus challenge points, emphasis and
 # questions. The 4,096-token default is tuned for parsing and truncates this
-# mid-string, which then fails as invalid JSON and retries into the same wall.
-MAX_TOKENS = 8192
+# mid-string. 8,192 was not enough either — the DiUS consulting ad has 23
+# must-haves — so the budget is generous and the prompt bounds the verbosity
+# instead, which is the part actually worth controlling.
+MAX_TOKENS = 16384
 
 # Keys the prompt is contracted to return. Anything else the model volunteers
 # is dropped rather than passed to a model with extra="forbid".

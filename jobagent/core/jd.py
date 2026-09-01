@@ -17,6 +17,12 @@ from jobagent.core.prompts import PromptError, load_prompt
 
 PROMPT_NAME = "parse_jd"
 
+# A long ad — the DiUS consulting JD has 23 requirement bullets — produces
+# more than the 4,096-token default in structured output, and a truncated
+# answer is unparseable JSON. Measured, not guessed: three calls came back at
+# exactly 4,096 output tokens before this was raised.
+MAX_TOKENS = 8192
+
 MIN_TEXT_LENGTH = 120
 
 # Keys the prompt is contracted to return. Anything else the model volunteers
@@ -76,7 +82,9 @@ def parse_jd(
         raise JDError(str(exc)) from exc
 
     try:
-        parsed, _response = client.complete_json(prompt=prompt, label=PROMPT_NAME)
+        parsed, _response = client.complete_json(
+            prompt=prompt, label=PROMPT_NAME, max_tokens=MAX_TOKENS
+        )
     except LLMError as exc:
         raise JDError(f"Model call failed while parsing the JD: {exc}") from exc
 
