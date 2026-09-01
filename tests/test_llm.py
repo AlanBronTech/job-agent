@@ -130,6 +130,7 @@ def test_complete_logs_run_line(tmp_path: Path):
     assert record["model"] == "claude-haiku-4-5"
     assert record["input_tokens"] == 100
     assert record["cost_usd"] == pytest.approx(350 / 1_000_000)
+    assert record["truncated"] is False
 
 
 def test_no_log_path_is_a_noop():
@@ -339,6 +340,19 @@ def test_a_truncated_answer_is_not_retried() -> None:
         client.complete_json(prompt="parse this", max_tokens=4096)
 
     assert client.calls == 1
+
+
+def test_a_truncated_call_is_logged_as_truncated(tmp_path: Path) -> None:
+    """The run log is where a blown ceiling gets diagnosed after the fact."""
+    client = TruncatingClient()
+    client._runs_log_path = tmp_path / "runs.jsonl"
+
+    with pytest.raises(LLMError):
+        client.complete_json(prompt="parse this", max_tokens=4096, label="prep")
+
+    record = json.loads((tmp_path / "runs.jsonl").read_text(encoding="utf-8"))
+    assert record["truncated"] is True
+    assert record["output_tokens"] == 4096
 
 
 def test_the_truncation_message_names_the_budget() -> None:

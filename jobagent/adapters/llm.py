@@ -259,6 +259,8 @@ class LLMClient(ABC):
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
             "cost_usd": response.cost_usd,
+            # The one field that explains a failed call after the fact.
+            "truncated": response.truncated,
         }
         try:
             with open(self._runs_log_path, "a", encoding="utf-8") as handle:

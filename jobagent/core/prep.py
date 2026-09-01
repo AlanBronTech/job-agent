@@ -31,7 +31,11 @@ from jobagent.core.prompts import PromptError, load_prompt
 from jobagent.core.validation import ValidationIssue, validate_rendered
 
 PROMPT_NAME = "interview_prep"
-MAX_TOKENS = 8192
+# Eight to twelve questions, each with an answer sketch and a story
+# reference, plus the questions to ask them. A dense ad (Ebury, JD 22)
+# ran the answer off the end of an 8,192-token ceiling, and a truncated
+# answer is a hard failure, not a degraded one — this matches scoring.
+MAX_TOKENS = 16384
 
 
 class PrepError(Exception):
