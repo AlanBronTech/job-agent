@@ -17,6 +17,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from jobagent.core.models import THIN_AD_CHARS
+
 # Where the advertisement starts, on the platforms Alan uses. Seek ads often
 # have no heading at all — the copy simply begins — which is why a missing
 # anchor has to degrade to "keep everything" rather than fail.
@@ -136,12 +138,6 @@ class ExtractedAd:
         """
         return len(self.text) < THIN_AD_CHARS
 
-
-# Under this, a capture is far more likely to be a collapsed description than
-# a short ad. Measured over the fifteen ads in the drop folder: the collapsed
-# Mattox capture yields 565 characters, the shortest whole ad (Care GP) 1,340.
-# The gap is wide enough that the threshold does not need to be clever.
-THIN_AD_CHARS = 800
 
 # How far above "About the job" the posting line may sit and still be taken as
 # the start of the ad. A "meet the hiring team" block pushes it well back.

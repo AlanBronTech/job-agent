@@ -383,3 +383,19 @@ def test_the_prompt_states_the_score_range(profile_factory) -> None:
     score_fit(make_jd(), make_profile(profile_factory), client=client)
 
     assert "0 to 100" in client.prompt
+
+
+# --------------------------------------------------------------------------- #
+# A stub ad is not scoreable
+# --------------------------------------------------------------------------- #
+
+
+def test_a_stub_ad_is_thin() -> None:
+    """JD 23 held 565 characters and the scorer still assessed five
+    requirements the ad never stated. Right verdict, wrong reasons."""
+    assert make_jd(raw_text="Design and implement AI solutions. " * 4).thin is True
+
+
+def test_a_whole_ad_is_not_thin() -> None:
+    assert make_jd(raw_text="w" * 800).thin is False
+    assert make_jd(raw_text="w" * 5000).thin is False

@@ -382,6 +382,15 @@ class SalaryRange(_Base):
     raw: str | None = None
 
 
+# Under this many characters, an ad is far more likely to be a collapsed
+# capture than a short advertisement. Measured over the fifteen ads in the drop
+# folder: the collapsed Mattox capture yields 565 characters, the shortest
+# whole ad (Care GP) 1,340. The gap is wide enough that this need not be
+# clever. Lives here because both a fresh capture and a stored JD are judged
+# by it, and they must be judged the same way.
+THIN_AD_CHARS = 800
+
+
 class JobDescription(_Base):
     """A parsed job ad.
 
@@ -433,6 +442,17 @@ class JobDescription(_Base):
     source_metadata: str | None = None
     raw_text: str
     ingested_at: datetime
+
+    @property
+    def thin(self) -> bool:
+        """Too little ad text to draw conclusions from.
+
+        The scorer reads two sentences with the same confidence it reads a
+        ten-thousand-character ad: the Mattox stub (JD 23) produced five
+        assessed "requirements" the ad never stated. Right verdict, wrong
+        reasons. `score` refuses these without --force.
+        """
+        return len(self.raw_text) < THIN_AD_CHARS
 
 
 # --------------------------------------------------------------------------- #
