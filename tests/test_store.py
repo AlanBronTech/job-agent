@@ -10,8 +10,15 @@ import pytest
 
 from jobagent.core import store
 from jobagent.core.models import (
+    ChallengePoint,
+    ConstraintCheck,
+    ConstraintStatus,
+    FitAssessment,
     HiringStatus,
+    MatchStatus,
+    RequirementMatch,
     Seniority,
+    Verdict,
     JobDescription,
     SalaryRange,
     WorkArrangement,
@@ -289,3 +296,140 @@ def test_a_v2_database_gains_the_v3_columns(tmp_path) -> None:
     assert loaded is not None
     assert loaded.via_agency is False
     assert loaded.hiring_status is HiringStatus.unknown
+
+
+# --------------------------------------------------------------------------- #
+# Fit assessments
+# --------------------------------------------------------------------------- #
+
+
+def make_assessment(jd_id: int, **overrides) -> FitAssessment:
+    data = {
+        "jd_id": jd_id,
+        "overall_score": 72,
+        "recruiter_screen_score": 48,
+        "verdict": Verdict.apply_with_caveats,
+        "rationale": "On target, but the office location is unstated.",
+        "target_role_match": True,
+        "target_role_note": "Engineering Manager.",
+        "constraints": [
+            ConstraintCheck(
+                name="location",
+                status=ConstraintStatus.unknown,
+                detail="On-site, no suburb named.",
+                question="Which office?",
+            )
+        ],
+        "requirements": [
+            RequirementMatch(
+                requirement="5+ years managing teams",
+                status=MatchStatus.met,
+                evidence_ref="acme_em",
+                note="Two squads for three years.",
+            )
+        ],
+        "emphasise": ["Lead with the founder track"],
+        "challenge_points": [
+            ChallengePoint(point="Why leaving?", response="The recorded reason.")
+        ],
+        "profile_gaps": ["No Kubernetes anywhere"],
+        "questions_to_ask": ["Which office?"],
+        "model_used": "claude-sonnet-5",
+        "scored_at": datetime(2026, 9, 1, 3, 0, tzinfo=timezone.utc),
+    }
+    data.update(overrides)
+    return FitAssessment(**data)
+
+
+def test_assessment_round_trips_with_its_nested_objects(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+
+    store.add_assessment(conn, make_assessment(jd_id))
+    loaded = store.latest_assessment(conn, jd_id)
+
+    assert loaded is not None
+    assert loaded.verdict is Verdict.apply_with_caveats
+    assert loaded.constraints[0].status is ConstraintStatus.unknown
+    assert loaded.constraints[0].question == "Which office?"
+    assert loaded.requirements[0].status is MatchStatus.met
+    assert loaded.requirements[0].evidence_ref == "acme_em"
+    assert loaded.challenge_points[0].point == "Why leaving?"
+    assert loaded.profile_gaps == ["No Kubernetes anywhere"]
+
+
+def test_rescoring_keeps_both_runs(conn) -> None:
+    """The eval harness compares a prompt change against what came before, so
+    an assessment must never overwrite its predecessor."""
+    jd_id = store.add_jd(conn, make_jd())
+    store.add_assessment(conn, make_assessment(jd_id, overall_score=40))
+    store.add_assessment(
+        conn,
+        make_assessment(
+            jd_id,
+            overall_score=80,
+            scored_at=datetime(2026, 9, 2, 3, 0, tzinfo=timezone.utc),
+        ),
+    )
+
+    history = store.list_assessments(conn, jd_id)
+
+    assert [a.overall_score for a in history] == [80, 40]
+    assert store.latest_assessment(conn, jd_id).overall_score == 80
+
+
+def test_no_assessment_yet_is_none_not_an_error(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+
+    assert store.latest_assessment(conn, jd_id) is None
+    assert store.list_assessments(conn, jd_id) == []
+
+
+def test_deleting_a_jd_takes_its_assessments_with_it(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+    store.add_assessment(conn, make_assessment(jd_id))
+
+    store.delete_jd(conn, jd_id)
+
+    assert store.list_assessments(conn, jd_id) == []
+
+
+def test_free_text_seniority_from_an_older_row_is_normalised(tmp_path) -> None:
+    """Seniority was free text until the eleven-ad prompt pass. Rows written
+    then hold "Engineering Manager", which no longer validates — without this
+    the store raises on every read of them."""
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        """
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE job_descriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL, company TEXT, location TEXT,
+            work_type TEXT NOT NULL, work_arrangement TEXT NOT NULL,
+            salary_json TEXT, seniority TEXT,
+            must_haves TEXT NOT NULL DEFAULT '[]',
+            nice_to_haves TEXT NOT NULL DEFAULT '[]',
+            tech_stack TEXT NOT NULL DEFAULT '[]',
+            responsibilities TEXT NOT NULL DEFAULT '[]',
+            red_flags TEXT NOT NULL DEFAULT '[]',
+            source TEXT, source_url TEXT, source_metadata TEXT,
+            raw_text TEXT NOT NULL, ingested_at TEXT NOT NULL
+        );
+        INSERT INTO job_descriptions
+            (title, work_type, work_arrangement, seniority, raw_text, ingested_at)
+        VALUES
+            ('EM', 'permanent', 'hybrid', 'Engineering Manager', 'x', '2026-08-31T03:00:00+00:00'),
+            ('Lead', 'permanent', 'hybrid', 'Lead', 'x', '2026-08-31T03:00:00+00:00'),
+            ('Odd', 'permanent', 'hybrid', 'Chief Wizard', 'x', '2026-08-31T03:00:00+00:00');
+        """
+    )
+    old.commit()
+    old.close()
+
+    with store.open_store(path) as conn:
+        loaded = {jd.title: jd.seniority for jd in store.list_jds(conn)}
+
+    assert loaded["EM"] is Seniority.manager
+    assert loaded["Lead"] is Seniority.lead
+    # Not guessed from prose — `unknown` is a first-class value.
+    assert loaded["Odd"] is Seniority.unknown

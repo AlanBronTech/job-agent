@@ -7,6 +7,7 @@ import typer
 from jobagent.cli import config as config_cli
 from jobagent.cli import jd as jd_cli
 from jobagent.cli import profile as profile_cli
+from jobagent.cli import score as score_cli
 
 app = typer.Typer(
     help="Personal, interactive job-application agent.",
@@ -16,6 +17,8 @@ app = typer.Typer(
 app.add_typer(profile_cli.app, name="profile")
 app.add_typer(config_cli.app, name="config")
 app.add_typer(jd_cli.app, name="jd")
+# `score` is one command, not a group — mounted directly.
+app.command(name="score")(score_cli.score)
 
 
 if __name__ == "__main__":

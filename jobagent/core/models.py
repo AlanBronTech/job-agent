@@ -433,3 +433,121 @@ class JobDescription(_Base):
     source_metadata: str | None = None
     raw_text: str
     ingested_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Fit assessment (Phase 3)
+# --------------------------------------------------------------------------- #
+
+
+class MatchStatus(str, Enum):
+    """How well the profile answers one requirement.
+
+    ``partial`` is the honest home for transferable experience. A requirement
+    answered by adjacent work is not met, and calling it met is how a scorer
+    talks its owner into a day of wasted effort.
+    """
+
+    met = "met"
+    partial = "partial"
+    gap = "gap"
+
+
+class Verdict(str, Enum):
+    apply = "apply"
+    apply_with_caveats = "apply_with_caveats"
+    skip = "skip"
+
+
+class ConstraintStatus(str, Enum):
+    """Whether one of Alan's stated hard filters is satisfied.
+
+    ``unknown`` is the important value and the reason these are checked in
+    code rather than asked of a model. The CareGP ad said "on-site" and named
+    no suburb; ``assets.yaml`` says such an ad must not be scored as a fit
+    until the suburb is known. That is a third state, and a boolean cannot
+    hold it.
+    """
+
+    ok = "ok"
+    breach = "breach"
+    unknown = "unknown"
+
+
+class ConstraintCheck(_Base):
+    """One hard filter from ``target_filters``, evaluated against one ad.
+
+    Computed in Python, never by the model. These are arithmetic and set
+    membership against values Alan has already decided — a model would apply
+    them inconsistently, and inconsistency here means the tool argues him into
+    a role he has already ruled out.
+    """
+
+    name: str
+    status: ConstraintStatus
+    detail: str
+    # What to ask before applying, when the ad simply does not say.
+    question: str | None = None
+
+
+class RequirementMatch(_Base):
+    requirement: str
+    status: MatchStatus
+    # Which profile entry evidences it: a role id, story id, differentiator id
+    # or founder-entry id. Required for `met` — an uncitable claim is not met.
+    evidence_ref: str | None = None
+    note: str
+
+
+class ChallengePoint(_Base):
+    point: str
+    response: str
+
+
+class FitAssessment(_Base):
+    """The output of scoring one ad against the profile.
+
+    Two scores, because two different readers decide in sequence and they do
+    not read the same way. ``recruiter_screen_score`` is what survives a
+    keyword pass by someone who is not an engineer; ``overall_score`` is what
+    a hiring manager reading properly would conclude. Most rejections in the
+    recorded outcomes happened at the first, and a tool that reports only the
+    second explains none of them.
+    """
+
+    id: int | None = None
+    jd_id: int
+
+    overall_score: int = Field(ge=0, le=100)
+    recruiter_screen_score: int = Field(ge=0, le=100)
+    verdict: Verdict
+    rationale: str
+
+    # Whether the ad is for a role on target_roles at all. Across eleven
+    # recorded applications this predicted the outcome better than the
+    # requirement match did: the only one that drew a considered human
+    # response was the only one aimed at a listed target role.
+    target_role_match: bool
+    target_role_note: str
+
+    constraints: list[ConstraintCheck] = Field(default_factory=list)
+    requirements: list[RequirementMatch] = Field(default_factory=list)
+    emphasise: list[str] = Field(default_factory=list)
+    challenge_points: list[ChallengePoint] = Field(default_factory=list)
+    profile_gaps: list[str] = Field(default_factory=list)
+    questions_to_ask: list[str] = Field(default_factory=list)
+
+    model_used: str | None = None
+    scored_at: datetime
+
+    @property
+    def unmet(self) -> list[RequirementMatch]:
+        return [r for r in self.requirements if r.status is MatchStatus.gap]
+
+    @property
+    def breaches(self) -> list[ConstraintCheck]:
+        return [c for c in self.constraints if c.status is ConstraintStatus.breach]
+
+    @property
+    def unknowns(self) -> list[ConstraintCheck]:
+        return [c for c in self.constraints if c.status is ConstraintStatus.unknown]

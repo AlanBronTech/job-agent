@@ -29,9 +29,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from jobagent.core.models import JobDescription
+from jobagent.core.models import FitAssessment, JobDescription
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -82,6 +82,28 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
 
 CREATE INDEX IF NOT EXISTS idx_jd_company ON job_descriptions (company);
 CREATE INDEX IF NOT EXISTS idx_jd_ingested ON job_descriptions (ingested_at);
+
+CREATE TABLE IF NOT EXISTS fit_assessments (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    jd_id                  INTEGER NOT NULL REFERENCES job_descriptions (id)
+                               ON DELETE CASCADE,
+    overall_score          INTEGER NOT NULL,
+    recruiter_screen_score INTEGER NOT NULL,
+    verdict                TEXT NOT NULL,
+    rationale              TEXT NOT NULL,
+    target_role_match      INTEGER NOT NULL,
+    target_role_note       TEXT NOT NULL,
+    constraints            TEXT NOT NULL DEFAULT '[]',
+    requirements           TEXT NOT NULL DEFAULT '[]',
+    emphasise              TEXT NOT NULL DEFAULT '[]',
+    challenge_points       TEXT NOT NULL DEFAULT '[]',
+    profile_gaps           TEXT NOT NULL DEFAULT '[]',
+    questions_to_ask       TEXT NOT NULL DEFAULT '[]',
+    model_used             TEXT,
+    scored_at              TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fit_jd ON fit_assessments (jd_id);
 """
 
 _LIST_COLUMNS = (
@@ -90,6 +112,17 @@ _LIST_COLUMNS = (
     "tech_stack",
     "responsibilities",
     "red_flags",
+)
+
+# Same treatment for the assessment: read and written whole, never queried
+# element-wise.
+_FIT_LIST_COLUMNS = (
+    "constraints",
+    "requirements",
+    "emphasise",
+    "challenge_points",
+    "profile_gaps",
+    "questions_to_ask",
 )
 
 
@@ -133,6 +166,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     try:
         conn.executescript(_SCHEMA)
         _apply_added_columns(conn)
+        _normalise_seniority(conn)
         conn.execute(
             "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -141,6 +175,48 @@ def init_schema(conn: sqlite3.Connection) -> None:
         conn.commit()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not initialise schema: {exc}") from exc
+
+
+# Free-text seniority values seen in rows written before the field became an
+# enum. Anything not listed becomes `unknown`, which is a first-class value —
+# guessing a band from prose the model wrote is how a migration invents data.
+_SENIORITY_FROM_TEXT = {
+    "engineering manager": "manager",
+    "manager": "manager",
+    "lead": "lead",
+    "senior": "senior",
+    "director": "director",
+    "head of engineering": "director",
+    "junior": "junior",
+    "mid": "mid",
+}
+
+_SENIORITY_VALUES = {
+    "junior", "mid", "senior", "lead", "manager", "director", "unknown",
+}
+
+
+def _normalise_seniority(conn: sqlite3.Connection) -> None:
+    """Bring pre-v4 rows into the seniority vocabulary.
+
+    Adding a column is safe; changing what an existing column may contain is
+    not, and this is the only case of it so far. Rows written when seniority
+    was free text hold "Engineering Manager" and "Lead", which no longer
+    validate — the store would raise on every read of them. Idempotent: a row
+    already inside the vocabulary is left alone.
+    """
+    rows = conn.execute(
+        "SELECT id, seniority FROM job_descriptions WHERE seniority IS NOT NULL"
+    ).fetchall()
+    for row in rows:
+        current = str(row["seniority"])
+        if current in _SENIORITY_VALUES:
+            continue
+        replacement = _SENIORITY_FROM_TEXT.get(current.strip().lower(), "unknown")
+        conn.execute(
+            "UPDATE job_descriptions SET seniority = ? WHERE id = ?",
+            (replacement, row["id"]),
+        )
 
 
 def _apply_added_columns(conn: sqlite3.Connection) -> None:
@@ -243,8 +319,107 @@ def delete_jd(conn: sqlite3.Connection, jd_id: int) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Fit assessments
+# --------------------------------------------------------------------------- #
+
+
+def add_assessment(conn: sqlite3.Connection, assessment: FitAssessment) -> int:
+    """Insert an assessment and return its id.
+
+    Assessments accumulate rather than replace. Re-scoring the same ad after a
+    prompt change is the operation the eval harness is built on, and comparing
+    the two runs is impossible if the first was overwritten.
+    """
+    data = assessment.model_dump(mode="json")
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO fit_assessments (
+                jd_id, overall_score, recruiter_screen_score, verdict,
+                rationale, target_role_match, target_role_note, constraints,
+                requirements, emphasise, challenge_points, profile_gaps,
+                questions_to_ask, model_used, scored_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                assessment.jd_id,
+                assessment.overall_score,
+                assessment.recruiter_screen_score,
+                assessment.verdict.value,
+                assessment.rationale,
+                int(assessment.target_role_match),
+                assessment.target_role_note,
+                *(json.dumps(data[column]) for column in _FIT_LIST_COLUMNS),
+                assessment.model_used,
+                _to_iso(assessment.scored_at),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save fit assessment: {exc}") from exc
+
+    assessment_id = cursor.lastrowid
+    if assessment_id is None:  # pragma: no cover - sqlite always sets this
+        raise StoreError("Insert succeeded but returned no row id")
+    return assessment_id
+
+
+def latest_assessment(
+    conn: sqlite3.Connection, jd_id: int
+) -> FitAssessment | None:
+    """The most recent assessment for one JD, or None."""
+    try:
+        row = conn.execute(
+            "SELECT * FROM fit_assessments WHERE jd_id = ? "
+            "ORDER BY scored_at DESC, id DESC LIMIT 1",
+            (jd_id,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not read assessments for JD {jd_id}: {exc}") from exc
+    return _row_to_assessment(row) if row is not None else None
+
+
+def list_assessments(conn: sqlite3.Connection, jd_id: int) -> list[FitAssessment]:
+    """Every assessment for one JD, newest first."""
+    try:
+        rows = conn.execute(
+            "SELECT * FROM fit_assessments WHERE jd_id = ? "
+            "ORDER BY scored_at DESC, id DESC",
+            (jd_id,),
+        ).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not read assessments for JD {jd_id}: {exc}") from exc
+    return [_row_to_assessment(row) for row in rows]
+
+
+# --------------------------------------------------------------------------- #
 # Row mapping
 # --------------------------------------------------------------------------- #
+
+
+def _row_to_assessment(row: sqlite3.Row) -> FitAssessment:
+    data = {
+        "id": row["id"],
+        "jd_id": row["jd_id"],
+        "overall_score": row["overall_score"],
+        "recruiter_screen_score": row["recruiter_screen_score"],
+        "verdict": row["verdict"],
+        "rationale": row["rationale"],
+        "target_role_match": bool(row["target_role_match"]),
+        "target_role_note": row["target_role_note"],
+        "model_used": row["model_used"],
+        "scored_at": row["scored_at"],
+    }
+    for column in _FIT_LIST_COLUMNS:
+        data[column] = _load_json_list(row, column)
+
+    try:
+        return FitAssessment.model_validate(data)
+    except ValidationError as exc:
+        raise StoreError(
+            f"Row {row['id']} in fit_assessments no longer matches the model. "
+            f"The schema changed without a migration.\n{exc}"
+        ) from exc
 
 
 def _row_to_jd(row: sqlite3.Row) -> JobDescription:
@@ -280,6 +455,14 @@ def _row_to_jd(row: sqlite3.Row) -> JobDescription:
 
 
 def _load_list(row: sqlite3.Row, column: str) -> list[str]:
+    """A JSON column of strings. The JD's list fields are all of these."""
+    return [str(item) for item in _load_json_list(row, column)]
+
+
+def _load_json_list(row: sqlite3.Row, column: str) -> list:
+    """A JSON column of anything. An assessment's constraints, requirements
+    and challenge points are lists of objects, and stringifying them would
+    turn each one into the repr of a dict."""
     raw = row[column]
     if not raw:
         return []
@@ -294,7 +477,7 @@ def _load_list(row: sqlite3.Row, column: str) -> list[str]:
             f"Row {row['id']} column {column!r} holds {type(value).__name__}, "
             "expected a list"
         )
-    return [str(item) for item in value]
+    return value
 
 
 def _to_iso(moment: datetime) -> str:
