@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from jobagent.cli import config as config_cli
+from jobagent.cli import generate as generate_cli
 from jobagent.cli import jd as jd_cli
 from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
@@ -19,6 +20,7 @@ app.add_typer(config_cli.app, name="config")
 app.add_typer(jd_cli.app, name="jd")
 # `score` is one command, not a group — mounted directly.
 app.command(name="score")(score_cli.score)
+app.command(name="generate")(generate_cli.generate)
 
 
 if __name__ == "__main__":
