@@ -208,11 +208,22 @@ def diff(
     cases_path: Path | None = typer.Option(
         None, "--cases", help="Case set to read.", callback=paths.expand
     ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Compare runs from this model only, e.g. 'claude-sonnet-5'.",
+    ),
 ) -> None:
     """Compare the two most recent scoring runs. Free.
 
     This is the prompt-regression view: edit `prompts/score_fit.md`, run
     `eval run`, then this shows what the edit actually changed.
+
+    Without `--model` the two newest runs for each case are compared whatever
+    produced them, so one cheap comparison run in between turns a prompt diff
+    into a provider diff. That happened: twelve of fourteen cases were read
+    against a Gemini run and reported swings of fifty points. The comparison
+    now names the models it used, and says so when they differ.
     """
     cases, _ = _load(cases_path)
     config = get_config()
@@ -221,7 +232,7 @@ def diff(
     try:
         with store.open_store(config.db_path) as conn:
             for case in cases:
-                history = store.list_assessments(conn, case.jd_id)
+                history = store.list_assessments(conn, case.jd_id, model=model)
                 changed = diff_runs(case.id, history)
                 if changed is not None:
                     diffs.append(changed)
@@ -240,6 +251,7 @@ def diff(
         f"[bold]{len(moved)} of {len(diffs)}[/] case(s) changed between the "
         "last two runs.\n"
     )
+    _report_models(diffs)
     if not moved:
         return
 
@@ -266,6 +278,29 @@ def diff(
             _delta(change.met_delta),
         )
     console.print(table)
+
+
+def _report_models(diffs: list) -> None:
+    """Name the models compared, and warn when a case crossed providers.
+
+    A diff that silently spans two models reads as a prompt regression and is
+    not one. Naming them makes the mistake visible in the output itself.
+    """
+    mixed = [d for d in diffs if d.before.model_used != d.after.model_used]
+    models = sorted(
+        {m for d in diffs for m in (d.before.model_used, d.after.model_used) if m}
+    )
+    console.print(f"[dim]Comparing: {', '.join(models) or 'model not recorded'}[/]")
+    if mixed:
+        err_console.print(
+            f"[bold yellow]{len(mixed)} of {len(diffs)} case(s) compare two "
+            "different models[/] — this is a provider difference, not a prompt "
+            "one."
+        )
+        err_console.print(
+            "[dim]Pass --model to compare like with like, e.g. "
+            "`jobagent eval diff --model claude-sonnet-5`.[/]\n"
+        )
 
 
 # --------------------------------------------------------------------------- #
