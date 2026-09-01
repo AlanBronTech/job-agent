@@ -90,6 +90,17 @@ def add(
                 "re-run. Parsing half an ad gives a confident, wrong answer.[/]"
             )
             raise typer.Exit(code=2)
+        if ad.thin:
+            err_console.print(
+                f"[bold yellow]Only {len(ad.text):,} characters of ad text — "
+                "this is more likely a collapsed description than a short "
+                "advertisement.[/]"
+            )
+            err_console.print(
+                "[dim]If the page has a '…more' toggle, expand it, save again "
+                "and re-run. Scoring a stub costs $0.20 to be told the ad is "
+                "empty. Continuing anyway.[/]"
+            )
     else:
         try:
             raw_text = _read_input(file=file, stdin=stdin)

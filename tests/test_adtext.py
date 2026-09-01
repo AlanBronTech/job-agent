@@ -11,6 +11,7 @@ from jobagent.adapters.adtext import (
     drop_junk,
     find_posting_metadata,
     isolate_ad,
+    ExtractedAd,
     looks_truncated,
     normalise,
 )
@@ -74,3 +75,31 @@ def test_truncation_is_only_detected_at_the_end() -> None:
     description was cut short only when it is the last thing in the ad."""
     assert looks_truncated("We are building the future and we… more")
     assert not looks_truncated("Show more\nWe are building the future and we ship.")
+
+
+def test_a_stub_capture_is_flagged_as_thin() -> None:
+    """The Mattox capture (JD 23) ended cleanly at a sentence boundary with
+    565 characters and no requirements, so the '…more' guard never fired.
+    Length is the signal that marker missed."""
+    stub = ExtractedAd(
+        text="Design and implement enterprise-scale AI solutions. " * 4,
+        full_text="x" * 3138,
+        source_url=None,
+        page_title=None,
+        posting_metadata=None,
+    )
+
+    assert len(stub.text) < 800
+    assert stub.thin is True
+
+
+def test_a_full_ad_is_not_thin() -> None:
+    ad = ExtractedAd(
+        text="w" * 800,
+        full_text="x" * 9000,
+        source_url=None,
+        page_title=None,
+        posting_metadata=None,
+    )
+
+    assert ad.thin is False

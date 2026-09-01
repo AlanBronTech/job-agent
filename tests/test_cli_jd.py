@@ -11,6 +11,7 @@ import os
 import pytest
 from typer.testing import CliRunner
 
+from jobagent.adapters.adtext import ExtractedAd
 from jobagent.adapters.llm import LLMError
 from jobagent.cli import jd as jd_cli
 from jobagent.cli.main import app
@@ -227,3 +228,22 @@ def test_file_and_latest_together_is_an_error(wired, drop_folder) -> None:
 
     assert result.exit_code == 2
     assert "not both" in result.output
+
+
+def test_a_thin_capture_warns_but_still_ingests(wired, jd_file, monkeypatch) -> None:
+    """A collapsed description is worth flagging before $0.20 is spent scoring
+    it, but a genuine two-sentence agency stub is still worth recording."""
+    stub = ExtractedAd(
+        text=SAMPLE_TEXT[:400],
+        full_text=SAMPLE_TEXT,
+        source_url="https://example.invalid/jobs/1",
+        page_title=None,
+        posting_metadata=None,
+    )
+    monkeypatch.setattr(jd_cli, "_extract_saved_page", lambda file: stub)
+
+    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+
+    assert result.exit_code == 0, result.output
+    assert "collapsed description" in result.output
+    assert "Saved as JD 1" in result.output
