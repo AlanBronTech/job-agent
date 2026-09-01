@@ -4,7 +4,7 @@
 
 A personal, interactive job-application agent for Alan Bron. It ingests job
 descriptions, scores them honestly against a structured profile, generates
-tailored resumes and cover letters as .docx into Google Drive, and tracks the
+tailored resumes and cover letters as .docx into a local folder, and tracks the
 application pipeline.
 
 It is **assistive, not autonomous**. It never submits an application. The human
@@ -16,8 +16,8 @@ reviews every generated artefact before it goes anywhere.
    terms of use. Do not fetch, parse, or navigate seek.com.au or linkedin.com
    job pages, logged-in or otherwise. Do not add Selenium, Playwright, or any
    headless browser. If a task seems to require it, stop and say so.
-   - Permitted: reading Alan's own Gmail inbox for job-alert emails he
-     subscribed to; accepting JD text he pastes or saves to a file.
+   - Permitted: accepting JD text Alan pastes, or a page he has already
+     opened and saved himself as PDF, .mhtml or .txt.
 2. **No invented experience.** All resume and cover-letter content must be
    selected and reweighted from `profile/`. If the profile lacks material for a
    requirement, the output must say so as a gap, not fabricate. Prompts must
@@ -128,15 +128,75 @@ on a tab stop at **16.93cm**.
 - Log every call (prompt name, tokens, cost estimate) to `runs.jsonl` for the
   eval harness.
 
+## Where the project is — 2026-09-01
+
+**Built and working. Phases 0-5 and 7 are done; only Phase 8 (a local UI) is
+left, and it is deferred until the CLI has been used on real applications.**
+Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
+for the reasoning, which matters more than the decisions.
+
+312 tests pass, none touching the network. `main` is pushed to a **public**
+GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
+`evals/cases.yaml` are gitignored and must stay that way.
+
+The commands, and roughly what each costs:
+
+    jobagent jd add --file <ad>        ~$0.08   parse an ad, print a JD id
+    jobagent score <id>                ~$0.20   verdict, two scores, filters
+    jobagent generate <id> --resume --cover  ~$0.30  documents + assessment
+    jobagent prep <id>                 ~$0.15   interview questions
+    jobagent apply|outcome|status      free     the pipeline
+    jobagent eval report|diff|export   free     grade the scorer
+    jobagent eval run                  ~$0.19/case
+    jobagent --budget <cmd>            free tier, 20 requests/day, worse
+
+`README.md` documents the loop for Alan. Keep it accurate — he uses it.
+
+## Design invariants — these were expensive to learn
+
+- **Hard filters are computed in Python; judgment is asked of the model.**
+  Salary floor, employment type, on-site geography, closed ads — arithmetic
+  and set membership over decisions Alan has already made. A breach overrides
+  the model's verdict outright. `ConstraintStatus` has three values because
+  "the ad does not say" is not "the ad is fine".
+- **For the resume the model returns references, not prose.** It picks roles,
+  bullets and ordering by id; the text is copied verbatim from `profile/`. A
+  model that cannot type a bullet cannot embellish one. It writes prose only
+  for the tagline, the PROFILE paragraphs and the cover letter — all validated.
+- **`core/validation.py` enforces the hard rules mechanically**, not by asking
+  a prompt nicely: every number traced to the profile, the banned list parsed
+  out of `voice.md` at runtime, explicit patterns for the age-signal policy.
+- **In `profile/`, `text` is rendered and `note_for_scorer` is not.** A
+  cross-reference left in a bullet's `text` was copied onto a real resume.
+- **The eval harness grades "was this worth applying to", never "was he
+  hired".** Alan was offered the Easy Signs job and applying was still the
+  wrong call — the commute that ended it is an absolute filter in his profile.
+  Grading on hiring outcomes would tune away the constraint that mattered.
+- **Check a variable was observable at decision time before it informs
+  anything.** Applicant counts read off a page saved weeks later are target
+  leakage; they were not there when he decided.
+- **Read the prompt before blaming the model.** Two sessions were spent
+  attributing over-split requirements to Gemini, then to Claude. The v1 prompt
+  instructed it.
+- **A weaker model is a prompt-underspecification detector.** Running the eval
+  set through free-tier Gemini found that the v2 scoring prompt never stated
+  the 0-100 range. Claude had been filling it in from convention.
+
 ## Testing
 
 - `core/` gets real unit tests with fixture JDs in `tests/fixtures/`.
 - LLM calls are mocked in unit tests. There is a separate `evals/` path that
   hits the real API and is never run in CI.
-- The eval set is ~15 real JDs Alan applied to, with known outcomes. The fit
-  scorer is measured against those outcomes. This is the part that makes the
-  project credible in an interview — treat it as a first-class deliverable, not
-  an afterthought.
+- The eval set is 14 real applications with known outcomes, built from the
+  `applications` table rather than a hand-written file, so it cannot go stale
+  through neglect. The fit scorer is measured against Alan's retrospective
+  judgment of each. This is the part that makes the project credible in an
+  interview — treat it as a first-class deliverable, not an afterthought.
+- Current standing: the scorer agrees on 10 of 14, and **all four of its errors
+  are false negatives** — it says skip on roles Alan judges he fits. It weights
+  role shape and ad structure; he weights requirement match. **Do not tune this
+  on fourteen cases.** `generate --force` records each time he overrules it, and
+  `eval report` reports who was right; the threshold moves on that evidence.
 
 ## Working style
 
@@ -145,4 +205,7 @@ on a tab stop at **16.93cm**.
 - When a design decision has a real trade-off, state it and ask rather than
   picking silently.
 - Alan is a 35-year engineer. Explain reasoning, skip tutorials.
+- Model calls cost real money and some take minutes. Say what a command will
+  cost before spending it, and prefer the free path (`eval report`, `score
+  --last`) when it answers the question.
 - Any value in profile YAML that begins with a quote or special character must use a >- folded block. The loader should surface YAML parse errors with the offending line, not a raw traceback.
