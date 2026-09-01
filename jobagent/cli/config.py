@@ -99,6 +99,7 @@ def check() -> None:
     paths.add_row("profile_dir", str(config.profile_dir or "[red]not set[/]"))
     paths.add_row("db_path", str(config.db_path))
     paths.add_row("runs_log_path", str(config.runs_log_path))
+    paths.add_row("output_dir", str(config.output_dir))
     console.print(paths)
 
     if unusable:

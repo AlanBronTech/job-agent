@@ -64,11 +64,15 @@ class Config(BaseSettings):
     runs_log_path: Path = Field(default=_REPO_ROOT / "runs.jsonl")
 
     profile_dir: Path | None = None
-    drive_resume_folder_id: str | None = None
-    drive_coverletter_folder_id: str | None = None
+
+    # Where generated documents are written, one folder per application.
+    # Google Drive upload was dropped on 2026-09-01 in favour of a local
+    # folder Alan copies from when it suits him; see BUILD_PLAN.md.
+    output_dir: Path = Field(default=Path("~/job-agent-out"))
+
     db_path: Path = Field(default=Path("~/.job-agent/jobagent.db"))
 
-    @field_validator("profile_dir", "db_path", "runs_log_path", mode="after")
+    @field_validator("profile_dir", "db_path", "runs_log_path", "output_dir", mode="after")
     @classmethod
     def _expand_user(cls, value: Path | None) -> Path | None:
         return None if value is None else Path(value).expanduser()

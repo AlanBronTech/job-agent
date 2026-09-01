@@ -46,8 +46,7 @@ jobagent/
     models.py    # pydantic models shared everywhere
   adapters/      # everything that talks to the outside world
     llm.py       # Anthropic API client, JSON-mode helpers, retries
-    gmail.py     # OAuth, alert-email fetch + parse
-    drive.py     # docx upload to known folders
+    docs.py      # writing generated documents to the local output folder
     docx_writer.py  # python-docx rendering to Alan's format
   cli/           # typer commands — thin, no logic
 ```
@@ -60,7 +59,7 @@ no `typer` imports, no `sys.exit` inside `core/`.
 - Python 3.12, `uv` for env and deps
 - `typer` (CLI), `pydantic` v2 (models), `rich` (output)
 - `anthropic` (LLM), `python-docx` (documents), `PyYAML` (profile)
-- `google-api-python-client` + `google-auth-oauthlib` (Gmail, Drive)
+- `pypdf` (reading job ads saved as PDF)
 - `sqlite3` from stdlib — plain SQL, no ORM
 - `pytest` for tests
 
