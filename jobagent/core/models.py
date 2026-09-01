@@ -551,3 +551,37 @@ class FitAssessment(_Base):
     @property
     def unknowns(self) -> list[ConstraintCheck]:
         return [c for c in self.constraints if c.status is ConstraintStatus.unknown]
+
+
+# --------------------------------------------------------------------------- #
+# Interview preparation (Phase 7)
+# --------------------------------------------------------------------------- #
+
+
+class PrepQuestion(_Base):
+    """One question to expect, and what to answer it with.
+
+    ``story_ref`` points at the story bank. A question with no story behind it
+    is worth knowing about — it is a question Alan can only answer in the
+    abstract, which is exactly the one to prepare hardest.
+    """
+
+    question: str
+    why_asked: str
+    story_ref: str | None = None
+    answer_outline: str
+    # Questions carried over from the assessment's challenge_points. They are
+    # not predictions: they are the objections the scorer already found in the
+    # gap between this ad and the profile.
+    hard: bool = False
+
+
+class InterviewPrep(_Base):
+    jd_id: int
+    interviewers: list[str] = Field(default_factory=list)
+    questions: list[PrepQuestion] = Field(default_factory=list)
+    # What Alan asks them. Seeded from the assessment's unresolved filters —
+    # an unanswered commute or salary question is the interview's real agenda.
+    questions_to_ask: list[str] = Field(default_factory=list)
+    opening: str = ""
+    prepared_at: datetime
