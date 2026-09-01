@@ -47,6 +47,8 @@ END_ANCHORS = (
     "Be careful",
     "What can I earn as",
     "More about this company",
+    "Company profile",
+    "Perks and benefits",
     "Your application will include the following questions",
     "Employer questions",
     "SEEK acknowledges the Traditional Custodians",
