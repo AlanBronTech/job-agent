@@ -10,6 +10,8 @@ import pytest
 
 from jobagent.core import store
 from jobagent.core.models import (
+    HiringStatus,
+    Seniority,
     JobDescription,
     SalaryRange,
     WorkArrangement,
@@ -33,7 +35,9 @@ def make_jd(**overrides) -> JobDescription:
         "work_type": WorkType.permanent,
         "work_arrangement": WorkArrangement.hybrid,
         "salary_range": SalaryRange(min_aud=160000, max_aud=190000, raw="$160k–$190k"),
-        "seniority": "Manager",
+        "seniority": Seniority.manager,
+        "posted_by": "Acme",
+        "hiring_status": HiringStatus.open,
         "must_haves": ["Team leadership", "PHP"],
         "nice_to_haves": ["AWS"],
         "tech_stack": ["PHP", "Vue.js"],
@@ -203,3 +207,85 @@ def test_row_that_no_longer_validates_raises(conn) -> None:
 
     with pytest.raises(StoreError, match="no longer matches the model"):
         store.get_jd(conn, jd_id)
+
+
+# --------------------------------------------------------------------------- #
+# Schema v3
+# --------------------------------------------------------------------------- #
+
+
+def test_agency_and_status_fields_round_trip(conn) -> None:
+    jd = make_jd(
+        company=None,
+        posted_by="Harvey Robinson Pty Ltd",
+        via_agency=True,
+        hiring_status=HiringStatus.closed,
+        multiple_roles=True,
+        seniority=Seniority.lead,
+    )
+    jd_id = store.add_jd(conn, jd)
+
+    loaded = store.get_jd(conn, jd_id)
+
+    assert loaded is not None
+    assert loaded.company is None
+    assert loaded.posted_by == "Harvey Robinson Pty Ltd"
+    assert loaded.via_agency is True
+    assert loaded.hiring_status is HiringStatus.closed
+    assert loaded.multiple_roles is True
+    assert loaded.seniority is Seniority.lead
+
+
+def test_defaults_round_trip(conn) -> None:
+    """An ad that says nothing about any of it."""
+    jd_id = store.add_jd(conn, make_jd(posted_by=None, hiring_status=HiringStatus.unknown))
+
+    loaded = store.get_jd(conn, jd_id)
+
+    assert loaded is not None
+    assert loaded.via_agency is False
+    assert loaded.multiple_roles is False
+    assert loaded.hiring_status is HiringStatus.unknown
+
+
+def test_a_v2_database_gains_the_v3_columns(tmp_path) -> None:
+    """The additive-column path is the only migration machinery there is, so
+    the columns added for the agency and status findings have to go through
+    it — a database written before them must still open and read."""
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        """
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE job_descriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL, company TEXT, location TEXT,
+            work_type TEXT NOT NULL, work_arrangement TEXT NOT NULL,
+            salary_json TEXT, seniority TEXT,
+            must_haves TEXT NOT NULL DEFAULT '[]',
+            nice_to_haves TEXT NOT NULL DEFAULT '[]',
+            tech_stack TEXT NOT NULL DEFAULT '[]',
+            responsibilities TEXT NOT NULL DEFAULT '[]',
+            red_flags TEXT NOT NULL DEFAULT '[]',
+            source TEXT, source_url TEXT, source_metadata TEXT,
+            raw_text TEXT NOT NULL, ingested_at TEXT NOT NULL
+        );
+        INSERT INTO job_descriptions
+            (title, work_type, work_arrangement, seniority, raw_text, ingested_at)
+        VALUES ('Engineering Manager', 'permanent', 'hybrid', 'unknown',
+                'Engineering Manager at Acme.', '2026-08-31T03:00:00+00:00');
+        """
+    )
+    old.commit()
+    old.close()
+
+    with store.open_store(path) as conn:
+        loaded = store.get_jd(conn, 1)
+        version = conn.execute(
+            "SELECT value FROM meta WHERE key = 'schema_version'"
+        ).fetchone()[0]
+
+    assert version == str(store.SCHEMA_VERSION)
+    assert loaded is not None
+    assert loaded.via_agency is False
+    assert loaded.hiring_status is HiringStatus.unknown

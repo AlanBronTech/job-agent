@@ -334,6 +334,40 @@ class WorkArrangement(str, Enum):
     unknown = "unknown"
 
 
+class Seniority(str, Enum):
+    """The level the ad is pitched at, on one scale.
+
+    Was free text, which across eleven real ads returned "Lead", "Manager",
+    "Senior", "Engineering Manager" and ``null`` — five spellings of three
+    ideas, comparable to nothing. The vocabulary is deliberately coarse: the
+    scorer only needs to know whether a role sits below, at, or above Alan's
+    target band, and any finer distinction is the ad's marketing rather than
+    its substance. The advertised wording survives in ``title``.
+    """
+
+    junior = "junior"
+    mid = "mid"
+    senior = "senior"
+    lead = "lead"          # tech lead, staff, principal — senior IC track
+    manager = "manager"    # engineering manager, delivery manager
+    director = "director"  # head of, director, GM, VP and above
+    unknown = "unknown"
+
+
+class HiringStatus(str, Enum):
+    """Whether the ad is still taking applications.
+
+    Both platforms say so plainly — "No longer accepting applications" on
+    LinkedIn, an expired-job URL on Seek — and it was being discarded. For a
+    live triage decision it is the most decisive fact on the page, and for the
+    eval set it separates "they ghosted him" from "the ad had closed".
+    """
+
+    open = "open"
+    closed = "closed"
+    unknown = "unknown"
+
+
 class SalaryRange(_Base):
     """Advertised salary. ``raw`` preserves the JD's own wording.
 
@@ -364,7 +398,23 @@ class JobDescription(_Base):
     work_type: WorkType = WorkType.unknown
     work_arrangement: WorkArrangement = WorkArrangement.unknown
     salary_range: SalaryRange | None = None
-    seniority: str | None = None
+    seniority: Seniority = Seniority.unknown
+
+    # Who put the ad up, and whether they are the employer. An agency blind ad
+    # is a different proposition from a direct posting — there is nobody to
+    # research, and the agency screens before the employer sees anything — and
+    # ``company`` alone cannot express it, because for a blind ad company is
+    # null precisely when this matters most.
+    posted_by: str | None = None
+    via_agency: bool = False
+
+    hiring_status: HiringStatus = HiringStatus.unknown
+
+    # One ad advertising several unnamed positions ("we're recruiting multiple
+    # positions across our product engineering team"). Nothing about such an
+    # ad can be tailored to, and it was being flattened into a single role with
+    # no record that it had happened.
+    multiple_roles: bool = False
 
     must_haves: list[str] = Field(default_factory=list)
     nice_to_haves: list[str] = Field(default_factory=list)

@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from jobagent.core.models import JobDescription
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -41,6 +41,11 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "job_descriptions": [
         ("source_url", "TEXT"),
         ("source_metadata", "TEXT"),
+        # v3
+        ("posted_by", "TEXT"),
+        ("via_agency", "INTEGER NOT NULL DEFAULT 0"),
+        ("hiring_status", "TEXT NOT NULL DEFAULT 'unknown'"),
+        ("multiple_roles", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 
@@ -58,7 +63,11 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     work_type        TEXT NOT NULL,
     work_arrangement TEXT NOT NULL,
     salary_json      TEXT,
-    seniority        TEXT,
+    seniority        TEXT NOT NULL DEFAULT 'unknown',
+    posted_by        TEXT,
+    via_agency       INTEGER NOT NULL DEFAULT 0,
+    hiring_status    TEXT NOT NULL DEFAULT 'unknown',
+    multiple_roles   INTEGER NOT NULL DEFAULT 0,
     must_haves       TEXT NOT NULL DEFAULT '[]',
     nice_to_haves    TEXT NOT NULL DEFAULT '[]',
     tech_stack       TEXT NOT NULL DEFAULT '[]',
@@ -158,10 +167,11 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
             """
             INSERT INTO job_descriptions (
                 title, company, location, work_type, work_arrangement,
-                salary_json, seniority, must_haves, nice_to_haves, tech_stack,
+                salary_json, seniority, posted_by, via_agency, hiring_status,
+                multiple_roles, must_haves, nice_to_haves, tech_stack,
                 responsibilities, red_flags, source, source_url,
                 source_metadata, raw_text, ingested_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 jd.title,
@@ -170,7 +180,11 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
                 jd.work_type.value,
                 jd.work_arrangement.value,
                 salary,
-                jd.seniority,
+                jd.seniority.value,
+                jd.posted_by,
+                int(jd.via_agency),
+                jd.hiring_status.value,
+                int(jd.multiple_roles),
                 json.dumps(jd.must_haves),
                 json.dumps(jd.nice_to_haves),
                 json.dumps(jd.tech_stack),
@@ -243,6 +257,10 @@ def _row_to_jd(row: sqlite3.Row) -> JobDescription:
         "work_arrangement": row["work_arrangement"],
         "salary_range": json.loads(row["salary_json"]) if row["salary_json"] else None,
         "seniority": row["seniority"],
+        "posted_by": row["posted_by"],
+        "via_agency": bool(row["via_agency"]),
+        "hiring_status": row["hiring_status"],
+        "multiple_roles": bool(row["multiple_roles"]),
         "source": row["source"],
         "source_url": row["source_url"],
         "source_metadata": row["source_metadata"],

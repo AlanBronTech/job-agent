@@ -14,7 +14,7 @@ import pytest
 
 from jobagent.adapters.llm import LLMClient, LLMError, LLMResponse, Provider
 from jobagent.core.jd import JDError, parse_jd
-from jobagent.core.models import WorkArrangement, WorkType
+from jobagent.core.models import HiringStatus, WorkArrangement, WorkType
 from jobagent.core.prompts import PROMPTS_DIR, PromptError, load_prompt
 
 SAMPLE_TEXT = (
@@ -36,7 +36,11 @@ FULL_RESPONSE = {
         "includes_super": False,
         "raw": "$160,000 to $190,000 plus superannuation",
     },
-    "seniority": "Manager",
+    "seniority": "manager",
+    "posted_by": "Acme Pty Ltd",
+    "via_agency": False,
+    "hiring_status": "open",
+    "multiple_roles": False,
     "must_haves": ["Team leadership", "PHP", "CI/CD"],
     "nice_to_haves": ["AWS exposure"],
     "tech_stack": ["PHP", "AWS"],
@@ -188,6 +192,49 @@ def test_wrong_shaped_salary_reports_schema_drift() -> None:
 
     with pytest.raises(JDError, match="did not match the JobDescription schema"):
         parse_jd(SAMPLE_TEXT, client=FakeClient(payload))
+
+
+def test_agency_and_status_fields_are_kept() -> None:
+    payload = dict(
+        FULL_RESPONSE,
+        company=None,
+        posted_by="Harvey Robinson Pty Ltd",
+        via_agency=True,
+        hiring_status="closed",
+        multiple_roles=True,
+    )
+
+    jd = parse_jd(SAMPLE_TEXT, client=FakeClient(payload))
+
+    assert jd.company is None
+    assert jd.posted_by == "Harvey Robinson Pty Ltd"
+    assert jd.via_agency is True
+    assert jd.hiring_status is HiringStatus.closed
+    assert jd.multiple_roles is True
+
+
+def test_seniority_outside_the_vocabulary_reports_schema_drift() -> None:
+    """It was free text and returned five spellings of three ideas across
+    eleven ads. A model reverting to prose should fail loudly."""
+    payload = dict(FULL_RESPONSE, seniority="Engineering Manager")
+
+    with pytest.raises(JDError, match="did not match the JobDescription schema"):
+        parse_jd(SAMPLE_TEXT, client=FakeClient(payload))
+
+
+def test_an_ad_that_says_none_of_it_gets_the_defaults() -> None:
+    payload = {
+        key: value
+        for key, value in FULL_RESPONSE.items()
+        if key not in {"posted_by", "via_agency", "hiring_status", "multiple_roles"}
+    }
+
+    jd = parse_jd(SAMPLE_TEXT, client=FakeClient(payload))
+
+    assert jd.posted_by is None
+    assert jd.via_agency is False
+    assert jd.hiring_status is HiringStatus.unknown
+    assert jd.multiple_roles is False
 
 
 # --------------------------------------------------------------------------- #

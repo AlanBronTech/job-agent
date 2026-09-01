@@ -16,7 +16,7 @@ from jobagent.adapters.llm import CallType, LLMError, get_client
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.jd import JDError, parse_jd
-from jobagent.core.models import JobDescription
+from jobagent.core.models import HiringStatus, JobDescription
 from jobagent.core.store import StoreError
 
 app = typer.Typer(help="Ingest and inspect job descriptions.", no_args_is_help=True)
@@ -215,11 +215,19 @@ def _render_jd(jd: JobDescription) -> None:
     header.add_column(style="cyan")
     header.add_column()
     header.add_row("company", jd.company or "[dim]not stated[/]")
+    if jd.posted_by:
+        posted = f"{jd.posted_by} [yellow](agency)[/]" if jd.via_agency else jd.posted_by
+        header.add_row("posted by", posted)
     header.add_row("location", jd.location or "[dim]not stated[/]")
     header.add_row("work type", jd.work_type.value)
     header.add_row("arrangement", jd.work_arrangement.value)
-    header.add_row("seniority", jd.seniority or "[dim]not stated[/]")
+    header.add_row("seniority", jd.seniority.value)
     header.add_row("salary", _format_salary(jd))
+    if jd.hiring_status is not HiringStatus.unknown:
+        status = jd.hiring_status.value
+        header.add_row("status", f"[yellow]{status}[/]" if status == "closed" else status)
+    if jd.multiple_roles:
+        header.add_row("scope", "[yellow]one ad, several unnamed roles[/]")
     if jd.source:
         header.add_row("source", jd.source)
     if jd.source_metadata:
