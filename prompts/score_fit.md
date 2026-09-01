@@ -85,7 +85,10 @@ would conclude. They are different readers and the first one decides first.
 8. **`profile_gaps` is about the profile, not the candidate.** Things the
    profile fails to evidence that would have helped here, so he can fix the
    file. Not things he should go and learn.
-9. **The rationale is one blunt paragraph, 80 words maximum**, and it must say
+9. **Keep every note to one sentence.** This is a decision aid he reads in a
+   terminal before deciding how to spend a day, not a report. An ad with
+   twenty requirements gets twenty short notes, not twenty paragraphs.
+10. **The rationale is one blunt paragraph, 80 words maximum**, and it must say
    the deciding thing first. If the deciding thing is a filter breach or a
    wrong-shaped role, lead with that, not with the score.
 

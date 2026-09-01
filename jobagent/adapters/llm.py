@@ -86,6 +86,9 @@ class LLMResponse:
     output_tokens: int
     cost_usd: float | None = None
     label: str | None = None
+    # True when the provider stopped because the token budget ran out, rather
+    # than because the model had finished. The answer is a fragment.
+    truncated: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -209,6 +212,17 @@ class LLMClient(ABC):
                 max_tokens=max_tokens,
                 label=label,
             )
+            # A truncated answer is a fragment, not a mistake. Retrying it
+            # against the same ceiling produces the same fragment and bills
+            # for it again — a long job ad cost three of these before the flag
+            # existed. Fail immediately and name the cause.
+            if response.truncated:
+                raise LLMError(
+                    f"{self.provider.value}:{self.model} ran out of output "
+                    f"tokens at max_tokens={max_tokens:,} and returned an "
+                    "incomplete answer. Raise the caller's token budget — "
+                    "retrying will hit the same ceiling."
+                )
             try:
                 return _parse_json(response.text), response
             except (json.JSONDecodeError, ValueError) as exc:
@@ -324,12 +338,14 @@ class AnthropicClient(LLMClient):
         text = "".join(
             block.text for block in message.content if block.type == "text"
         )
+        truncated = getattr(message, "stop_reason", None) == "max_tokens"
         return LLMResponse(
             text=text,
             provider=self.provider,
             model=message.model,
             input_tokens=message.usage.input_tokens,
             output_tokens=message.usage.output_tokens,
+            truncated=truncated,
         )
 
 

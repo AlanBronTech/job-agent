@@ -302,3 +302,47 @@ def test_permanent_failure_is_not_retried(no_sleep) -> None:
 def test_retryable_error_is_an_llm_error() -> None:
     # Callers catching LLMError must still catch the transient subclass.
     assert issubclass(RetryableLLMError, LLMError)
+
+
+# --------------------------------------------------------------------------- #
+# Truncation
+# --------------------------------------------------------------------------- #
+
+
+class TruncatingClient(LLMClient):
+    """Returns a fragment and reports that the budget ran out."""
+
+    provider = Provider.anthropic
+
+    def __init__(self):
+        super().__init__(model="fake-model")
+        self.calls = 0
+
+    def _complete(self, *, system, prompt, max_tokens):
+        self.calls += 1
+        return LLMResponse(
+            text='{"title": "Engineering Manager", "must_haves": ["one", "tw',
+            provider=self.provider,
+            model=self.model,
+            input_tokens=100,
+            output_tokens=max_tokens,
+            truncated=True,
+        )
+
+
+def test_a_truncated_answer_is_not_retried() -> None:
+    """Retrying against the same ceiling returns the same fragment and bills
+    for it again. A long job ad cost three of these before the flag existed."""
+    client = TruncatingClient()
+
+    with pytest.raises(LLMError, match="ran out of output tokens"):
+        client.complete_json(prompt="parse this", max_tokens=4096)
+
+    assert client.calls == 1
+
+
+def test_the_truncation_message_names_the_budget() -> None:
+    client = TruncatingClient()
+
+    with pytest.raises(LLMError, match="max_tokens=4,096"):
+        client.complete_json(prompt="parse this", max_tokens=4096)
