@@ -135,13 +135,14 @@ left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-312 tests pass, none touching the network. `main` is pushed to a **public**
+328 tests pass, none touching the network. `main` is pushed to a **public**
 GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
 `evals/cases.yaml` are gitignored and must stay that way.
 
 The commands, and roughly what each costs:
 
-    jobagent jd add --file <ad>        ~$0.08   parse an ad, print a JD id
+    jobagent jd add --latest           ~$0.08   parse the ad just saved
+    jobagent jd add --file <fragment>  ~$0.08   or name one in JD_DIR
     jobagent score <id>                ~$0.20   verdict, two scores, filters
     jobagent generate <id> --resume --cover  ~$0.30  documents + assessment
     jobagent prep <id>                 ~$0.15   interview questions
@@ -181,6 +182,17 @@ The commands, and roughly what each costs:
 - **A weaker model is a prompt-underspecification detector.** Running the eval
   set through free-tier Gemini found that the v2 scoring prompt never stated
   the 0-100 range. Claude had been filling it in from convention.
+- **A comparison across two models is not a prompt regression.** `eval diff`
+  took the two newest assessments per case whatever produced them, so a budget
+  run sitting between two real ones read as a fifty-point prompt change. It
+  now takes `--model`, names what it compared, and warns on a mixed set.
+  Anything that reads a run history has to say which model it read.
+- **One run of a boundary case is a coin flip, not a measurement.** Case 10
+  has gone skip / apply / apply / skip / apply across five Sonnet runs, a
+  20-point band straddling the threshold, with the two `skip`s falling either
+  side of a prompt change that had nothing to do with it. Grading a boundary
+  case once and attributing the result to the last edit is how a prompt gets
+  blamed for noise. Repeat the case before believing the delta.
 
 ## Testing
 
@@ -197,6 +209,11 @@ The commands, and roughly what each costs:
   role shape and ad structure; he weights requirement match. **Do not tune this
   on fourteen cases.** `generate --force` records each time he overrules it, and
   `eval report` reports who was right; the threshold moves on that evidence.
+- That 10 is itself **±1 between runs of the same prompt**. Measured on
+  2026-09-01: same-prompt score movement averages 6.3 points, and the cases
+  that sit on the apply/skip boundary change verdict from one run to the next
+  without anything changing. Grade a prompt edit with `eval diff --model`, and
+  re-run a case that flipped before treating the flip as real.
 
 ## Working style
 
