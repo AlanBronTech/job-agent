@@ -119,10 +119,14 @@ $OUTPUT_DIR/2026-09_Toshiba_EngineeringManager/
     AlanBron_CoverLetter_Toshiba_202609.docx
     answers.md          # if --answers was used
     assessment.md       # the FitAssessment that shaped it, for the record
+    job-ad.md           # the ad itself, as the parser read it
 ```
 
 `assessment.md` is there so that months later it is possible to see *why* a
 resume was cut the way it was — and so the eval harness has the pairing.
+`job-ad.md` is written from the stored `raw_text` rather than copied from the
+saved PDF: nothing records where that PDF was and it may since have moved, and
+`raw_text` is the text the parser and scorer actually read.
 
 **Exit:** a generated resume and cover letter land in the output folder and
 need less than ten minutes of editing.

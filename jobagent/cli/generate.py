@@ -171,6 +171,7 @@ def generate(
             folder, "assessment.md", docs.assessment_markdown(assessment, jd, issues)
         )
     )
+    written.append(docs.write_text(folder, "job-ad.md", docs.job_ad_markdown(jd)))
 
     _report(folder, written, issues)
 
