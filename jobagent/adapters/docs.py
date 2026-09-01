@@ -7,11 +7,19 @@ One folder per application, holding everything that was produced for it:
         AlanBron_CoverLetter_Toshiba_202609.docx
         answers.md
         assessment.md
+        job-ad.md
 
 Google Drive upload was dropped on 2026-09-01 in favour of this — the folder
 is copied by hand when it suits. `assessment.md` is written alongside so that
 months later it is possible to see *why* a resume was cut the way it was, and
 so the eval harness has the pairing.
+
+`job-ad.md` is written from the stored `raw_text` rather than copied from the
+saved PDF. Nothing in the store records where that PDF was, and it may have
+been moved or deleted by the time anyone looks; more usefully, `raw_text` is
+exactly what the parser and the scorer read, so a document that came out
+strangely can be checked against the text that produced it rather than
+against the page a human saw.
 """
 
 from __future__ import annotations
@@ -125,6 +133,78 @@ def assessment_markdown(
                 lines.append(f"  - `{issue.excerpt}`")
 
     return "\n".join(lines) + "\n"
+
+
+def job_ad_markdown(jd: JobDescription) -> str:
+    """The advertisement as the tool read it, with what was parsed out of it."""
+    lines = [
+        f"# {jd.title}" + (f" · {jd.company}" if jd.company else ""),
+        "",
+    ]
+
+    facts: list[tuple[str, str]] = []
+    if jd.company:
+        facts.append(("Company", jd.company))
+    if jd.posted_by and jd.posted_by != jd.company:
+        facts.append(("Posted by", jd.posted_by + (" (agency)" if jd.via_agency else "")))
+    if jd.location:
+        facts.append(("Location", jd.location))
+    facts.append(("Work", f"{jd.work_type.value}, {jd.work_arrangement.value}"))
+    facts.append(("Seniority", jd.seniority.value))
+    if jd.salary_range:
+        facts.append(("Salary", _salary(jd)))
+    if jd.source:
+        facts.append(("Source", jd.source))
+    if jd.source_metadata:
+        facts.append(("Posting", jd.source_metadata))
+    if jd.source_url:
+        facts.append(("URL", jd.source_url))
+    facts.append(("Ingested", f"{jd.ingested_at:%Y-%m-%d}"))
+
+    lines += [f"**{label}:** {value}  " for label, value in facts]
+
+    for heading, items in (
+        ("Must haves", jd.must_haves),
+        ("Nice to haves", jd.nice_to_haves),
+        ("Responsibilities", jd.responsibilities),
+        ("Red flags", jd.red_flags),
+    ):
+        if items:
+            lines += ["", f"## {heading}", ""]
+            lines += [f"- {item}" for item in items]
+
+    if jd.tech_stack:
+        lines += ["", "## Tech stack", "", ", ".join(jd.tech_stack)]
+
+    lines += [
+        "",
+        "## The advertisement",
+        "",
+        "As read by the parser — the text every downstream claim was checked",
+        "against, kept verbatim.",
+        "",
+        "```",
+        jd.raw_text.strip(),
+        "```",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _salary(jd: JobDescription) -> str:
+    salary = jd.salary_range
+    if salary is None:
+        return "not stated"
+    if salary.min_aud or salary.max_aud:
+        low = f"${salary.min_aud:,}" if salary.min_aud else "?"
+        high = f"${salary.max_aud:,}" if salary.max_aud else "?"
+        suffix = ""
+        if salary.includes_super is True:
+            suffix = " inc. super"
+        elif salary.includes_super is False:
+            suffix = " + super"
+        return f"{low} – {high}{suffix}"
+    return salary.raw or "not stated"
 
 
 def _slug(value: str) -> str:
