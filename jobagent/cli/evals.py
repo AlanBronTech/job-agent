@@ -1,0 +1,329 @@
+"""`jobagent eval ...`. Thin: resolve config, call core, render."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.config import get_config
+from jobagent.core import store
+from jobagent.core.evals import (
+    CaseResult,
+    EvalCase,
+    EvalError,
+    EvalReport,
+    Worth,
+    build_report,
+    diff_runs,
+    load_cases,
+)
+from jobagent.core.models import Verdict
+from jobagent.core.profile import ProfileError, load_profile
+from jobagent.core.scoring import ScoringError, score_fit
+from jobagent.core.store import StoreError
+
+app = typer.Typer(
+    help="Measure the fit scorer against applications with known outcomes.",
+    no_args_is_help=True,
+)
+
+console = Console()
+err_console = Console(stderr=True)
+
+# Observed on this eval set: ~26k input tokens (the whole profile goes in
+# every call) and 6-9k out, at Sonnet's $3/$15 per million.
+COST_PER_CASE_USD = 0.19
+
+_VERDICT_STYLE = {
+    Verdict.apply: "green",
+    Verdict.apply_with_caveats: "yellow",
+    Verdict.skip: "red",
+}
+
+_AGREEMENT_STYLE = {
+    "agree — apply": "green",
+    "agree — skip": "green",
+    "false positive": "red",
+    "false negative": "bold red",
+    "unlabelled": "dim",
+    "unscored": "dim",
+}
+
+
+@app.command("report")
+def report(
+    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+) -> None:
+    """Grade the stored assessments against the recorded outcomes. Free."""
+    cases, results = _load(cases_path)
+    if not any(result.scored for result in results):
+        err_console.print(
+            "[bold yellow]No case has been scored yet.[/] Run `jobagent eval run`."
+        )
+        raise typer.Exit(code=1)
+    _render_report(build_report(results))
+
+
+@app.command("run")
+def run(
+    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+    only: str | None = typer.Option(None, "--only", help="Score one case by id."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the cost confirmation."),
+) -> None:
+    """Score every case again, then grade. Costs money — it calls the API."""
+    cases, _ = _load(cases_path)
+    if only:
+        cases = [case for case in cases if case.id == only]
+        if not cases:
+            err_console.print(f"[bold red]No case with id {only!r}.[/]")
+            raise typer.Exit(code=1)
+
+    estimate = len(cases) * COST_PER_CASE_USD
+    console.print(
+        f"Scoring {len(cases)} case(s). Estimated cost "
+        f"[bold]${estimate:.2f}[/] [dim](~${COST_PER_CASE_USD:.2f} each; the "
+        f"whole profile is sent with every call)[/]"
+    )
+    if not yes and not typer.confirm("Continue?", default=False):
+        raise typer.Exit(code=1)
+
+    config = get_config()
+    if config.profile_dir is None:
+        err_console.print("[bold red]No profile directory.[/] Set PROFILE_DIR in .env.")
+        raise typer.Exit(code=2)
+    try:
+        profile = load_profile(config.profile_dir)
+        client = get_client(CallType.score, config)
+    except (ProfileError, LLMError) as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=2)
+
+    results: list[CaseResult] = []
+    failures: list[tuple[str, str]] = []
+    with store.open_store(config.db_path) as conn:
+        for index, case in enumerate(cases, 1):
+            jd = store.get_jd(conn, case.jd_id)
+            if jd is None:
+                failures.append((case.id, f"JD {case.jd_id} is not in the store"))
+                continue
+            label = f"[{index}/{len(cases)}] {case.id}"
+            with console.status(f"{label} — scoring…"):
+                try:
+                    assessment = score_fit(jd, profile, client=client)
+                except ScoringError as exc:
+                    failures.append((case.id, str(exc)))
+                    console.print(f"{label} [red]failed[/]")
+                    continue
+                assessment.id = store.add_assessment(conn, assessment)
+            style = _VERDICT_STYLE[assessment.verdict]
+            console.print(
+                f"{label} [{style}]{assessment.verdict.value}[/] "
+                f"{assessment.overall_score}/100"
+            )
+            results.append(CaseResult(case=case, assessment=assessment))
+
+    if failures:
+        err_console.print("\n[bold red]Failed[/]")
+        for case_id, reason in failures:
+            err_console.print(f"  {case_id}: {reason}")
+
+    if results:
+        console.print()
+        _render_report(build_report(results))
+
+
+@app.command("diff")
+def diff(
+    cases_path: Path | None = typer.Option(None, "--cases", help="Case set to read."),
+) -> None:
+    """Compare the two most recent scoring runs. Free.
+
+    This is the prompt-regression view: edit `prompts/score_fit.md`, run
+    `eval run`, then this shows what the edit actually changed.
+    """
+    cases, _ = _load(cases_path)
+    config = get_config()
+
+    diffs = []
+    try:
+        with store.open_store(config.db_path) as conn:
+            for case in cases:
+                history = store.list_assessments(conn, case.jd_id)
+                changed = diff_runs(case.id, history)
+                if changed is not None:
+                    diffs.append(changed)
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    if not diffs:
+        console.print(
+            "[dim]No case has been scored twice yet — nothing to compare.[/]"
+        )
+        return
+
+    moved = [d for d in diffs if d.changed]
+    console.print(
+        f"[bold]{len(moved)} of {len(diffs)}[/] case(s) changed between the "
+        "last two runs.\n"
+    )
+    if not moved:
+        return
+
+    table = Table(box=None, pad_edge=False)
+    table.add_column("case", style="cyan")
+    table.add_column("verdict")
+    table.add_column("score", justify="right")
+    table.add_column("screen", justify="right")
+    table.add_column("reqs", justify="right")
+    table.add_column("met", justify="right")
+
+    for change in moved:
+        verdict = (
+            f"[yellow]{change.before.verdict.value} → {change.after.verdict.value}[/]"
+            if change.verdict_changed
+            else "[dim]unchanged[/]"
+        )
+        table.add_row(
+            change.case_id,
+            verdict,
+            _delta(change.score_delta),
+            _delta(change.screen_delta),
+            _delta(change.requirement_delta),
+            _delta(change.met_delta),
+        )
+    console.print(table)
+
+
+# --------------------------------------------------------------------------- #
+# Rendering
+# --------------------------------------------------------------------------- #
+
+
+def _render_report(report: EvalReport) -> None:
+    _render_cases(report)
+
+    console.print("\n[bold]Graded against 'was this worth applying to'[/]")
+    if report.labelled:
+        console.print(
+            f"  agreed on [bold]{report.agree}[/] of {report.labelled} labelled "
+            f"case(s)"
+            + (f"  [dim]({report.accuracy:.0%})[/]" if report.accuracy else "")
+        )
+    else:
+        console.print("  [dim]no case carries a worth_applying label yet[/]")
+
+    if report.false_negatives:
+        console.print(
+            f"\n  [bold red]{len(report.false_negatives)} false negative(s)[/] "
+            "— said skip, was worth applying to. [dim]The expensive error: an "
+            "opportunity that does not come back.[/]"
+        )
+        for result in report.false_negatives:
+            console.print(f"    [red]·[/] {result.case.id} — {result.case.why}")
+
+    if report.false_positives:
+        console.print(
+            f"\n  [red]{len(report.false_positives)} false positive(s)[/] "
+            "— said apply, was not worth it. [dim]Costs a day.[/]"
+        )
+        for result in report.false_positives:
+            console.print(f"    [red]·[/] {result.case.id} — {result.case.why}")
+
+    if report.separation is not None:
+        console.print(
+            f"\n  mean score {report.mean_score_worth:.0f} on the cases worth "
+            f"applying to against {report.mean_score_not_worth:.0f} on those "
+            f"that were not — [bold]{report.separation:+.0f} points[/] of "
+            "separation"
+        )
+
+    if report.outcome_correlation is not None:
+        console.print(
+            f"\n[dim]Secondary: rank correlation between score and how far the "
+            f"application got is {report.outcome_correlation:+.2f}. Reported "
+            f"because it is the obvious measure, but it grades the scorer on "
+            f"predicting the employer rather than on advising Alan — the Easy "
+            f"Signs case scores badly here and is right.[/]"
+        )
+
+    notes = []
+    if report.unlabelled:
+        notes.append(f"{report.unlabelled} case(s) unlabelled")
+    if report.unscored:
+        notes.append(f"{report.unscored} unscored")
+    if report.derived_labels:
+        notes.append(
+            f"{report.derived_labels} label(s) derived from outcomes.yaml notes "
+            "rather than stated by Alan"
+        )
+    if notes:
+        console.print(f"\n[dim]{'; '.join(notes)}.[/]")
+
+
+def _render_cases(report: EvalReport) -> None:
+    table = Table(box=None, pad_edge=False)
+    table.add_column("case", style="cyan")
+    table.add_column("verdict")
+    table.add_column("score", justify="right")
+    table.add_column("screen", justify="right")
+    table.add_column("worth")
+    table.add_column("outcome", style="dim")
+    table.add_column("")
+
+    for result in report.results:
+        assessment = result.assessment
+        verdict = (
+            f"[{_VERDICT_STYLE[assessment.verdict]}]{assessment.verdict.value}[/]"
+            if assessment
+            else "[dim]—[/]"
+        )
+        worth = result.case.worth_applying.value
+        if result.case.label_derived and worth != Worth.unsure.value:
+            worth += "*"
+        agreement = result.agreement
+        table.add_row(
+            result.case.id,
+            verdict,
+            str(assessment.overall_score) if assessment else "—",
+            str(assessment.recruiter_screen_score) if assessment else "—",
+            worth,
+            result.case.outcome.value,
+            f"[{_AGREEMENT_STYLE[agreement]}]{agreement}[/]",
+        )
+    console.print(table)
+
+
+def _delta(value: int) -> str:
+    if value == 0:
+        return "[dim]0[/]"
+    colour = "green" if value > 0 else "red"
+    return f"[{colour}]{value:+d}[/]"
+
+
+# --------------------------------------------------------------------------- #
+# Loading
+# --------------------------------------------------------------------------- #
+
+
+def _load(cases_path: Path | None) -> tuple[list[EvalCase], list[CaseResult]]:
+    try:
+        cases = load_cases(cases_path)
+    except EvalError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    try:
+        with store.open_store(get_config().db_path) as conn:
+            results = [
+                CaseResult(case=case, assessment=store.latest_assessment(conn, case.jd_id))
+                for case in cases
+            ]
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+    return cases, results
