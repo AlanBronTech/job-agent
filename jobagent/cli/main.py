@@ -6,6 +6,7 @@ import os
 
 import typer
 
+from jobagent.cli import apply as apply_cli
 from jobagent.cli import config as config_cli
 from jobagent.cli import evals as evals_cli
 from jobagent.cli import generate as generate_cli
@@ -48,6 +49,9 @@ app.add_typer(evals_cli.app, name="eval")
 app.command(name="score")(score_cli.score)
 app.command(name="generate")(generate_cli.generate)
 app.command(name="prep")(prep_cli.prep)
+app.command(name="apply")(apply_cli.apply)
+app.command(name="outcome")(apply_cli.outcome)
+app.command(name="status")(apply_cli.status_command)
 
 
 if __name__ == "__main__":

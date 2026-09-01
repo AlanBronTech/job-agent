@@ -32,7 +32,14 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator
 
-from jobagent.core.models import FitAssessment, MatchStatus, Verdict
+from jobagent.core.models import (
+    Application,
+    ApplicationStatus,
+    FitAssessment,
+    MatchStatus,
+    Verdict,
+    Worth,
+)
 
 CASES_PATH = Path(__file__).resolve().parents[2] / "evals" / "cases.yaml"
 
@@ -41,44 +48,35 @@ class EvalError(Exception):
     """The case set could not be read."""
 
 
-class Outcome(str, Enum):
-    """What actually happened, in rough order of how far it got."""
-
-    not_applied = "not_applied"
-    applied_no_reply = "applied_no_reply"
-    rejected_screen = "rejected_screen"
-    recruiter_call = "recruiter_call"
-    interview_1 = "interview_1"
-    interview_2 = "interview_2"
-    offer = "offer"
-    withdrew = "withdrew"
+# Kept as an alias: the harness called this `Outcome` before the pipeline
+# existed, and the two were the same idea under two names.
+Outcome = ApplicationStatus
 
 
 # How far the application got, for the secondary correlation. `withdrew` is
 # excluded rather than ranked: Alan stopping is not the employer's verdict.
-_OUTCOME_RANK: dict[Outcome, int] = {
-    Outcome.not_applied: 0,
-    Outcome.applied_no_reply: 1,
-    Outcome.rejected_screen: 2,
-    Outcome.recruiter_call: 3,
-    Outcome.interview_1: 4,
-    Outcome.interview_2: 5,
-    Outcome.offer: 6,
+_OUTCOME_RANK: dict[ApplicationStatus, int] = {
+    ApplicationStatus.not_applied: 0,
+    ApplicationStatus.applied_no_reply: 1,
+    ApplicationStatus.rejected_screen: 2,
+    ApplicationStatus.recruiter_call: 3,
+    ApplicationStatus.interview_1: 4,
+    ApplicationStatus.interview_2: 5,
+    ApplicationStatus.offer: 6,
 }
 
-
-class Worth(str, Enum):
-    """Was the day well spent, knowing what he knows now."""
-
-    yes = "yes"
-    no = "no"
-    unsure = "unsure"
+# `applied` and `identified` are live states, not results — an application
+# sent yesterday says nothing about the scorer yet, and grading it would
+# reward a scorer for cases that have not finished happening.
+_LIVE_STATUSES = frozenset(
+    {ApplicationStatus.identified, ApplicationStatus.applied}
+)
 
 
 class EvalCase(BaseModel):
     id: str
     jd_id: int
-    outcome: Outcome
+    outcome: ApplicationStatus
     worth_applying: Worth = Worth.unsure
     why: str = ""
     # True where the label was inferred from the notes in outcomes.yaml rather
@@ -195,6 +193,46 @@ def load_cases(path: Path | None = None) -> list[EvalCase]:
     if len(seen) != len(cases):
         raise EvalError("Two cases share an id.")
     return cases
+
+
+def cases_from_applications(
+    applications: list[Application], titles: dict[int, str]
+) -> list[EvalCase]:
+    """Build the case set out of the pipeline.
+
+    This is the point of recording applications at all. A case set maintained
+    by hand goes stale the first week it is inconvenient, and a stale eval set
+    is worse than none — it reports on a scorer that no longer exists while
+    looking authoritative.
+
+    Applications still in flight are left out: `identified` and `applied` are
+    live states, and grading a scorer on a case that has not finished
+    happening rewards it for nothing.
+    """
+    cases = []
+    for application in applications:
+        if application.status in _LIVE_STATUSES:
+            continue
+        cases.append(
+            EvalCase(
+                id=_case_id(application.jd_id, titles.get(application.jd_id, "")),
+                jd_id=application.jd_id,
+                outcome=application.status,
+                worth_applying=application.worth_applying,
+                why=application.worth_why,
+                label_derived=application.worth_derived,
+            )
+        )
+    return cases
+
+
+def _case_id(jd_id: int, title: str) -> str:
+    slug = "".join(
+        char.lower() if char.isalnum() else "_" for char in title
+    ).strip("_")
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return f"{jd_id}_{slug[:32]}" if slug else str(jd_id)
 
 
 # --------------------------------------------------------------------------- #

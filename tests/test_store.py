@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from jobagent.core import store
 from jobagent.core.models import (
+    Application,
+    ApplicationStatus,
     ChallengePoint,
     ConstraintCheck,
     ConstraintStatus,
@@ -19,6 +21,7 @@ from jobagent.core.models import (
     RequirementMatch,
     Seniority,
     Verdict,
+    Worth,
     JobDescription,
     SalaryRange,
     WorkArrangement,
@@ -433,3 +436,78 @@ def test_free_text_seniority_from_an_older_row_is_normalised(tmp_path) -> None:
     assert loaded["Lead"] is Seniority.lead
     # Not guessed from prose — `unknown` is a first-class value.
     assert loaded["Odd"] is Seniority.unknown
+
+
+# --------------------------------------------------------------------------- #
+# Applications
+# --------------------------------------------------------------------------- #
+
+
+def make_application(jd_id: int, **overrides) -> Application:
+    data = {
+        "jd_id": jd_id,
+        "status": ApplicationStatus.applied,
+        "applied_on": date(2026, 8, 7),
+        "channel": "seek",
+        "notes": "Applied through the portal.",
+        "updated_at": datetime(2026, 9, 1, 3, 0, tzinfo=timezone.utc),
+    }
+    data.update(overrides)
+    return Application(**data)
+
+
+def test_an_application_round_trips(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+
+    store.save_application(conn, make_application(jd_id))
+    loaded = store.get_application(conn, jd_id)
+
+    assert loaded is not None
+    assert loaded.status is ApplicationStatus.applied
+    assert loaded.applied_on == date(2026, 8, 7)
+    assert loaded.channel == "seek"
+
+
+def test_recording_an_outcome_replaces_rather_than_appends(conn) -> None:
+    """Unlike an assessment, an application has one current truth. The history
+    that matters — what the scorer said, and when — is in fit_assessments."""
+    jd_id = store.add_jd(conn, make_jd())
+    store.save_application(conn, make_application(jd_id))
+
+    store.save_application(
+        conn,
+        make_application(
+            jd_id,
+            status=ApplicationStatus.interview_2,
+            worth_applying=Worth.yes,
+            worth_why="Two interviews.",
+        ),
+    )
+
+    assert len(store.list_applications(conn)) == 1
+    loaded = store.get_application(conn, jd_id)
+    assert loaded.status is ApplicationStatus.interview_2
+    assert loaded.worth_applying is Worth.yes
+
+
+def test_the_derived_marker_survives_a_round_trip(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+
+    store.save_application(conn, make_application(jd_id, worth_derived=True))
+
+    assert store.get_application(conn, jd_id).worth_derived is True
+
+
+def test_no_application_yet_is_none_not_an_error(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+
+    assert store.get_application(conn, jd_id) is None
+
+
+def test_deleting_a_jd_takes_its_application_with_it(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+    store.save_application(conn, make_application(jd_id))
+
+    store.delete_jd(conn, jd_id)
+
+    assert store.list_applications(conn) == []

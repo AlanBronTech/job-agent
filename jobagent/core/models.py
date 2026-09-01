@@ -17,7 +17,7 @@ Two policies are enforced structurally rather than by prose:
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Annotated
 
@@ -564,6 +564,76 @@ class FitAssessment(_Base):
     @property
     def unknowns(self) -> list[ConstraintCheck]:
         return [c for c in self.constraints if c.status is ConstraintStatus.unknown]
+
+
+# --------------------------------------------------------------------------- #
+# The application pipeline (Phase 5)
+# --------------------------------------------------------------------------- #
+
+
+class ApplicationStatus(str, Enum):
+    """How far an application got, in order.
+
+    One vocabulary, not two. The eval harness had its own `Outcome` enum and
+    the pipeline was specified with a separate status enum covering the same
+    ground; a translation layer between them would have been pure cost, and
+    the first disagreement between the two lists would have been a bug nobody
+    could see.
+
+    `applied` is the live state — sent, nothing back yet. `applied_no_reply`
+    is the terminal one: enough time has passed to call it ghosted. Only the
+    second is a result.
+    """
+
+    identified = "identified"
+    applied = "applied"
+    applied_no_reply = "applied_no_reply"
+    rejected_screen = "rejected_screen"
+    recruiter_call = "recruiter_call"
+    interview_1 = "interview_1"
+    interview_2 = "interview_2"
+    offer = "offer"
+    withdrew = "withdrew"
+    not_applied = "not_applied"
+
+
+class Worth(str, Enum):
+    """Was the day well spent, knowing what he knows now.
+
+    Deliberately separate from the status. Alan was offered the Easy Signs job
+    and it was still not worth applying for — the commute that ended it is an
+    absolute filter in his own profile. The scorer is graded against this, not
+    against whether the employer said yes.
+    """
+
+    yes = "yes"
+    no = "no"
+    unsure = "unsure"
+
+
+class Application(_Base):
+    """One application, and what became of it."""
+
+    id: int | None = None
+    jd_id: int
+    status: ApplicationStatus = ApplicationStatus.identified
+    applied_on: date | None = None
+    # How it reached him: "seek", "linkedin", "recruiter — <name>", "referral".
+    # Across fourteen recorded applications this predicted the outcome better
+    # than the requirement match did.
+    channel: str | None = None
+    notes: str = ""
+
+    # The eval label. Set when it is knowable, which is usually later.
+    worth_applying: Worth = Worth.unsure
+    worth_why: str = ""
+    # True while the judgment is a reading of Alan's notes rather than his
+    # statement. Set on import, cleared the moment he sets --worth himself.
+    # The report counts these separately: a metric must never be quoted as his
+    # judgment when it is someone else's inference.
+    worth_derived: bool = False
+
+    updated_at: datetime
 
 
 # --------------------------------------------------------------------------- #
