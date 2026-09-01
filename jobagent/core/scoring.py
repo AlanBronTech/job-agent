@@ -47,6 +47,12 @@ from jobagent.core.prompts import PromptError, load_prompt
 
 PROMPT_NAME = "score_fit"
 
+# An assessment is several times the size of a parsed ad: one entry per
+# requirement with a note against each, plus challenge points, emphasis and
+# questions. The 4,096-token default is tuned for parsing and truncates this
+# mid-string, which then fails as invalid JSON and retries into the same wall.
+MAX_TOKENS = 8192
+
 # Keys the prompt is contracted to return. Anything else the model volunteers
 # is dropped rather than passed to a model with extra="forbid".
 _EXPECTED_KEYS = frozenset(
@@ -91,7 +97,9 @@ def score_fit(
         raise ScoringError(str(exc)) from exc
 
     try:
-        parsed, response = client.complete_json(prompt=prompt, label=PROMPT_NAME)
+        parsed, response = client.complete_json(
+            prompt=prompt, label=PROMPT_NAME, max_tokens=MAX_TOKENS
+        )
     except LLMError as exc:
         raise ScoringError(f"Model call failed while scoring: {exc}") from exc
 
