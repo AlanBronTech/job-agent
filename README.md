@@ -299,6 +299,11 @@ pass `--no-save`. Costs roughly $0.15.
   whatever was scored last wins, which matters if you have run a comparison.
 - `eval report --cases <path>` — replay a fixed snapshot instead of the live
   pipeline.
+- `eval diff --model claude-sonnet-5` — compare two runs of the same model.
+  Use it after any prompt edit: without it the two newest runs are compared
+  whatever produced them, and one budget run in between reads as a fifty-point
+  prompt regression. The diff names the models it used and warns when they
+  differ.
 - `eval run --only <case_id>` — one case. `--yes` skips the cost prompt.
 
 The case set builds itself from the applications you record, so it cannot go

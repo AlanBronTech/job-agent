@@ -380,6 +380,37 @@ def test_rescoring_keeps_both_runs(conn) -> None:
     assert store.latest_assessment(conn, jd_id).overall_score == 80
 
 
+def test_list_assessments_can_narrow_to_one_model(conn) -> None:
+    """A cheap comparison run sitting between two real ones turns a prompt
+    diff into a provider diff. `eval diff --model` reads through this."""
+    jd_id = store.add_jd(conn, make_jd())
+    store.add_assessment(conn, make_assessment(jd_id, overall_score=40))
+    store.add_assessment(
+        conn,
+        make_assessment(
+            jd_id,
+            overall_score=5,
+            model_used="gemini-2.5-flash",
+            scored_at=datetime(2026, 9, 2, 3, 0, tzinfo=timezone.utc),
+        ),
+    )
+    store.add_assessment(
+        conn,
+        make_assessment(
+            jd_id,
+            overall_score=44,
+            scored_at=datetime(2026, 9, 3, 3, 0, tzinfo=timezone.utc),
+        ),
+    )
+
+    everything = store.list_assessments(conn, jd_id)
+    sonnet = store.list_assessments(conn, jd_id, model="claude-sonnet-5")
+
+    # Unfiltered, the two newest span two providers — a 39-point "regression".
+    assert [a.overall_score for a in everything] == [44, 5, 40]
+    assert [a.overall_score for a in sonnet] == [44, 40]
+
+
 def test_no_assessment_yet_is_none_not_an_error(conn) -> None:
     jd_id = store.add_jd(conn, make_jd())
 

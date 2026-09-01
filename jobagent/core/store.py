@@ -405,14 +405,23 @@ def latest_assessment(
     return _row_to_assessment(row) if row is not None else None
 
 
-def list_assessments(conn: sqlite3.Connection, jd_id: int) -> list[FitAssessment]:
-    """Every assessment for one JD, newest first."""
+def list_assessments(
+    conn: sqlite3.Connection, jd_id: int, *, model: str | None = None
+) -> list[FitAssessment]:
+    """Every assessment for one JD, newest first.
+
+    ``model`` narrows it to runs from one model, for the same reason
+    ``latest_assessment`` takes it: a cheap comparison run sitting between two
+    runs of the real model turns a prompt diff into a provider diff.
+    """
+    sql = "SELECT * FROM fit_assessments WHERE jd_id = ?"
+    params: tuple = (jd_id,)
+    if model:
+        sql += " AND model_used LIKE ?"
+        params += (f"%{model}%",)
+    sql += " ORDER BY scored_at DESC, id DESC"
     try:
-        rows = conn.execute(
-            "SELECT * FROM fit_assessments WHERE jd_id = ? "
-            "ORDER BY scored_at DESC, id DESC",
-            (jd_id,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not read assessments for JD {jd_id}: {exc}") from exc
     return [_row_to_assessment(row) for row in rows]

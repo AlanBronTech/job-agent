@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from jobagent.cli import evals as evals_cli
 from jobagent.core.evals import (
     CaseResult,
     EvalCase,
@@ -21,6 +22,7 @@ from jobagent.core.evals import (
     Outcome,
     Worth,
     build_report,
+    RunDiff,
     diff_runs,
     load_cases,
 )
@@ -294,6 +296,42 @@ def test_an_identical_rerun_shows_no_change() -> None:
     change = diff_runs("toshiba", [assessment(), assessment()])
 
     assert change.changed is False
+
+
+# --------------------------------------------------------------------------- #
+# The diff has to say what it compared
+# --------------------------------------------------------------------------- #
+
+
+def _diff(before_model: str, after_model: str) -> RunDiff:
+    return RunDiff(
+        case_id="toshiba",
+        before=assessment(model_used=before_model),
+        after=assessment(model_used=after_model),
+    )
+
+
+def test_a_cross_model_diff_warns_that_it_is_not_a_prompt_change(capsys) -> None:
+    """Twelve of fourteen cases once compared Sonnet against a Gemini budget
+    run and reported fifty-point swings as a prompt regression."""
+    evals_cli._report_models(
+        [_diff("claude-sonnet-5", "claude-sonnet-5"), _diff("gemini-2.5-flash", "claude-sonnet-5")]
+    )
+
+    out = capsys.readouterr()
+    printed = out.out + out.err
+    assert "gemini-2.5-flash" in printed
+    assert "different models" in printed
+    assert "--model" in printed
+
+
+def test_a_single_model_diff_names_the_model_and_does_not_warn(capsys) -> None:
+    evals_cli._report_models([_diff("claude-sonnet-5", "claude-sonnet-5")])
+
+    out = capsys.readouterr()
+    printed = out.out + out.err
+    assert "claude-sonnet-5" in printed
+    assert "different models" not in printed
 
 
 # --------------------------------------------------------------------------- #
