@@ -223,3 +223,31 @@ def test_archive_without_html_raises(tmp_path) -> None:
 def test_unreadable_file_raises(tmp_path) -> None:
     with pytest.raises(MHTMLError, match="Could not read"):
         extract_ad(tmp_path / "does_not_exist.mhtml")
+
+
+# --------------------------------------------------------------------------- #
+# Collapsed descriptions
+# --------------------------------------------------------------------------- #
+
+COLLAPSED_BODY = """
+<html><body>
+<div>Acme Corp</div><h1>Engineering Manager</h1>
+<h2>About the job</h2>
+<p>We are building the future of accounting software and we</p>
+<button>&hellip; more</button>
+<h2>Set alert for similar jobs</h2>
+</body></html>
+"""
+
+
+def test_flags_a_description_saved_collapsed(tmp_path) -> None:
+    """The text behind LinkedIn's "…more" toggle is lazy-loaded and genuinely
+    absent from the archive. Returning half an ad silently is worse than
+    saying so — it parses into a confident, wrong answer."""
+    collapsed = write_archive(tmp_path / "collapsed.mhtml", COLLAPSED_BODY)
+
+    assert extract_ad(collapsed).truncated is True
+
+
+def test_a_complete_description_is_not_flagged(archive) -> None:
+    assert extract_ad(archive).truncated is False

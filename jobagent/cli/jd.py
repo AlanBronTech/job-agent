@@ -10,8 +10,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from jobagent.adapters import mhtml, pdf
+from jobagent.adapters.adtext import ExtractedAd
 from jobagent.adapters.llm import CallType, LLMError, get_client
-from jobagent.adapters.mhtml import MHTMLError, extract_ad, looks_like_mhtml
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.jd import JDError, parse_jd
@@ -41,17 +42,14 @@ def add(
 ) -> None:
     """Parse a job description and save it. Opens $EDITOR if no input is given.
 
-    A saved web-page archive (.mhtml) is detected and unwrapped automatically.
+    A saved job page — .mhtml archive or printed .pdf — is detected and
+    unwrapped automatically.
     """
     source_url: str | None = None
     source_metadata: str | None = None
 
-    if file is not None and not stdin and looks_like_mhtml(file):
-        try:
-            ad = extract_ad(file)
-        except MHTMLError as exc:
-            err_console.print(f"[bold red]{exc}[/]")
-            raise typer.Exit(code=2)
+    ad = _extract_saved_page(file) if file is not None and not stdin else None
+    if ad is not None:
         raw_text = ad.text
         source_url = ad.source_url
         source_metadata = ad.posting_metadata
@@ -61,6 +59,16 @@ def add(
         )
         if source_metadata:
             console.print(f"[dim]Posting: {source_metadata}[/]")
+        if ad.truncated:
+            err_console.print(
+                "[bold yellow]The description ends at a '…more' toggle — this "
+                "capture is incomplete.[/]"
+            )
+            err_console.print(
+                "[dim]Expand the description on the page, save it again, and "
+                "re-run. Parsing half an ad gives a confident, wrong answer.[/]"
+            )
+            raise typer.Exit(code=2)
     else:
         try:
             raw_text = _read_input(file=file, stdin=stdin)
@@ -155,6 +163,25 @@ def show(jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd lis
 # --------------------------------------------------------------------------- #
 # Input
 # --------------------------------------------------------------------------- #
+
+
+def _extract_saved_page(file: Path) -> ExtractedAd | None:
+    """Unwrap a saved job page, or return None if this is plain text.
+
+    Neither adapter fetches anything; both read the file Alan already saved.
+    """
+    if mhtml.looks_like_mhtml(file):
+        reader, error = mhtml.extract_ad, mhtml.MHTMLError
+    elif pdf.looks_like_pdf(file):
+        reader, error = pdf.extract_ad, pdf.PDFError
+    else:
+        return None
+
+    try:
+        return reader(file)
+    except error as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=2)
 
 
 def _read_input(*, file: Path | None, stdin: bool) -> str:
