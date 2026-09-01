@@ -216,6 +216,12 @@ Prompt:
 > and the pipeline status board from Phase 5. Add `jobagent ui`, which starts
 > the server and opens a browser.
 
+**Deferred 2026-09-01.** Alan wants to run the tool from inside Claude Code
+while he applies for real, and to see what the workflow settles into before
+any of it is fixed in a screen. Revisit once the CLI has been used in anger
+for a few weeks. The rest of this section is the argument for the shape it
+should take when it happens.
+
 **Why last, not first.** `core/` has been written from the start to be callable
 from a web handler — no printing, no typer, no sys.exit — so this is genuinely
 additive whenever it happens. But the shape of what a screen would display has
