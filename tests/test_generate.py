@@ -15,18 +15,25 @@ import pytest
 from jobagent.adapters.llm import LLMClient, LLMResponse, Provider
 from jobagent.core.generate import (
     GenerateError,
+    _founder_dates,
+    _founder_line,
+    _unknown,
     build_catalogue,
     build_resume,
     format_dates,
 )
 from jobagent.core.models import (
+    Bullet,
     FitAssessment,
+    FounderEntry,
     JobDescription,
     Verdict,
+    Visibility,
     WorkArrangement,
     WorkType,
 )
 from jobagent.core.profile import load_profile
+from jobagent.core.validation import Severity
 
 
 @pytest.fixture
@@ -297,3 +304,91 @@ def test_a_clean_first_draft_is_not_regenerated(profile, jd, assessment) -> None
     build_cover_letter(jd, profile, assessment, client=client)
 
     assert len(client.prompts) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Founder ventures in EARLIER CAREER
+# --------------------------------------------------------------------------- #
+#
+# `founder_track_record` was rendered into the catalogue with referenceable
+# bullets but resolved by neither `roles` nor `earlier_career_ids`, so the model
+# had no correct slot for it. On the Colonial First State generation it put four
+# founder ids in `roles` and lost all four to blockers.
+#
+# The format below is taken from AlanBronResumeMaster2026.docx, which wins over
+# any spec that disagrees with it.
+
+
+def founder(**overrides) -> FounderEntry:
+    data = {
+        "id": "home_design_directory",
+        "company": "Australian Home Design Directory",
+        "role": "Co-founder & CTO",
+        "visibility": Visibility.full,
+        "start": "2006-09",
+        "end": "2016-06",
+        "bullets": [Bullet(text="Built it.", tags=["founder"], evidence_strength="strong")],
+        "summary": "sole architect; grew it to 1M+ annual visitors.",
+    }
+    return FounderEntry.model_validate(data | overrides)
+
+
+def test_a_closed_venture_renders_in_the_masters_format() -> None:
+    line, issue = _founder_line(founder())
+
+    assert issue is None
+    assert line == (
+        "Co-founder & CTO, Australian Home Design Directory (2006–16) — "
+        "sole architect; grew it to 1M+ annual visitors."
+    )
+
+
+def test_the_end_year_is_two_digits_like_the_master() -> None:
+    """`2006–16`, not `2006 – 2016`. The role headings use the other style."""
+    assert _founder_dates("2006-09", "2016-06") == "2006–16"
+    assert _founder_dates("2015-07", "2017-06") == "2015–17"
+
+
+def test_an_undated_venture_renders_without_a_parenthetical() -> None:
+    """OneBlink is deliberately undated — Alan's recollection and the master
+    disagree and neither is verified, so no date is asserted."""
+    line, issue = _founder_line(founder(start=None, end=None))
+
+    assert issue is None
+    assert "(" not in line
+
+
+def test_a_single_year_is_not_rendered_as_a_range() -> None:
+    assert _founder_dates("2015-01", "2015-11") == "2015"
+
+
+def test_an_ongoing_venture_is_kept_out_of_earlier_career() -> None:
+    """DataLlama appears in the master exactly once, as a CAREER HIGHLIGHT.
+    Its note_for_scorer forbids presenting it as full-time work or using it to
+    fill a timeline gap, and it is still running."""
+    line, issue = _founder_line(founder(id="datallama", start="2018", end="present"))
+
+    assert line == ""
+    assert issue is not None
+    assert issue.severity is Severity.blocker
+    assert "highlights" in issue.detail.lower()
+
+
+def test_a_venture_with_no_summary_is_blocked_not_invented() -> None:
+    """The model returns references for the resume and never composes
+    experience prose, so a missing summary is a profile gap, not a prompt to
+    write one."""
+    line, issue = _founder_line(founder(summary=None))
+
+    assert line == ""
+    assert issue is not None
+    assert "roles.yaml" in issue.detail
+
+
+def test_an_unknown_earlier_career_id_no_longer_claims_invention() -> None:
+    """The old wording sent a reader to check whether the profile had changed.
+    A real id in the wrong collection looks identical to a fabricated one."""
+    issue = _unknown("datallama", "earlier career entry")
+
+    assert "invented" not in issue.detail.split("before assuming")[0]
+    assert "another section" in issue.detail

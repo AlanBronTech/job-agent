@@ -109,7 +109,16 @@ on a tab stop at **16.93cm**.
   `2026 – Present`. `roles.yaml` stores `YYYY-MM`; the renderer truncates.
 - Founder entries in EARLIER CAREER **do** show years, including pre-2017
   (`2006–16`). See the age-signal policy in `profile/roles.yaml` — dates are
-  shown, career length is never computed.
+  shown, career length is never computed. The parenthetical style is the
+  master's — two-digit end year, no spaces — and is not the tab-stopped range
+  used beside a role heading.
+- **A closed venture is record; an ongoing one is evidence.** DataLlama runs
+  2018–present and appears in the master exactly once, as a CAREER HIGHLIGHT
+  — not in EXPERIENCE, not in EARLIER CAREER. Its `note_for_scorer` says never
+  to present it as full-time work or use it to fill a gap in the employment
+  timeline, and a dated line among closed ventures does neither job. The
+  renderer blocks an ongoing venture from that section and points at the
+  highlights.
 - `earlier_career` entries stay undated.
 
 ### Length
@@ -135,7 +144,7 @@ left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-366 tests pass, none touching the network. `main` is pushed to a **public**
+373 tests pass, none touching the network. `main` is pushed to a **public**
 GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
 `evals/cases.yaml` are gitignored and must stay that way.
 
