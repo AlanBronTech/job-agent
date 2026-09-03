@@ -19,7 +19,8 @@ from jobagent.adapters.docx_writer import (
 from jobagent.adapters.llm import CallType, LLMError, get_client
 from jobagent.cli import paths
 from jobagent.config import get_config
-from jobagent.core import store
+from jobagent.cli.history import render_company_history
+from jobagent.core import history, store
 from jobagent.core.generate import (
     GenerateError,
     build_answers,
@@ -64,6 +65,7 @@ def generate(
         with store.open_store(config.db_path) as conn:
             jd = store.get_jd(conn, jd_id)
             assessment = store.latest_assessment(conn, jd_id) if jd else None
+            seen_before = history.company_history(conn, jd) if jd else None
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
@@ -78,6 +80,9 @@ def generate(
             "assessment."
         )
         raise typer.Exit(code=2)
+
+    if seen_before is not None:
+        render_company_history(err_console, seen_before)
 
     if assessment.verdict is Verdict.skip and force:
         _record_override(config, jd_id)

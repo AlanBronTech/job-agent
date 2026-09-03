@@ -664,6 +664,62 @@ class Application(_Base):
     updated_at: datetime
 
 
+class PriorEncounter(_Base):
+    """One earlier ad from the same company, and what became of it.
+
+    Facts read out of the store, never a judgment. Warn-only by decision: the
+    record of what happened at a company is context for Alan, not a filter over
+    the verdict. Nuix screened him out on JD 14 and posted a different role in
+    the same team a day later — whether that is worth another day is his call,
+    and the tool's job is to make sure he knows he is making it again.
+    """
+
+    jd_id: int
+    title: str
+    ingested_at: datetime
+    # The identical posting ingested a second time — same source_url, not
+    # merely the same employer. Four of the first twenty-four rows are
+    # re-ingests of two ads, and saying "you already have this" is a different
+    # sentence from "you have been here before".
+    same_posting: bool = False
+    # None where the ad was never taken past ingestion.
+    status: ApplicationStatus | None = None
+    worth_applying: Worth | None = None
+    worth_why: str = ""
+
+    @property
+    def applied(self) -> bool:
+        """Did this one actually get sent."""
+        return self.status is not None and self.status not in {
+            ApplicationStatus.identified,
+            ApplicationStatus.not_applied,
+        }
+
+
+class CompanyHistory(_Base):
+    """Every earlier ad in the pipeline from one company, newest first."""
+
+    company: str
+    encounters: list[PriorEncounter] = Field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return bool(self.encounters)
+
+    @property
+    def applications(self) -> list[PriorEncounter]:
+        return [e for e in self.encounters if e.applied]
+
+    @property
+    def rejections(self) -> list[PriorEncounter]:
+        return [
+            e for e in self.encounters if e.status is ApplicationStatus.rejected_screen
+        ]
+
+    @property
+    def same_posting(self) -> list[PriorEncounter]:
+        return [e for e in self.encounters if e.same_posting]
+
+
 # --------------------------------------------------------------------------- #
 # Interview preparation (Phase 7)
 # --------------------------------------------------------------------------- #

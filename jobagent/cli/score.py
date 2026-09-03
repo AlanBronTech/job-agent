@@ -9,7 +9,8 @@ from rich.table import Table
 
 from jobagent.adapters.llm import CallType, LLMError, get_client
 from jobagent.config import get_config
-from jobagent.core import store
+from jobagent.cli.history import render_company_history
+from jobagent.core import history, store
 from jobagent.core.models import (
     ConstraintStatus,
     FitAssessment,
@@ -62,6 +63,7 @@ def score(
         with store.open_store(config.db_path) as conn:
             jd = store.get_jd(conn, jd_id)
             previous = store.latest_assessment(conn, jd_id) if show_last else None
+            seen_before = history.company_history(conn, jd) if jd else None
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
@@ -69,6 +71,11 @@ def score(
     if jd is None:
         err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
         raise typer.Exit(code=1)
+
+    # Before the refusals and before the model, so it is read whichever way
+    # this call ends.
+    if seen_before is not None:
+        render_company_history(err_console, seen_before)
 
     if show_last:
         if previous is None:

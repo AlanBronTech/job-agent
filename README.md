@@ -23,9 +23,14 @@ output too.
 ### 1. Save the ad, then ingest it
 
 Print the job page to PDF (Chrome: Cmd-P → "Save as PDF") into
-`~/job-agent-jds/`. Printing is better than copying: it captures the full
-description whether or not the "…more" toggle was expanded, and it keeps the
-URL, the posting age and the applicant count.
+`~/job-agent-jds/`. Printing is better than copying: it keeps the URL, the
+posting age and the applicant count.
+
+**Expand the description before you print.** Printing does not rescue a
+collapsed one — the text behind LinkedIn's "…more" toggle is lazy-loaded and
+genuinely absent from the page. The Nuix ad printed on 2026-09-02 gave 706
+characters against 6,912 for the same company's expanded ad. `jd add` says so
+when it sees it, and `score` refuses to read a stub.
 
 ```
 jobagent jd add --latest --source seek
@@ -47,6 +52,23 @@ Saved as JD 22.
 
 **That number is the handle for everything else.** Every later command takes
 it. If you lose it, `jobagent jd list` shows them all.
+
+**If you have been to this company before, it says so** — every earlier ad from
+them in the pipeline, and what became of each:
+
+```
+Seen before — Nuix
+  JD 14  2026-09-01  Engineering Manager - AI Team  rejected at screen
+                     worth it: yes. "I fit the job description reasonably well…"
+   JD 7  2026-08-31  Engineering Manager - AI Team  not applied
+  4 earlier ads, 1 applied to, 1 rejected at screen. This does not change the verdict.
+```
+
+It is a report, not a filter. Nothing about it moves the score, and the same
+lines print again before `score` and before `generate`, which is where the
+money and the day actually go. If a company ever becomes a flat no, that is a
+line you write in `profile/assets.yaml` like any other hard filter, not
+something the tool infers from a rejection.
 
 **What to do about it:** skim the red flags. If the parse looks wrong — a
 company name that is actually the agency, a location that is a sentence — tell

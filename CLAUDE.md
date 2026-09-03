@@ -135,7 +135,7 @@ left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-328 tests pass, none touching the network. `main` is pushed to a **public**
+366 tests pass, none touching the network. `main` is pushed to a **public**
 GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
 `evals/cases.yaml` are gitignored and must stay that way.
 
@@ -173,6 +173,15 @@ The commands, and roughly what each costs:
   hired".** Alan was offered the Easy Signs job and applying was still the
   wrong call — the commute that ended it is an absolute filter in his profile.
   Grading on hiring outcomes would tune away the constraint that mattered.
+- **Company history is reported, never scored.** `core/history.py` reads the
+  store and says "you have been here before, and here is how it went". It does
+  not reach `check_constraints` and does not move a verdict. Nuix screened him
+  out on JD 14 and posted a different role in the same team the next day; the
+  fix for that is a line he reads, not a filter inferred from one rejection.
+  A company only becomes an absolute skip when Alan says so in `assets.yaml`,
+  the way every other hard filter got there. The warning cannot fire before
+  the ad is parsed — the company name is what the parser reads out of it — so
+  it costs the $0.08 parse and saves the $0.20 score and the $0.30 generate.
 - **Check a variable was observable at decision time before it informs
   anything.** Applicant counts read off a page saved weeks later are target
   leakage; they were not there when he decided.
