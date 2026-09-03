@@ -247,3 +247,28 @@ def test_a_thin_capture_warns_but_still_ingests(wired, jd_file, monkeypatch) -> 
     assert result.exit_code == 0, result.output
     assert "collapsed description" in result.output
     assert "Saved as JD 1" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# Company history
+# --------------------------------------------------------------------------- #
+
+
+def test_the_second_ad_from_a_company_says_so(wired, jd_file) -> None:
+    """The Nuix case: an ad from a company already in the pipeline must say so
+    while the JD id is still on screen, before $0.20 is spent scoring it."""
+    runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+
+    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+
+    output = " ".join(result.output.split())
+    assert result.exit_code == 0, result.output
+    assert "Seen before — Acme Pty Ltd" in output
+    assert "JD 1" in output
+    assert "does not change the verdict" in output
+
+
+def test_the_first_ad_from_a_company_says_nothing(wired, jd_file) -> None:
+    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+
+    assert "Seen before" not in result.output

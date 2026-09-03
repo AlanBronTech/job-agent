@@ -327,6 +327,21 @@ def list_jds(conn: sqlite3.Connection, limit: int | None = None) -> list[JobDesc
     return [_row_to_jd(row) for row in rows]
 
 
+def list_jds_with_applications(
+    conn: sqlite3.Connection,
+) -> list[tuple[JobDescription, Application | None]]:
+    """Every JD paired with its application, where it has one. Newest first.
+
+    Unfiltered on purpose. Deciding which rows are the same employer is a text
+    comparison — `company` is whatever the parser read off the ad, so "Nuix"
+    and "Nuix Pty Ltd" are one company and no index can say so — and that rule
+    belongs in Python where it can be tested. The table is two dozen rows and
+    will not outgrow reading all of them.
+    """
+    by_jd = {app.jd_id: app for app in list_applications(conn)}
+    return [(jd, by_jd.get(jd.id)) for jd in list_jds(conn)]
+
+
 def delete_jd(conn: sqlite3.Connection, jd_id: int) -> bool:
     """Delete a JD. Returns True if a row was removed."""
     try:

@@ -14,8 +14,9 @@ from jobagent.adapters import mhtml, pdf
 from jobagent.adapters.adtext import ExtractedAd
 from jobagent.adapters.llm import CallType, LLMError, get_client
 from jobagent.cli import paths
+from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
-from jobagent.core import store
+from jobagent.core import history, store
 from jobagent.core.jd import JDError, parse_jd
 from jobagent.core.models import HiringStatus, JobDescription
 from jobagent.core.store import StoreError
@@ -128,13 +129,18 @@ def add(
     try:
         with store.open_store(config.db_path) as conn:
             jd_id = store.add_jd(conn, jd)
+            jd.id = jd_id
+            seen_before = history.company_history(conn, jd)
     except StoreError as exc:
         err_console.print(f"[bold red]Parsed, but could not save.[/] {exc}")
         raise typer.Exit(code=1)
 
-    jd.id = jd_id
     _render_jd(jd)
     console.print(f"\n[green]Saved as JD {jd_id}.[/]")
+    # Last, so it is the line still on screen when he decides whether to spend
+    # $0.20 scoring it. The company name only exists once the ad is parsed, so
+    # this cannot come any earlier than it does.
+    render_company_history(err_console, seen_before)
 
 
 @app.command("list")
