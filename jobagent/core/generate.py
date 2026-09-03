@@ -54,6 +54,15 @@ ANSWERS_PROMPT = "generate_answers"
 
 MAX_TOKENS = 8192
 
+# The resume selection gets its own, larger budget. A correct answer to that
+# contract is under a thousand tokens — references, eight keys, a tagline and
+# two paragraphs — but on 2026-09-04 the Colonial First State generation ran
+# to the full 8,192 and was truncated, losing the call. The prompt already
+# bounds the verbosity (rules 1, 3, 5, 6 and 10 all cap counts), so the
+# ceiling is there to survive a model that derails, not to shape the output.
+# Same reasoning as MAX_TOKENS in core/scoring.py, and the same number.
+RESUME_MAX_TOKENS = 16384
+
 # voice.md: "Under 350 words. One page."
 COVER_LETTER_MAX_WORDS = 350
 
@@ -163,7 +172,7 @@ def _ask_for_selection(
 
     try:
         parsed, _ = client.complete_json(
-            prompt=prompt, label=RESUME_PROMPT, max_tokens=MAX_TOKENS
+            prompt=prompt, label=RESUME_PROMPT, max_tokens=RESUME_MAX_TOKENS
         )
     except LLMError as exc:
         raise GenerateError(f"Model call failed while selecting content: {exc}") from exc
