@@ -35,6 +35,7 @@ from jobagent.adapters.docx_writer import (
 )
 from jobagent.adapters.llm import LLMClient, LLMError
 from jobagent.core.models import (
+    FounderEntry,
     FitAssessment,
     JobDescription,
     Profile,
@@ -246,12 +247,20 @@ def _assemble(
 
     earlier = []
     by_id = {entry.id: entry for entry in profile.roles.earlier_career}
+    founders_by_id = {entry.id: entry for entry in profile.roles.founder_track_record}
     for entry_id in selection.earlier_career_ids:
         entry = by_id.get(entry_id)
-        if entry is None:
-            issues.append(_unknown(entry_id, "earlier career entry"))
-            continue
-        line = f"{entry.company} — {entry.summary}"
+        if entry is not None:
+            line = f"{entry.company} — {entry.summary}"
+        else:
+            founder = founders_by_id.get(entry_id)
+            if founder is None:
+                issues.append(_unknown(entry_id, "earlier career entry"))
+                continue
+            line, problem = _founder_line(founder)
+            if problem is not None:
+                issues.append(problem)
+                continue
         issues += validate_rendered(line, context=f"Earlier-career entry {entry_id}")
         earlier.append(line)
 
@@ -431,15 +440,26 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
                 f"{bullet.text}"
             )
 
-    lines.append("\n## Founder track record")
+    lines.append(
+        "\n## Founder track record"
+        "\n(Closed ventures go in `earlier_career_ids`, one dated line each — "
+        "never in `roles`. An ongoing one has no line: cite its bullets from "
+        "the highlights instead.)"
+    )
     for entry in roles.founder_track_record:
         if entry.visibility is Visibility.scorer_only:
             continue
-        lines.append(f"\n{entry.id} — {entry.role}, {entry.company}")
+        dates = _founder_dates(entry.start, entry.end)
+        when = "ongoing" if _is_ongoing(entry) else (dates or "undated")
+        lines.append(f"\n{entry.id} [{when}] — {entry.role}, {entry.company}")
         for index, bullet in enumerate(entry.bullets):
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
 
-    lines.append("\n## AI capability")
+    lines.append(
+        "\n## AI capability"
+        "\n(Evidence for the highlights and the PROFILE paragraphs only. These "
+        "are not employment and have no body section.)"
+    )
     for entry in roles.ai_capability:
         if entry.visibility is Visibility.scorer_only:
             continue
@@ -475,6 +495,74 @@ def _render_stories(profile: Profile) -> str:
 # --------------------------------------------------------------------------- #
 # Deterministic details
 # --------------------------------------------------------------------------- #
+
+
+def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
+    """One EARLIER CAREER line for a closed venture, in the master's format.
+
+    From `AlanBronResumeMaster2026.docx`, which wins over any spec that
+    disagrees with it:
+
+        Co-founder & CTO, Australian Home Design Directory (2006–16) — sole
+        architect; built the entire platform, grew to 1M+ annual visitors,
+        acquired after a competitive bidding process.
+
+    An *ongoing* venture is deliberately not renderable here. The master lists
+    DataLlama once, as a CAREER HIGHLIGHT, and nowhere else — and its
+    `note_for_scorer` says never to present it as full-time work or use it to
+    fill a gap in the employment timeline. A dated line among closed ventures
+    does neither job well. Its bullets still reach the page through highlights.
+    """
+    if _is_ongoing(entry):
+        return "", ValidationIssue(
+            rule="ongoing venture in earlier career",
+            severity=Severity.blocker,
+            detail=(
+                f"{entry.id!r} is still running ({entry.start}–present) and does "
+                "not belong in EARLIER CAREER, which lists closed ventures. Cite "
+                "its bullets from CAREER HIGHLIGHTS instead — that is where the "
+                "master resume puts it."
+            ),
+            excerpt=entry.id,
+        )
+    if not entry.summary:
+        return "", ValidationIssue(
+            rule="missing summary",
+            severity=Severity.blocker,
+            detail=(
+                f"{entry.id!r} has no `summary` in the profile, and the model "
+                "may not write one — resume prose is copied, never composed. "
+                "Add a summary line to this entry in roles.yaml."
+            ),
+            excerpt=entry.id,
+        )
+    dates = _founder_dates(entry.start, entry.end)
+    heading = f"{entry.role}, {entry.company}"
+    if dates:
+        heading += f" ({dates})"
+    return f"{heading} — {entry.summary}", None
+
+
+def _is_ongoing(entry: FounderEntry) -> bool:
+    return entry.end is not None and entry.end.lower() == PRESENT
+
+
+def _founder_dates(start: str | None, end: str | None) -> str:
+    """``2006–16`` — the master's parenthetical style for a closed venture.
+
+    Two-digit end year, en dash, no spaces. Distinct from `format_dates`,
+    which renders the tab-stopped range beside a role heading. Same age-signal
+    policy either way: the years are shown, the span is never computed.
+    """
+    if start is None:
+        return ""
+    start_year = start.split("-")[0]
+    if end is None:
+        return start_year
+    end_year = end.split("-")[0]
+    if end_year == start_year:
+        return start_year
+    return f"{start_year}\u2013{end_year[-2:]}"
 
 
 def format_dates(start: str, end: str, *, today: date) -> str:
@@ -543,8 +631,10 @@ def _unknown(ref: str, kind: str) -> ValidationIssue:
         rule="unknown reference",
         severity=Severity.blocker,
         detail=(
-            f"The model referenced a {kind} {ref!r} that is not in the profile. "
-            "Either the profile changed, or the reference was invented."
+            f"The model referenced a {kind} {ref!r} that is not in the "
+            f"profile's {kind} list. Check whether the id exists in another "
+            "section before assuming it was invented — a real id in the wrong "
+            "slot looks identical to a fabricated one here."
         ),
         excerpt=ref,
     )

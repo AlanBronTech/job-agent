@@ -312,7 +312,7 @@ def _profile_text(profile: Profile) -> list[str]:
         parts += [role.title, role.company, role.start, role.end]
         parts += [bullet.text for bullet in role.bullets]
     for entry in roles.founder_track_record:
-        parts += [entry.company, entry.role]
+        parts += [entry.company, entry.role, entry.summary or ""]
         parts += [bullet.text for bullet in entry.bullets]
         parts += [str(entry.start or ""), str(entry.end or "")]
     for entry in roles.ai_capability:

@@ -1,4 +1,4 @@
-# generate_resume — v1
+# generate_resume — v2
 
 Select and order profile content for one specific job advertisement.
 
@@ -72,7 +72,14 @@ Skill category keys available: {skills}
    no "since 2006", no decades. Role dates are added by the renderer; you do
    not write them.
 10. **`earlier_career_ids`** — all of them, in catalogue order, unless one is
-    genuinely irrelevant to this ad.
+    genuinely irrelevant to this ad. **Closed founder ventures go here too**,
+    interleaved in catalogue order; each renders as one dated line. An entry
+    marked `[ongoing]` has no line — it is not employment history. Cite it in
+    the highlights instead.
+11. **`roles` accepts ids from the Roles section only.** Founder ventures and
+    AI-capability entries are not roles. Their bullets are still yours to use
+    as a highlight `source_ref`, which is where the master resume puts the
+    strongest of them.
 
 ## Output
 
