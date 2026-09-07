@@ -173,6 +173,15 @@ The commands, and roughly what each costs:
   bullets and ordering by id; the text is copied verbatim from `profile/`. A
   model that cannot type a bullet cannot embellish one. It writes prose only
   for the tagline, the PROFILE paragraphs and the cover letter — all validated.
+- **What a highlight may cite is wider than what a bullet may copy.** The
+  catalogue holds role bullets keyed `id.index` because its text is copied
+  verbatim into EXPERIENCE; `build_citable` also accepts entry ids, including
+  `earlier_career`, because a CAREER HIGHLIGHT composes prose and cites the
+  evidence behind it. Collapsing the two would let a thirty-year-old undated
+  summary render inside a dated role block. Keeping them equal in the other
+  direction blocked `mlc_nab` — a real, correct citation of Alan's
+  superannuation work, on a superannuation ad. A checker narrower than the
+  prompt reports the model's best answer as a fabrication.
 - **`core/validation.py` enforces the hard rules mechanically**, not by asking
   a prompt nicely: every number traced to the profile, the banned list parsed
   out of `voice.md` at runtime, explicit patterns for the age-signal policy.
