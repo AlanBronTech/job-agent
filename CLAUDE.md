@@ -191,6 +191,17 @@ The commands, and roughly what each costs:
   the way every other hard filter got there. The warning cannot fire before
   the ad is parsed — the company name is what the parser reads out of it — so
   it costs the $0.08 parse and saves the $0.20 score and the $0.30 generate.
+- **The store is not the record of what has been done.** `generate` rewrote
+  the Colonial First State folder three days after it was written, in place,
+  because the database had no application row and the agent read that as "not
+  yet worked on" without looking in `OUTPUT_DIR`. Documents on disk are state.
+  Ebury and Bright & Duggan had also been generated and were about to be read
+  the same way. A guard now refuses before spending, and any check of "has this
+  been done" has to look where the artefacts actually land, not only in SQLite.
+- **A guard that fires when nothing is at risk stops being a guard.** The
+  overwrite check names only the files that run would write, so an
+  `interview-prep.md` from a `prep` run never triggers it. The moment
+  `--overwrite` becomes reflexive it protects nothing.
 - **Check a variable was observable at decision time before it informs
   anything.** Applicant counts read off a page saved weeks later are target
   leakage; they were not there when he decided.
