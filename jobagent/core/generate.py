@@ -22,6 +22,8 @@ with an arithmetic rule that Alan is deliberately exposed on.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -284,6 +286,30 @@ def _assemble(
 # --------------------------------------------------------------------------- #
 
 
+# A salutation the model wrote itself. Short, opens with "Dear" or "To", and
+# ends at a comma or colon — a body sentence beginning "Dear" would not.
+_SALUTATION = re.compile(r"^(dear|to)\b[^.]{0,60}[,:]$", re.IGNORECASE)
+
+
+def strip_letter_salutation(text: str) -> str:
+    """Drop a salutation the model supplied despite being told not to.
+
+    `prompts/generate_cover_letter.md` says to return the body only, because
+    the renderer writes the salutation from `CoverLetterContent`. The model
+    obeyed on three of the first five letters; the other two came out addressed
+    to the hiring manager twice, and one of those was for a role Alan had
+    already applied to.
+
+    A rule this mechanical is not worth asking for twice. Stripped before
+    validation so the word count measures the body that will actually be
+    rendered.
+    """
+    lines = text.lstrip().splitlines()
+    while lines and _SALUTATION.match(lines[0].strip()):
+        lines.pop(0)
+    return "\n".join(lines).lstrip("\n")
+
+
 def build_cover_letter(
     jd: JobDescription,
     profile: Profile,
@@ -310,6 +336,7 @@ def build_cover_letter(
         profile,
         max_words=COVER_LETTER_MAX_WORDS,
         context="The cover letter",
+        clean=strip_letter_salutation,
     )
 
 
@@ -349,6 +376,7 @@ def _write_and_check(
     *,
     max_words: int | None = None,
     context: str,
+    clean: Callable[[str], str] | None = None,
 ) -> GeneratedText:
     """Write, validate, and regenerate once if the draft breaks a hard rule.
 
@@ -363,6 +391,8 @@ def _write_and_check(
 
     for attempt in range(REWRITE_ATTEMPTS + 1):
         text = _ask_for_text(client, attempt_prompt, label)
+        if clean is not None:
+            text = clean(text)
         issues = validate_prose(
             text, profile, max_words=max_words, context=context
         )
