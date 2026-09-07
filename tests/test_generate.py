@@ -19,7 +19,9 @@ from jobagent.core.generate import (
     _founder_line,
     _unknown,
     build_catalogue,
+    build_cover_letter,
     build_citable,
+    strip_letter_salutation,
     build_resume,
     format_dates,
 )
@@ -84,6 +86,22 @@ class FakeClient(LLMClient):
         self.prompt = prompt
         return self.payload, LLMResponse(
             text="{}", provider=self.provider, model=self.model,
+            input_tokens=1, output_tokens=1,
+        )
+
+
+class TextClient(LLMClient):
+    """The prose path calls `complete`, not `complete_json`."""
+
+    provider = Provider.anthropic
+
+    def __init__(self, text: str):
+        super().__init__(model="fake-model")
+        self.text = text
+
+    def _complete(self, *, system, prompt, max_tokens):
+        return LLMResponse(
+            text=self.text, provider=self.provider, model=self.model,
             input_tokens=1, output_tokens=1,
         )
 
@@ -490,3 +508,48 @@ def test_a_highlight_citing_nothing_real_still_blocks(profile, jd, assessment) -
 
     blockers = [i for i in built.issues if i.severity is Severity.blocker]
     assert any("no_such_entry" in (i.excerpt or "") for i in blockers)
+
+
+# --------------------------------------------------------------------------- #
+# The renderer writes the salutation, so the letter must not carry its own
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Dear Hiring Manager,\n\nBody starts here.",
+        "Dear Hiring Manager,\nBody starts here.",
+        "Dear ELMO Software Hiring Team,\n\nBody starts here.",
+        "To whom it may concern,\n\nBody starts here.",
+        "   \n Dear Sir or Madam:\n\nBody starts here.",
+    ],
+)
+def test_a_salutation_the_model_wrote_is_removed(text: str) -> None:
+    """Two of the first five letters came out addressed twice: the model wrote
+    a salutation the prompt told it to omit, and the renderer added its own."""
+    assert strip_letter_salutation(text).startswith("Body starts here.")
+
+
+def test_a_letter_without_one_is_untouched() -> None:
+    text = "Technical Team Lead at ELMO is a leadership role.\n\nSecond paragraph."
+
+    assert strip_letter_salutation(text) == text
+
+
+def test_prose_that_merely_opens_with_dear_survives() -> None:
+    """The line has to look like a salutation — short, and closing on a comma
+    or colon — not merely begin with the word."""
+    text = "Dear colleagues at ELMO, I learned the hard way that scope creep kills."
+
+    assert strip_letter_salutation(text) == text
+
+
+def test_the_generated_letter_is_addressed_once(profile, jd, assessment) -> None:
+    """End to end, through the builder that renders into the .docx."""
+    client = TextClient("Dear Hiring Manager,\n\nI led 15 engineers.")
+
+    letter = build_cover_letter(jd, profile, assessment, client=client)
+
+    assert letter.text.lower().count("dear hiring manager") == 0
+    assert letter.text.startswith("I led 15 engineers.")
