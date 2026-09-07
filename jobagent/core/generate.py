@@ -132,6 +132,7 @@ def build_resume(
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume."""
     catalogue = build_catalogue(profile)
+    citable = build_citable(profile)
     selection = _ask_for_selection(jd, profile, assessment, catalogue, client=client)
 
     issues: list[ValidationIssue] = []
@@ -143,7 +144,7 @@ def build_resume(
             profile,
             context="a CAREER HIGHLIGHTS bullet",
         )
-        issues += _check_reference(highlight.source_ref, catalogue)
+        issues += _check_citation(highlight.source_ref, citable)
 
     content, reference_issues = _assemble(
         selection, profile, catalogue, today=today or date.today()
@@ -423,6 +424,40 @@ def build_catalogue(profile: Profile) -> dict[str, str]:
     return catalogue
 
 
+def build_citable(profile: Profile) -> set[str]:
+    """Every id a CAREER HIGHLIGHTS bullet may cite as its evidence.
+
+    Wider than `build_catalogue`, and deliberately a different thing. The
+    catalogue is what gets *copied verbatim* into EXPERIENCE, so it holds only
+    role bullets — putting an earlier-career summary in it would let the model
+    reference one from `bullet_refs` and land thirty-year-old text inside a
+    dated role block.
+
+    A highlight does not copy; it composes prose and cites the evidence behind
+    it. So it may cite anything the selection prompt actually shows it: an
+    entry heading or a single bullet within one, in any of the four groups.
+    Earlier-career entries appear in that prompt with a bare id and no bullets
+    at all, which is why `mlc_nab` — a real, correct citation of Alan's
+    superannuation work on a superannuation ad — was reported as unknown.
+
+    Keep this in step with `_render_catalogue`: whatever that shows the model
+    is what this has to accept.
+    """
+    citable = set(build_catalogue(profile))
+    roles = profile.roles
+    groups = (roles.roles, roles.founder_track_record, roles.ai_capability)
+    for group in groups:
+        for entry in group:
+            if entry.visibility is Visibility.scorer_only:
+                continue
+            citable.add(entry.id)
+    for entry in roles.earlier_career:
+        if entry.visibility is Visibility.scorer_only:
+            continue
+        citable.add(entry.id)
+    return citable
+
+
 def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
     """The catalogue as text for the prompt, grouped so the model can see
     which bullets belong to which role."""
@@ -467,8 +502,14 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         for index, bullet in enumerate(entry.bullets):
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
 
-    lines.append("\n## Earlier career (undated, one condensed line each)")
+    lines.append(
+        "\n## Earlier career (undated, one condensed line each)"
+        "\n(Cite one of these from a highlight by its bare id — they have no "
+        "bullets. Thirty years of domain evidence lives here.)"
+    )
     for entry in roles.earlier_career:
+        if entry.visibility is Visibility.scorer_only:
+            continue
         lines.append(f"  {entry.id} — {entry.company}: {entry.summary}")
 
     return "\n".join(lines)
@@ -624,6 +665,27 @@ def _check_reference(ref: str, catalogue: dict[str, str]) -> list[ValidationIssu
     if ref in catalogue:
         return []
     return [_unknown(ref, "bullet")]
+
+
+def _check_citation(ref: str, citable: set[str]) -> list[ValidationIssue]:
+    """A highlight's `source_ref`, which may name an entry or a single bullet."""
+    if ref in citable:
+        return []
+    return [
+        ValidationIssue(
+            rule="unknown reference",
+            severity=Severity.blocker,
+            detail=(
+                f"A CAREER HIGHLIGHTS bullet cites {ref!r}, which is not an id "
+                "anywhere in the profile. Every id the selection prompt offers "
+                "is citable — a role, a founder venture, an AI capability "
+                "entry, an earlier-career line, or one bullet within any of "
+                "them — so an id that fails here was invented. Check the "
+                "sentence it supports before keeping it."
+            ),
+            excerpt=ref,
+        )
+    ]
 
 
 def _unknown(ref: str, kind: str) -> ValidationIssue:

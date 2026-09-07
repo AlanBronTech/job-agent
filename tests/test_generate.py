@@ -19,6 +19,7 @@ from jobagent.core.generate import (
     _founder_line,
     _unknown,
     build_catalogue,
+    build_citable,
     build_resume,
     format_dates,
 )
@@ -392,3 +393,100 @@ def test_an_unknown_earlier_career_id_no_longer_claims_invention() -> None:
 
     assert "invented" not in issue.detail.split("before assuming")[0]
     assert "another section" in issue.detail
+
+
+# --------------------------------------------------------------------------- #
+# What a highlight may cite, as against what a bullet may copy
+# --------------------------------------------------------------------------- #
+
+
+def test_an_earlier_career_entry_is_citable(profile) -> None:
+    """Thirty years of domain evidence lives in `earlier_career`, and the
+    selection prompt shows it with a bare id and no bullets. A highlight citing
+    one used to blocker as an invented reference — on a superannuation ad, for
+    citing the superannuation work."""
+    entry = profile.roles.earlier_career[0]
+
+    assert entry.id in build_citable(profile)
+
+
+def test_an_earlier_career_entry_stays_out_of_the_bullet_catalogue(profile) -> None:
+    """The catalogue is what gets copied verbatim into a dated role block. An
+    earlier-career summary reaching it would put undated thirty-year-old text
+    inside EXPERIENCE, which is the leak this separation exists to prevent."""
+    entry = profile.roles.earlier_career[0]
+
+    assert entry.id not in build_catalogue(profile)
+
+
+def test_an_entry_heading_is_citable_as_well_as_its_bullets(profile) -> None:
+    role = profile.roles.roles[0]
+    citable = build_citable(profile)
+
+    assert role.id in citable
+    assert f"{role.id}.0" in citable
+
+
+def test_an_invented_id_is_still_not_citable(profile) -> None:
+    assert "totally_made_up" not in build_citable(profile)
+
+
+def test_scorer_only_entries_are_not_citable(profile) -> None:
+    """Citing one would put prose derived from never-rendered material on the
+    page, which is the thing `scorer_only` exists to stop."""
+    from jobagent.core.models import Visibility
+
+    hidden = [
+        entry.id
+        for entry in profile.roles.ai_capability
+        if entry.visibility is Visibility.scorer_only
+    ]
+    citable = build_citable(profile)
+
+    assert hidden, "the example profile should carry a scorer_only entry"
+    for entry_id in hidden:
+        assert entry_id not in citable
+
+
+def test_a_highlight_citing_earlier_career_raises_no_blocker(
+    profile, jd, assessment
+) -> None:
+    """End to end: the Colonial First State case that produced the report."""
+    entry = profile.roles.earlier_career[0]
+    client = FakeClient(
+        selection(
+            profile,
+            highlights=[
+                {
+                    "label": "Superannuation domain adjacency",
+                    "text": entry.summary,
+                    "source_ref": entry.id,
+                }
+            ],
+        )
+    )
+
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 7))
+
+    blockers = [i for i in built.issues if i.severity is Severity.blocker]
+    assert blockers == []
+
+
+def test_a_highlight_citing_nothing_real_still_blocks(profile, jd, assessment) -> None:
+    client = FakeClient(
+        selection(
+            profile,
+            highlights=[
+                {
+                    "label": "Invented",
+                    "text": "Something that is not in the profile.",
+                    "source_ref": "no_such_entry",
+                }
+            ],
+        )
+    )
+
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 7))
+
+    blockers = [i for i in built.issues if i.severity is Severity.blocker]
+    assert any("no_such_entry" in (i.excerpt or "") for i in blockers)
