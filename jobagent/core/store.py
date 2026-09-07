@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from jobagent.core.models import Application, FitAssessment, JobDescription
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -41,6 +41,8 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "applications": [
         ("worth_derived", "INTEGER NOT NULL DEFAULT 0"),
         ("overrode_scorer", "INTEGER NOT NULL DEFAULT 0"),
+        # v8
+        ("reposted_on", "TEXT"),
     ],
     "job_descriptions": [
         ("source_url", "TEXT"),
@@ -116,6 +118,7 @@ CREATE TABLE IF NOT EXISTS applications (
     status         TEXT NOT NULL,
     applied_on     TEXT,
     channel        TEXT,
+    reposted_on    TEXT,
     notes          TEXT NOT NULL DEFAULT '',
     worth_applying TEXT NOT NULL DEFAULT 'unsure',
     worth_why      TEXT NOT NULL DEFAULT '',
@@ -458,13 +461,15 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
         cursor = conn.execute(
             """
             INSERT INTO applications (
-                jd_id, status, applied_on, channel, notes, worth_applying,
-                worth_why, worth_derived, overrode_scorer, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                jd_id, status, applied_on, channel, reposted_on, notes,
+                worth_applying, worth_why, worth_derived, overrode_scorer,
+                updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(jd_id) DO UPDATE SET
                 status = excluded.status,
                 applied_on = excluded.applied_on,
                 channel = excluded.channel,
+                reposted_on = excluded.reposted_on,
                 notes = excluded.notes,
                 worth_applying = excluded.worth_applying,
                 worth_why = excluded.worth_why,
@@ -477,6 +482,9 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 application.status.value,
                 application.applied_on.isoformat() if application.applied_on else None,
                 application.channel,
+                application.reposted_on.isoformat()
+                if application.reposted_on
+                else None,
                 application.notes,
                 application.worth_applying.value,
                 application.worth_why,
@@ -530,6 +538,7 @@ def _row_to_application(row: sqlite3.Row) -> Application:
         "status": row["status"],
         "applied_on": row["applied_on"],
         "channel": row["channel"],
+        "reposted_on": row["reposted_on"],
         "notes": row["notes"],
         "worth_applying": row["worth_applying"],
         "worth_why": row["worth_why"],
