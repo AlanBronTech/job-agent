@@ -51,6 +51,11 @@ def generate(
         "--force",
         help="Generate even when the assessment says skip.",
     ),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        help="Replace documents already generated for this application.",
+    ),
 ) -> None:
     """Generate application documents for one job description."""
     if not (resume or cover or answers):
@@ -98,6 +103,12 @@ def generate(
         )
         raise typer.Exit(code=2)
 
+    today = date.today()
+    if not overwrite:
+        _refuse_to_clobber(
+            config, jd, today, resume=resume, cover=cover, answers=answers is not None
+        )
+
     if config.profile_dir is None:
         err_console.print("[bold red]No profile directory.[/] Set PROFILE_DIR in .env.")
         raise typer.Exit(code=2)
@@ -116,7 +127,6 @@ def generate(
         raise typer.Exit(code=2)
 
     questions = _read_questions(answers) if answers else []
-    today = date.today()
     folder = docs.application_folder(config.output_dir, jd, when=today)
     issues: list[ValidationIssue] = []
     written: list[Path] = []
@@ -184,6 +194,61 @@ def generate(
     written.append(docs.write_text(folder, "job-ad.md", docs.job_ad_markdown(jd)))
 
     _report(folder, written, issues)
+
+
+def _planned_documents(
+    jd: JobDescription, when: date, *, resume: bool, cover: bool, answers: bool
+) -> list[str]:
+    """Exactly the filenames this run would write.
+
+    Kept in step with the writes below by listing the same names in the same
+    order. `assessment.md` and `job-ad.md` are unconditional: every run
+    rewrites the record of why the documents were cut the way they were.
+    """
+    names: list[str] = []
+    if resume:
+        names.append(docs.document_name("Resume", jd, when=when))
+    if cover:
+        names.append(docs.document_name("CoverLetter", jd, when=when))
+    if answers:
+        names.append("answers.md")
+    names += ["assessment.md", "job-ad.md"]
+    return names
+
+
+def _refuse_to_clobber(
+    config, jd: JobDescription, when: date, *, resume: bool, cover: bool, answers: bool
+) -> None:
+    """Stop before spending anything if this run would overwrite earlier work.
+
+    Checked here rather than at the point of writing, because by then the model
+    calls have been paid for and the only choice left is to bin the result or
+    bin the earlier documents. The generated .docx files are the ones that get
+    edited by hand and sent to an employer; regenerating them from the same
+    profile reproduces the substance but not the edits.
+    """
+    folder = docs.application_folder_path(config.output_dir, jd, when=when)
+    names = _planned_documents(jd, when, resume=resume, cover=cover, answers=answers)
+    clashes = docs.existing_documents(folder, names)
+    if not clashes:
+        return
+
+    newest = max(path.stat().st_mtime for path in clashes)
+    err_console.print(
+        f"[bold yellow]Already generated.[/] {folder} holds documents for this "
+        f"application, most recently "
+        f"{datetime.fromtimestamp(newest):%-d %B %Y at %H:%M}."
+    )
+    for path in clashes:
+        stamp = datetime.fromtimestamp(path.stat().st_mtime)
+        err_console.print(f"  [dim]{stamp:%Y-%m-%d %H:%M}[/]  {path.name}")
+    err_console.print(
+        "\n[dim]Re-running would replace these in place, including any edits "
+        "made by hand since. Move or rename the folder to keep them, or pass "
+        "--overwrite to replace them.[/]"
+    )
+    raise typer.Exit(code=2)
+
 
 
 # --------------------------------------------------------------------------- #

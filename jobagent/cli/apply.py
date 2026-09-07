@@ -139,6 +139,32 @@ def status_command(
 # --------------------------------------------------------------------------- #
 
 
+def _parse_date(value: str) -> date:
+    """`--on 2026-09-04` to a date, or a readable refusal.
+
+    Worth its own guard rather than `date.fromisoformat` at the call site: the
+    application date feeds `days_to_response`, which outcomes.yaml treats as
+    carrying as much signal as the outcome itself — a rejection inside three
+    days is automated, one after three weeks was read by a human. A date typed
+    wrong, or a future one, corrupts that quietly.
+    """
+    try:
+        parsed = date.fromisoformat(value.strip())
+    except ValueError:
+        err_console.print(
+            f"[bold red]Could not read '{value}' as a date.[/] "
+            "Use YYYY-MM-DD, as in --on 2026-09-04."
+        )
+        raise typer.Exit(code=2)
+    if parsed > date.today():
+        err_console.print(
+            f"[bold red]{parsed:%Y-%m-%d} is in the future.[/] "
+            "An application date is a record of something that has happened."
+        )
+        raise typer.Exit(code=2)
+    return parsed
+
+
 def _save(
     jd_id: int,
     *,

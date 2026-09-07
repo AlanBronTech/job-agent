@@ -25,6 +25,7 @@ against the page a human saw.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 
@@ -38,18 +39,52 @@ class DocsError(Exception):
     """The output folder could not be prepared or written to."""
 
 
+def application_folder_path(
+    output_dir: Path, jd: JobDescription, *, when: date | None = None
+) -> Path:
+    """Where one application's folder is, whether or not it exists yet.
+
+    Separate from `application_folder` because the caller has to be able to ask
+    "what is already in there" *before* spending money, and a check that
+    created the folder as a side effect could not answer that question twice.
+
+    The month is part of the name, so regenerating in a later month lands in a
+    new folder and leaves the old one intact. That is deliberate — a second
+    application to the same role months later is a different application — but
+    it does mean the overwrite guard only fires within a month.
+    """
+    when = when or date.today()
+    name = f"{when:%Y-%m}_{_slug(jd.company or jd.posted_by or 'Unknown')}_{_slug(jd.title)}"
+    return Path(output_dir).expanduser() / name
+
+
 def application_folder(
     output_dir: Path, jd: JobDescription, *, when: date | None = None
 ) -> Path:
     """The folder for one application. Created if absent."""
-    when = when or date.today()
-    name = f"{when:%Y-%m}_{_slug(jd.company or jd.posted_by or 'Unknown')}_{_slug(jd.title)}"
-    folder = Path(output_dir).expanduser() / name
+    folder = application_folder_path(output_dir, jd, when=when)
     try:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise DocsError(f"Could not create {folder}: {exc}") from exc
     return folder
+
+
+def existing_documents(folder: Path, names: Iterable[str]) -> list[Path]:
+    """Which of `names` are already on disk, so a caller can refuse to clobber.
+
+    Only the names the caller is about to write are considered. A folder can
+    hold `interview-prep.md` from a `prep` run that `generate` would not touch,
+    and reporting that as at risk would be a false alarm — the one thing a
+    guard like this cannot afford, because a guard that cries wolf gets passed
+    `--overwrite` reflexively and stops being a guard.
+    """
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (path for name in names if (path := folder / name).is_file()),
+        key=lambda path: path.name,
+    )
 
 
 def document_name(kind: str, jd: JobDescription, *, when: date | None = None) -> str:
