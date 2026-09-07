@@ -648,6 +648,14 @@ class Application(_Base):
     # Across fourteen recorded applications this predicted the outcome better
     # than the requirement match did.
     channel: str | None = None
+    # The date the ad was (re)posted, when Alan saw it said so at the moment he
+    # applied. Supersedes any posting date derived from the capture: the Ebury
+    # ad was captured reading "3 weeks ago · 46 applicants" on 2026-09-01, was
+    # reposted, and was applied to on 2026-09-02 — an ad age of roughly zero
+    # days, not the ~24 the capture line implies. Deriving age from capture
+    # metadata alone is the same class of error as reading an applicant count
+    # off a page saved weeks later.
+    reposted_on: date | None = None
     notes: str = ""
 
     # The eval label. Set when it is knowable, which is usually later.

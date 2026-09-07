@@ -40,15 +40,30 @@ def apply(
         "--channel",
         help="How it reached you: 'seek', 'linkedin', 'recruiter — Jane Smith'.",
     ),
+    reposted_on: str | None = typer.Option(
+        None,
+        "--reposted-on",
+        help="Date the ad was reposted, YYYY-MM-DD, if it said so when you "
+        "applied. Supersedes the age implied by the saved page.",
+    ),
     note: str = typer.Option("", "--note", help="Anything worth remembering."),
 ) -> None:
     """Record that you applied for a job."""
     applied_on = _parse_date(on) if on else date.today()
+    reposted = _parse_date(reposted_on) if reposted_on else None
+    if reposted is not None and reposted > applied_on:
+        err_console.print(
+            f"[bold red]The repost ({reposted:%Y-%m-%d}) is after the "
+            f"application ({applied_on:%Y-%m-%d}).[/] A repost you saw when "
+            "you applied cannot postdate the application."
+        )
+        raise typer.Exit(code=2)
     _save(
         jd_id,
         status=ApplicationStatus.applied,
         applied_on=applied_on,
         channel=channel,
+        reposted_on=reposted,
         notes=note,
     )
 
@@ -171,6 +186,7 @@ def _save(
     status: ApplicationStatus,
     applied_on: date | None = None,
     channel: str | None = None,
+    reposted_on: date | None = None,
     worth: Worth | None = None,
     worth_why: str = "",
     notes: str = "",
@@ -193,6 +209,8 @@ def _save(
                 application.applied_on = applied_on
             if channel is not None:
                 application.channel = channel
+            if reposted_on is not None:
+                application.reposted_on = reposted_on
             if worth is not None:
                 application.worth_applying = worth
                 # Stated by Alan, so it is no longer an inference from notes.

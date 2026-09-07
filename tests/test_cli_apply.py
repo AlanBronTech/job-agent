@@ -108,3 +108,60 @@ def test_today_is_not_treated_as_the_future(wired) -> None:
 
     assert result.exit_code == 0
     assert stored(wired, jd_id).applied_on == date.today()
+
+
+# --------------------------------------------------------------------------- #
+# A repost supersedes the age implied by the saved page
+# --------------------------------------------------------------------------- #
+
+
+def test_a_repost_date_is_recorded(wired) -> None:
+    """Ebury's page was captured reading "3 weeks ago · 46 applicants", then
+    reposted, then applied to the next day. Age at application was about zero
+    days; the capture line implies twenty-four. Deriving from the capture alone
+    is the same error as reading an applicant count off a page saved later."""
+    jd_id = seed(wired)
+
+    result = runner.invoke(
+        app,
+        ["apply", str(jd_id), "--on", "2026-09-02", "--reposted-on", "2026-09-02"],
+    )
+
+    assert result.exit_code == 0
+    assert stored(wired, jd_id).reposted_on == date(2026, 9, 2)
+
+
+def test_no_repost_leaves_the_field_empty(wired) -> None:
+    """Absent is a real answer: most ads were never reposted."""
+    jd_id = seed(wired)
+
+    runner.invoke(app, ["apply", str(jd_id), "--on", "2026-09-04"])
+
+    assert stored(wired, jd_id).reposted_on is None
+
+
+def test_a_repost_after_the_application_is_refused(wired) -> None:
+    """A repost Alan saw when he applied cannot postdate the application."""
+    jd_id = seed(wired)
+
+    result = runner.invoke(
+        app,
+        ["apply", str(jd_id), "--on", "2026-09-02", "--reposted-on", "2026-09-05"],
+    )
+
+    assert result.exit_code == 2
+    assert "after the application" in result.output
+    assert stored(wired, jd_id) is None
+
+
+def test_the_repost_date_survives_a_later_status_change(wired) -> None:
+    """`outcome` must not drop it — it is the input to ad age at application."""
+    jd_id = seed(wired)
+    runner.invoke(
+        app,
+        ["apply", str(jd_id), "--on", "2026-09-02", "--reposted-on", "2026-09-02"],
+    )
+
+    runner.invoke(app, ["outcome", str(jd_id), "rejected_screen", "--worth", "no"])
+
+    assert stored(wired, jd_id).reposted_on == date(2026, 9, 2)
