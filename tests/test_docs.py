@@ -8,8 +8,10 @@ import pytest
 
 from jobagent.adapters.docs import (
     application_folder,
+    application_folder_path,
     assessment_markdown,
     document_name,
+    existing_documents,
     job_ad_markdown,
     write_text,
 )
@@ -209,3 +211,48 @@ def test_write_text_lands_in_the_folder(tmp_path) -> None:
 
     assert path.read_text(encoding="utf-8") == "the ad"
     assert path.parent == folder
+
+
+# --------------------------------------------------------------------------- #
+# Not clobbering earlier work
+# --------------------------------------------------------------------------- #
+
+
+def test_the_folder_path_is_available_without_creating_it(tmp_path) -> None:
+    """The overwrite check has to run before anything is spent, so asking where
+    the folder would be must not bring it into existence."""
+    folder = application_folder_path(tmp_path, make_jd(), when=WHEN)
+
+    assert not folder.exists()
+    assert folder == application_folder(tmp_path, make_jd(), when=WHEN)
+    assert folder.is_dir()
+
+
+def test_nothing_is_at_risk_in_a_folder_that_does_not_exist(tmp_path) -> None:
+    folder = application_folder_path(tmp_path, make_jd(), when=WHEN)
+
+    assert existing_documents(folder, ["assessment.md"]) == []
+
+
+def test_only_the_files_about_to_be_written_are_reported(tmp_path) -> None:
+    """A `prep` run leaves interview-prep.md in the same folder and `generate`
+    never touches it. Reporting it would train the reflex of passing
+    --overwrite without reading."""
+    folder = application_folder(tmp_path, make_jd(), when=WHEN)
+    write_text(folder, "assessment.md", "earlier")
+    write_text(folder, "interview-prep.md", "from a prep run")
+
+    at_risk = existing_documents(folder, ["assessment.md", "job-ad.md"])
+
+    assert [path.name for path in at_risk] == ["assessment.md"]
+
+
+def test_the_documents_already_there_are_named(tmp_path) -> None:
+    folder = application_folder(tmp_path, make_jd(), when=WHEN)
+    resume = document_name("Resume", make_jd(), when=WHEN)
+    write_text(folder, resume, "earlier resume")
+    write_text(folder, "job-ad.md", "earlier ad")
+
+    at_risk = existing_documents(folder, [resume, "assessment.md", "job-ad.md"])
+
+    assert [path.name for path in at_risk] == [resume, "job-ad.md"]

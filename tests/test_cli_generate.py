@@ -107,3 +107,100 @@ def test_nothing_is_said_for_an_unscored_ad(wired) -> None:
 
     assert result.exit_code == 2
     assert "has not been scored" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# Not overwriting documents already generated
+# --------------------------------------------------------------------------- #
+
+
+def seed_worth_generating(config) -> int:
+    """An ad the scorer is happy with, so the skip guard does not do the work."""
+    with store.open_store(config.db_path) as conn:
+        jd_id = store.add_jd(conn, make_jd("Senior Manager, AI Product Delivery"))
+        store.add_assessment(
+            conn,
+            FitAssessment(
+                jd_id=jd_id,
+                overall_score=57,
+                recruiter_screen_score=48,
+                verdict=Verdict.apply_with_caveats,
+                rationale="Worth the day if location and band clear.",
+                target_role_match=True,
+                target_role_note="Close to AI enablement lead.",
+                scored_at=NOW,
+            ),
+        )
+        return jd_id
+
+
+def already_generated(config, jd_id: int) -> "tuple":
+    """Put a resume and the two records where an earlier run would have left
+    them, and hand back the folder and the resume's prior contents."""
+    from datetime import date
+
+    from jobagent.adapters import docs
+    from jobagent.core import store as _store
+
+    with _store.open_store(config.db_path) as conn:
+        jd = _store.get_jd(conn, jd_id)
+    today = date.today()
+    folder = docs.application_folder(config.output_dir, jd, when=today)
+    resume = folder / docs.document_name("Resume", jd, when=today)
+    resume.write_text("the resume that was sent", encoding="utf-8")
+    docs.write_text(folder, "assessment.md", "the earlier assessment")
+    return folder, resume
+
+
+def test_it_refuses_to_overwrite_documents_from_an_earlier_run(wired) -> None:
+    """The failure this guards against cost a real set of documents: `generate`
+    rewrote a folder from three days earlier, in place, with no warning."""
+    jd_id = seed_worth_generating(wired)
+    _, resume = already_generated(wired, jd_id)
+
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+
+    output = " ".join(result.output.split())
+    assert result.exit_code == 2
+    assert "Already generated" in output
+    assert "--overwrite" in output
+    assert resume.name in output
+    # The point of the guard: the earlier work is still on disk.
+    assert resume.read_text(encoding="utf-8") == "the resume that was sent"
+
+
+def test_the_refusal_names_only_what_this_run_would_write(wired) -> None:
+    """Without --cover, the cover letter is not at risk and is not listed."""
+    jd_id = seed_worth_generating(wired)
+    folder, _ = already_generated(wired, jd_id)
+    (folder / "interview-prep.md").write_text("from a prep run", encoding="utf-8")
+
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+
+    output = " ".join(result.output.split())
+    assert "assessment.md" in output
+    assert "interview-prep.md" not in output
+    assert "CoverLetter" not in output
+
+
+def test_overwrite_gets_past_the_guard(wired) -> None:
+    """It stops at the next gate — a missing profile — not at the folder.
+
+    Proves the flag is what releases it without paying for a model call.
+    """
+    jd_id = seed_worth_generating(wired)
+    already_generated(wired, jd_id)
+
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume", "--overwrite"])
+
+    assert "Already generated" not in result.output
+    assert "No profile directory" in result.output
+
+
+def test_a_first_run_is_not_blocked(wired) -> None:
+    jd_id = seed_worth_generating(wired)
+
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+
+    assert "Already generated" not in result.output
+    assert "No profile directory" in result.output

@@ -151,6 +151,25 @@ argued against. Pass --force if you disagree with it.
 disagreed, so `jobagent eval report` can later tell you which of you was right.
 That is how the tool learns your judgment rather than arguing with it.
 
+It also refuses if you have already generated for this application, before it
+spends anything:
+
+```
+Already generated. /Users/alanbron/job-agent-out/2026-09_Acme_EngineeringManager
+holds documents for this application, most recently 4 September 2026 at 09:07.
+  2026-09-04 09:07  AlanBron_Resume_Acme_202609.docx
+  2026-09-04 09:07  assessment.md
+
+Re-running would replace these in place, including any edits made by hand
+since. Move or rename the folder to keep them, or pass --overwrite to replace
+them.
+```
+
+**`--overwrite` replaces them.** Only the files that run would write are
+listed — an `interview-prep.md` from `jobagent prep` is never at risk. The
+folder name carries the month, so regenerating in a later month starts a fresh
+folder and leaves the old one alone.
+
 **What you get back:** a folder, and a validation report.
 
 ```
@@ -267,6 +286,9 @@ whole ad. Expand the description, save the page again, re-add it.
 - `--answers <path>` — a text file of application questions, one per line;
   writes `answers.md`.
 - `--force` — generate even against a `skip`, and record the disagreement.
+- `--overwrite` — replace documents already generated for this application.
+  Without it, a folder that already holds them stops the run before any model
+  call.
 
 Costs roughly $0.15 per document. The job must be scored first — the
 assessment is what shapes the selection.
