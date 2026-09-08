@@ -105,7 +105,7 @@ def add(
             )
             err_console.print(
                 "[dim]If the page has a '…more' toggle, expand it, save again "
-                "and re-run. Scoring a stub costs $0.20 to be told the ad is "
+                "and re-run. Scoring a stub costs $0.11 to be told the ad is "
                 "empty. Continuing anyway.[/]"
             )
     else:
@@ -151,7 +151,7 @@ def add(
     _render_jd(jd)
     console.print(f"\n[green]Saved as JD {jd_id}.[/]")
     # Last, so it is the line still on screen when he decides whether to spend
-    # $0.20 scoring it. The company name only exists once the ad is parsed, so
+    # $0.11 scoring it. The company name only exists once the ad is parsed, so
     # this cannot come any earlier than it does.
     render_company_history(err_console, seen_before)
 

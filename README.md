@@ -341,7 +341,7 @@ pass `--no-save`. Costs roughly $0.11.
 | Command | What it does |
 |---|---|
 | `jobagent eval report` | Grade stored assessments against outcomes. **Free.** |
-| `jobagent eval run` | Re-score every case, then grade. **Costs ~$0.19 each.** |
+| `jobagent eval run` | Re-score every case, then grade. **Costs ~$0.11 each.** |
 | `jobagent eval diff` | What changed between the last two runs. Free. |
 | `jobagent eval export` | Write the case set out as reviewable YAML. Free. |
 
