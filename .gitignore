@@ -38,3 +38,10 @@ profile/
 # by keeping it local: `jobagent eval report` still runs and still proves the
 # claim. Regenerate it any time with `jobagent eval export`.
 evals/cases.yaml
+
+# Outside reviews of this repo. They quote the parts of `profile/` that are
+# gitignored for a reason — the salary floor, figures the profile says never to
+# publish — alongside candid notes on named employers and response rates. The
+# working notes that act on a review belong in the commits; the review itself
+# does not belong in a public repository.
+REVIEW-*.md
