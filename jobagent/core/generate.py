@@ -691,12 +691,6 @@ def _assessment_summary(assessment: FitAssessment) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-def _check_reference(ref: str, catalogue: dict[str, str]) -> list[ValidationIssue]:
-    if ref in catalogue:
-        return []
-    return [_unknown(ref, "bullet")]
-
-
 def _check_citation(ref: str, citable: set[str]) -> list[ValidationIssue]:
     """A highlight's `source_ref`, which may name an entry or a single bullet."""
     if ref in citable:
