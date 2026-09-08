@@ -253,6 +253,15 @@ def _names_an_allowed_place(location: str, allowed: list[str]) -> bool:
     Deliberately literal. "Sydney NSW" does not name "Sydney CBD" and must not
     be treated as if it did — the whole point of the on-site filter is that
     somewhere else in Sydney is a skip.
+
+    Known limitation, left in on purpose: a location naming two places —
+    "Sydney CBD office, relocating to Parramatta in Q1" — passes on the first
+    one. Tightening it would have to decide that two places means `unknown`,
+    and that judgement would also fire on "Sydney CBD (occasional travel to
+    Parramatta)", which is fine. The `detail` line prints the ad's location
+    verbatim, so the second place is in front of Alan either way, and a filter
+    that turns a passing ad into a question is the failure mode that matters
+    more here. Revisit if a real ad is ever mis-passed by it; none has been.
     """
     lowered = location.lower()
     return any(place.lower() in lowered for place in allowed)
