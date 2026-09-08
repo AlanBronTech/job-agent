@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.config import get_config
 from jobagent.cli.history import render_company_history
 from jobagent.core import history, store
@@ -113,7 +113,11 @@ def score(
         raise typer.Exit(code=1)
 
     try:
-        client = get_client(CallType.score, config)
+        client = get_client(
+            CallType.score,
+            config,
+            RunContext(command="score", jd_id=jd.id),
+        )
     except LLMError as exc:
         err_console.print(f"[bold red]No model available for scoring.[/] {exc}")
         err_console.print("[dim]Run `jobagent config check` to see routing.[/]")

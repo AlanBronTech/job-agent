@@ -12,6 +12,7 @@ from jobagent.adapters.llm import (
     CallType,
     LLMError,
     QuotaExhaustedError,
+    RunContext,
     get_client,
 )
 from jobagent.cli import paths
@@ -40,9 +41,10 @@ app = typer.Typer(
 console = Console()
 err_console = Console(stderr=True)
 
-# Observed on this eval set: ~26k input tokens (the whole profile goes in
-# every call) and 6-9k out, at Sonnet's $3/$15 per million.
-COST_PER_CASE_USD = 0.19
+# Measured over 63 real scoring calls, not estimated: ~26k input tokens (the
+# whole profile goes in every call) and 6-9k out, at Sonnet 5's $2/$10 per
+# million. Was 0.19 while the price table carried Sonnet 4.6's $3/$15.
+COST_PER_CASE_USD = 0.11
 
 _VERDICT_STYLE = {
     Verdict.apply: "green",
@@ -123,7 +125,11 @@ def run(
         raise typer.Exit(code=2)
     try:
         profile = load_profile(config.profile_dir)
-        client = get_client(CallType.score, config)
+        client = get_client(
+            CallType.score,
+            config,
+            RunContext(command="eval run", source="eval"),
+        )
     except (ProfileError, LLMError) as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=2)
@@ -136,6 +142,9 @@ def run(
             if jd is None:
                 failures.append((case.id, f"JD {case.jd_id} is not in the store"))
                 continue
+            # One client, many cases: the context says which case each
+            # call belongs to, so eval spend is attributable per JD too.
+            client.context.jd_id = case.jd_id
             label = f"[{index}/{len(cases)}] {case.id}"
             with console.status(f"{label} — scoring…"):
                 try:

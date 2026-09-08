@@ -268,7 +268,7 @@ a case is recorded but cannot be marked.
 
 | Command | What it does |
 |---|---|
-| `jobagent score <jd_id>` | Assess one ad against the profile. **Costs ~$0.20.** |
+| `jobagent score <jd_id>` | Assess one ad against the profile. **Costs ~$0.11.** |
 | `jobagent score <jd_id> --last` | Show the last saved assessment. Free. |
 
 An ad under 800 characters is refused before the call is made — that is
@@ -290,7 +290,7 @@ whole ad. Expand the description, save the page again, re-add it.
   Without it, a folder that already holds them stops the run before any model
   call.
 
-Costs roughly $0.15 per document. The job must be scored first — the
+Costs roughly $0.07 per document. The job must be scored first — the
 assessment is what shapes the selection.
 
 ### The pipeline
@@ -334,7 +334,7 @@ Likely questions mapped to real stories from your story bank, with the
 assessment's challenge points as the hard ones — those are not predictions,
 they are objections the scorer already found in the gap between the ad and your
 profile. Also writes `interview-prep.md` into the application folder unless you
-pass `--no-save`. Costs roughly $0.15.
+pass `--no-save`. Costs roughly $0.11.
 
 ### Measuring the scorer
 
@@ -406,16 +406,25 @@ that matters. The rest regenerates.
 
 ## Costs, roughly
 
+Measured, not estimated — these are the mean per call over 183 real calls on
+Claude Sonnet 5, read out of `runs.jsonl` by `jobagent spend`.
+
 | Action | Cost |
 |---|---|
-| `jd add` | ~$0.08 |
-| `score` | ~$0.20 |
-| `generate --resume --cover` | ~$0.30 |
-| `prep` | ~$0.15 |
-| Everything else | free |
+| `jd add` | ~$0.03 |
+| `score` | ~$0.11 |
+| `generate --resume --cover` | ~$0.13 |
+| `prep` | ~$0.11 |
+| Everything else, `spend` included | free |
 
-About 60 cents per application end to end. `runs.jsonl` has the real figures if
-you want to check.
+**About 28 cents per application end to end.** The figure used to read 60 cents,
+which was two errors compounding: the estimates were conservative, and the
+hardcoded price table costed Sonnet 5 at Sonnet 4.6's rate and overstated every
+logged call by a third.
+
+Run `jobagent spend` for the real numbers, broken down by job description, by
+call and by whether it was real work or an eval run. `jobagent spend --jd 22`
+answers what one application cost end to end.
 
 ---
 
