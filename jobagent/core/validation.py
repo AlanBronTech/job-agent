@@ -296,36 +296,67 @@ def _section(voice: str, heading: str) -> str:
 
 
 def _profile_numbers(profile: Profile) -> set[str]:
-    """Every number that appears anywhere in the profile."""
+    """Every number the profile offers as evidence for a claim.
+
+    This set is what licenses a figure in generated prose, so what is left out
+    of it matters as much as what goes in. It is built by walking the loaded
+    model rather than listing fields by hand: the hand-written list this
+    replaced had already drifted from the schema, omitting
+    ``stories.explanations`` — which ``generate.py`` feeds to the cover-letter
+    and answers prompts under "use these words, do not invent others". A model
+    following that instruction exactly had its salary expectation blocked as an
+    invented figure.
+    """
     found: set[str] = set()
-    for text in _profile_text(profile):
+    for text in _evidence_text(profile):
         for match in _NUMBER_PATTERN.finditer(text):
             found.add(match.group().replace(",", ""))
     return found
 
 
-def _profile_text(profile: Profile) -> list[str]:
-    parts: list[str] = [profile.voice]
-    roles = profile.roles
-    parts += [roles.person.headline, roles.person.positioning]
-    for role in roles.roles:
-        parts += [role.title, role.company, role.start, role.end]
-        parts += [bullet.text for bullet in role.bullets]
-    for entry in roles.founder_track_record:
-        parts += [entry.company, entry.role, entry.summary or ""]
-        parts += [bullet.text for bullet in entry.bullets]
-        parts += [str(entry.start or ""), str(entry.end or "")]
-    for entry in roles.ai_capability:
-        parts += [entry.label] + [bullet.text for bullet in entry.bullets]
-    for entry in roles.earlier_career:
-        parts += [entry.company, entry.role, entry.summary]
-    for values in roles.skills.values():
-        parts += values
-    for story in profile.stories.stories:
-        parts += [story.situation, story.task, story.action, story.result]
-    for differentiator in profile.assets.differentiators:
-        parts += [differentiator.label, differentiator.detail]
-    return [part for part in parts if part]
+# Keys whose contents are in the profile but are not evidence for anything Alan
+# can claim. Everything else is included, so a field added to the schema is
+# covered without editing this file.
+#
+#   voice            the rules document, not evidence. It quotes "25 years" and
+#                    "20+ years" as examples of *banned* age signals and states
+#                    Alan's age; scanning it made all three supported numbers.
+#   note_for_scorer  bookkeeping the model never sees when generating. Two
+#                    figures live only here — the DataLlama user count and the
+#                    HDD equity split — and the profile says in as many words
+#                    that neither is ever to be published. A haystack covering
+#                    them would have this check bless the one number the
+#                    profile forbids.
+#   phone            rendered onto the contact line deterministically, never
+#                    through generated prose. Its digits are not evidence, and
+#                    including them licensed "379" as a headcount.
+#   *_rationale      why a filter is set, not a claim about Alan.
+#
+# Entries marked ``visibility: scorer_only`` are skipped for the same reason as
+# ``note_for_scorer``: they inform the decision and are never rendered.
+_NON_EVIDENCE_KEYS = frozenset({"voice", "note_for_scorer", "phone"})
+
+
+def _evidence_text(profile: Profile) -> list[str]:
+    """Every string in the profile that may support a figure in prose."""
+    found: list[str] = []
+    _collect(profile.model_dump(mode="json"), found)
+    return found
+
+
+def _collect(node: object, found: list[str]) -> None:
+    if isinstance(node, dict):
+        if node.get("visibility") == Visibility.scorer_only.value:
+            return
+        for key, value in node.items():
+            if key in _NON_EVIDENCE_KEYS or key.endswith("_rationale"):
+                continue
+            _collect(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            _collect(item, found)
+    elif node is not None:
+        found.append(str(node))
 
 
 def _scorer_only_labels(profile: Profile) -> list[str]:

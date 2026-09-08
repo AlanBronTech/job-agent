@@ -134,31 +134,40 @@ on a tab stop at **16.93cm**.
   inline a long prompt in Python.
 - Structured output: instruct JSON-only, parse defensively, retry once on
   parse failure with the error fed back.
-- Log every call (prompt name, tokens, cost estimate) to `runs.jsonl` for the
-  eval harness.
+- Log every call to `runs.jsonl` — prompt name, tokens, cost, and what it was
+  for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
+  see the invariants below for why each field is there.
 
-## Where the project is — 2026-09-01
+## Where the project is — 2026-09-08
 
 **Built and working. Phases 0-5 and 7 are done; only Phase 8 (a local UI) is
 left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-373 tests pass, none touching the network. `main` is pushed to a **public**
+465 tests pass, none touching the network. `main` is pushed to a **public**
 GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
 `evals/cases.yaml` are gitignored and must stay that way.
 
-The commands, and roughly what each costs:
+The commands, and what each costs. These are **measured** — the mean per call
+over 183 real calls, from `jobagent spend` — not estimates. They were roughly
+double until 2026-09-08, because the hardcoded price table costed Sonnet 5 at
+Sonnet 4.6's rate and the estimates on top of that were conservative:
 
-    jobagent jd add --latest           ~$0.08   parse the ad just saved
-    jobagent jd add --file <fragment>  ~$0.08   or name one in JD_DIR
-    jobagent score <id>                ~$0.20   verdict, two scores, filters
-    jobagent generate <id> --resume --cover  ~$0.30  documents + assessment
-    jobagent prep <id>                 ~$0.15   interview questions
+    jobagent jd add --latest           ~$0.03   parse the ad just saved
+    jobagent jd add --file <fragment>  ~$0.03   or name one in JD_DIR
+    jobagent score <id>                ~$0.11   verdict, two scores, filters
+    jobagent generate <id> --resume --cover  ~$0.13  documents + assessment
+    jobagent prep <id>                 ~$0.11   interview questions
     jobagent apply|outcome|status      free     the pipeline
+    jobagent spend [--jd N]            free     where the bill went
     jobagent eval report|diff|export   free     grade the scorer
-    jobagent eval run                  ~$0.19/case
+    jobagent eval run                  ~$0.11/case
     jobagent --budget <cmd>            free tier, 20 requests/day, worse
+
+About 28 cents per application end to end. Do not quote a cost from memory or
+from this file if `jobagent spend` can answer it — that is the whole reason it
+exists.
 
 `README.md` documents the loop for Alan. Keep it accurate — he uses it.
 
@@ -187,6 +196,24 @@ The commands, and roughly what each costs:
   out of `voice.md` at runtime, explicit patterns for the age-signal policy.
 - **In `profile/`, `text` is rendered and `note_for_scorer` is not.** A
   cross-reference left in a bullet's `text` was copied onto a real resume.
+- **The number haystack is built by exclusion, and the exclusions are the
+  point.** `_profile_numbers` walks the loaded model, so a field added to the
+  schema is licensed without editing the validator — the hand-written list it
+  replaced had drifted and was blocking the agreed salary expectation, which
+  `generate.py` hands the model under "use these words". But the obvious
+  version of that fix, scanning every string, inverts the rule it enforces:
+  the DataLlama user count and the HDD equity split live only in
+  `note_for_scorer`, under an instruction never to publish them, and a
+  haystack covering them would have the validator bless the one figure the
+  profile forbids. `voice.md` is excluded for the same shape of reason — it
+  quotes "25 years" and "20+ years" as examples of *banned* age signals and
+  states Alan's age, so scanning the rules file licensed all three. Excluded:
+  `voice`, `note_for_scorer`, `phone`, `*_rationale`, and anything marked
+  `visibility: scorer_only`.
+- **The number check is unit-blind, and knows it.** The haystack holds `180`,
+  not `$180K`, so "I led 180 engineers" validates against "MVP in 18 months on
+  $180K". It catches the fabricated metric, not the transplanted one. Do not
+  describe it as stronger than that.
 - **The eval harness grades "was this worth applying to", never "was he
   hired".** Alan was offered the Easy Signs job and applying was still the
   wrong call — the commute that ended it is an absolute filter in his profile.
@@ -199,7 +226,7 @@ The commands, and roughly what each costs:
   A company only becomes an absolute skip when Alan says so in `assets.yaml`,
   the way every other hard filter got there. The warning cannot fire before
   the ad is parsed — the company name is what the parser reads out of it — so
-  it costs the $0.08 parse and saves the $0.20 score and the $0.30 generate.
+  it costs the $0.03 parse and saves the $0.11 score and the $0.13 generate.
 - **The store is not the record of what has been done.** `generate` rewrote
   the Colonial First State folder three days after it was written, in place,
   because the database had no application row and the agent read that as "not
@@ -207,6 +234,21 @@ The commands, and roughly what each costs:
   Ebury and Bright & Duggan had also been generated and were about to be read
   the same way. A guard now refuses before spending, and any check of "has this
   been done" has to look where the artefacts actually land, not only in SQLite.
+- **A figure nobody re-checked is worse than no figure.** The price table was
+  hardcoded and carried Sonnet 4.6's rate for Sonnet 5, so every logged cost
+  was overstated by a third and the README quoted double the real per-
+  application cost. Prices now live in `prices.yaml` with a `checked_on:` date
+  and the pages they were read off; a model absent from it has *no* price, and
+  that is written into the run log as `price_unknown` and printed once at the
+  end of the command. A silent `None` in a spend log is how two Gemini calls
+  cost nothing at all for a week.
+- **The run log records what a call was for, not just what it cost.** Every
+  record carries `command`, `jd_id`, `source` (`cli` or `eval`) and `run_id`.
+  Without `source`, a month of eval runs is indistinguishable from a month of
+  applications. `run_id` exists because `parse_jd` runs before the JD has an
+  id — `jd add` parses, then stores — so the command appends one attribution
+  record once the id is known and `spend` joins on it. The call records are
+  never rewritten; the log is append-only.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment
@@ -242,6 +284,14 @@ The commands, and roughly what each costs:
   through neglect. The fit scorer is measured against Alan's retrospective
   judgment of each. This is the part that makes the project credible in an
   interview — treat it as a first-class deliverable, not an afterthought.
+- **The eval set is a regression detector, not a measurement of scorer
+  quality.** Its job is to catch a prompt edit that moves verdicts beyond the
+  known noise floor. It cannot tell you whether the scorer is good, and saying
+  it can is the kind of claim this project exists to avoid making: at 14 cases
+  and 4 errors the confidence interval on accuracy runs roughly 45–90%, which
+  does not distinguish a good scorer from a mediocre one and will not at the
+  rate applications accumulate. Report it as "no regression", never as "71%
+  accurate".
 - Current standing: the scorer agrees on 10 of 14, and **all four of its errors
   are false negatives** — it says skip on roles Alan judges he fits. It weights
   role shape and ad structure; he weights requirement match. **Do not tune this

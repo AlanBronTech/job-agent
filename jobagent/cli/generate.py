@@ -16,7 +16,7 @@ from jobagent.adapters.docx_writer import (
     write_cover_letter,
     write_resume,
 )
-from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.cli import paths
 from jobagent.config import get_config
 from jobagent.cli.history import render_company_history
@@ -121,7 +121,11 @@ def generate(
         raise typer.Exit(code=1)
 
     try:
-        client = get_client(CallType.generate, config)
+        client = get_client(
+            CallType.generate,
+            config,
+            RunContext(command="generate", jd_id=jd.id),
+        )
     except LLMError as exc:
         err_console.print(f"[bold red]No model available for generation.[/] {exc}")
         raise typer.Exit(code=2)

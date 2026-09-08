@@ -9,8 +9,8 @@ If a company ever becomes an absolute skip, that is a decision Alan states in
 `profile/assets.yaml` like every other hard filter, not one inferred here.
 
 The warning cannot fire before the ad is parsed, because the company name is
-what the parser reads out of it. That costs ~$0.08. It fires before the $0.20
-score and the $0.30 generate, which is where the money and the day actually go.
+what the parser reads out of it. That costs ~$0.03. It fires before the $0.11
+score and the $0.13 generate, which is where the money and the day actually go.
 """
 
 from __future__ import annotations

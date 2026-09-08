@@ -165,3 +165,51 @@ def test_the_repost_date_survives_a_later_status_change(wired) -> None:
     runner.invoke(app, ["outcome", str(jd_id), "rejected_screen", "--worth", "no"])
 
     assert stored(wired, jd_id).reposted_on == date(2026, 9, 2)
+
+
+# --------------------------------------------------------------------------- #
+# `--json` — the seam a UI or a spreadsheet reads
+#
+# Phase 8 is deferred, but the shape of the pipeline is fresh now. The point of
+# the flag is that a caller never has to parse rendered prose to find out what
+# happened, so the empty case is the one that matters.
+# --------------------------------------------------------------------------- #
+
+
+def test_status_json_is_parseable_and_carries_the_jd_fields(wired) -> None:
+    import json
+
+    jd_id = seed(wired)
+    runner.invoke(app, ["apply", str(jd_id), "--channel", "linkedin"])
+
+    result = runner.invoke(app, ["status", "--json"])
+
+    assert result.exit_code == 0
+    rows = json.loads(result.stdout)
+    assert [row["jd_id"] for row in rows] == [jd_id]
+    # Flattened, so the caller does not have to join against the JD table.
+    assert rows[0]["company"] == "Colonial First State"
+    assert rows[0]["status"] == "applied"
+
+
+def test_an_empty_pipeline_is_an_empty_list_not_a_sentence(wired) -> None:
+    """A caller that has to read English to learn there is nothing has no seam
+    at all."""
+    import json
+
+    result = runner.invoke(app, ["status", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []
+
+
+def test_status_without_json_still_prints_the_table(wired) -> None:
+    jd_id = seed(wired)
+    runner.invoke(app, ["apply", str(jd_id), "--channel", "linkedin"])
+
+    result = runner.invoke(app, ["status"])
+
+    assert result.exit_code == 0
+    # Not the full company name: rich sizes columns to the terminal and wraps
+    # it, so asserting the whole string tests the width of the test runner.
+    assert "Colonial" in result.stdout

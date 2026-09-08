@@ -230,3 +230,172 @@ def test_a_small_figure_attached_to_experience_is_still_caught(profile) -> None:
     issues = validate_prose("I bring 8 years of experience.", profile)
 
     assert "age signal" in rules(issues)
+
+
+# --------------------------------------------------------------------------- #
+# What the number haystack covers, and what it deliberately does not
+#
+# `_check_numbers` blocks any figure absent from the haystack, so the set is
+# the boundary between "traced to the profile" and "invented". Both directions
+# have drawn blood: the haystack was hand-maintained and had drifted away from
+# material the prompts actually carry, and widening it indiscriminately would
+# license figures the profile forbids by name.
+# --------------------------------------------------------------------------- #
+
+
+def _numbers_in(text: str) -> set[str]:
+    from jobagent.core.validation import _NUMBER_PATTERN
+
+    return {m.group().replace(",", "") for m in _NUMBER_PATTERN.finditer(text)}
+
+
+def test_every_number_the_model_may_reuse_is_supported(profile_factory) -> None:
+    """The invariant the hand-maintained field list broke.
+
+    Profile material `generate.py` puts in front of the model to reuse must be
+    licensed by the validator, or a model gets blocked for following the
+    instruction it was given. `stories.explanations` reaches the cover-letter
+    and answers prompts under "use these words, do not invent others", and was
+    absent from the haystack for as long as the list was written by hand.
+
+    The example profile ships `salary_expectation: TODO`, so the figures are
+    written in here — without them this test passes against the very bug it
+    exists to catch.
+
+    Scoped to the text, not the rendered prompt: `_render_catalogue` adds its
+    own digits — `easy_signs.0` reference keys and `[2015-17]` date ranges —
+    which are scaffolding for the model to navigate by, not claims it may make.
+    """
+    from tests.conftest import edit_yaml
+    from jobagent.core.generate import _render_stories, build_catalogue
+    from jobagent.core.validation import _profile_numbers
+
+    def fill_in(dst):
+        edit_yaml(
+            dst / "stories.yaml",
+            lambda data: data["explanations"].update(
+                {
+                    "salary_expectation": "Targeting $170,000; the floor is $150,000.",
+                    "why_leaving_current": "The contract ends after 18 months.",
+                }
+            ),
+        )
+
+    profile = load_profile(profile_factory(fill_in))
+
+    reusable = "\n".join(
+        [
+            *build_catalogue(profile).values(),  # bullets, copied verbatim
+            _render_stories(profile),  # stories and the agreed explanations
+            *(skill for values in profile.roles.skills.values() for skill in values),
+        ]
+    )
+
+    assert {"170000", "150000", "18"} <= _numbers_in(reusable)  # the fixture bites
+    assert _numbers_in(reusable) <= _profile_numbers(profile)
+
+
+@pytest.mark.parametrize(
+    "path, mutate",
+    [
+        ("stories.yaml", lambda d: d["explanations"].update({"outside_interests": "Ran 4711 km."})),
+        ("stories.yaml", lambda d: d["stories"][0].update({"label": "Cutover of 4711 accounts"})),
+        ("roles.yaml", lambda d: d["person"]["certifications"].append(
+            {"name": "Certified Operator 4711", "issuer": "Example Board"})),
+        ("roles.yaml", lambda d: d["person"]["education"][0].update(
+            {"institution": "Institute 4711"})),
+        ("assets.yaml", lambda d: d["target_filters"].update({"min_salary_aud": 4711})),
+    ],
+    ids=["explanations", "story-label", "certifications", "education", "target-filters"],
+)
+def test_fields_the_hand_written_list_omitted_are_covered(
+    path, mutate, profile_factory
+) -> None:
+    """Every field an outside review found missing from the old list.
+
+    These are the drift the walk exists to prevent: each was in the schema, in
+    the loaded profile, and absent from the haystack, so a figure taken from
+    any of them read as fabricated.
+    """
+    from tests.conftest import edit_yaml
+    from jobagent.core.validation import _profile_numbers
+
+    profile = load_profile(
+        profile_factory(lambda dst: edit_yaml(dst / path, mutate))
+    )
+
+    assert "4711" in _profile_numbers(profile)
+
+
+def test_an_agreed_explanation_is_not_an_invented_number(profile_factory) -> None:
+    """The live regression. A salary expectation is prose the model is told to
+    reuse verbatim, and the figure in it must not read as fabricated."""
+    from tests.conftest import edit_yaml
+
+    def set_salary(dst):
+        edit_yaml(
+            dst / "stories.yaml",
+            lambda data: data["explanations"].update(
+                {"salary_expectation": "Targeting $170,000, and the floor is $150,000."}
+            ),
+        )
+
+    profile = load_profile(profile_factory(set_salary))
+
+    issues = validate_prose("My expectation is $170,000.", profile)
+
+    assert "unsupported number" not in rules(issues)
+
+
+def test_a_scorer_only_note_does_not_license_a_number(profile_factory) -> None:
+    """The reason the haystack is not simply every string in the model.
+
+    A real `note_for_scorer` reads "NEVER PUBLISH THE USER COUNT. The
+    deployment has 22 users." Scanning it would make 22 a supported figure, so
+    a draft publishing the one number the profile forbids would validate
+    clean — the invariant inverted by the check meant to enforce it.
+    """
+    from tests.conftest import edit_yaml
+    from jobagent.core.validation import _profile_numbers
+
+    def add_note(dst):
+        edit_yaml(
+            dst / "roles.yaml",
+            lambda data: data["founder_track_record"][0].update(
+                {"note_for_scorer": "NEVER PUBLISH THIS. The deployment has 4711 users."}
+            ),
+        )
+
+    profile = load_profile(profile_factory(add_note))
+
+    assert "4711" not in _profile_numbers(profile)
+    assert "unsupported number" in rules(
+        validate_prose("The deployment has 4711 users.", profile)
+    )
+
+
+def test_voice_md_does_not_license_a_number(profile) -> None:
+    """voice.md is the rules, not the evidence.
+
+    It quotes "25 years" and "20+ years" as examples of banned age signals and
+    states Alan's age. Scanning it made every one of those a supported figure,
+    so the file written to prohibit an age signal was licensing one.
+    """
+    from jobagent.core.validation import _profile_numbers
+
+    assert _numbers_in(profile.voice) - _profile_numbers(profile)
+
+
+def test_a_contact_detail_does_not_license_a_number(profile) -> None:
+    """The phone number is rendered deterministically onto the contact line and
+    never passes through generated prose, so its digits are not evidence.
+
+    A pin, not a regression: the old hand-written list omitted `phone` too. It
+    is here because the walk that replaced that list would otherwise pick the
+    field up, and on the real profile that licensed "379" as a headcount.
+    """
+    from jobagent.core.validation import _profile_numbers
+
+    digits = _numbers_in(profile.roles.person.phone)
+
+    assert digits and not digits & _profile_numbers(profile)
