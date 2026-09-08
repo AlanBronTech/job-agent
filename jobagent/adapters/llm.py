@@ -28,10 +28,11 @@ from __future__ import annotations
 import json
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
+from uuid import uuid4
 
 from jobagent.adapters.prices import load_prices, note_unpriced
 
@@ -80,6 +81,30 @@ class CallType(str, Enum):
     score = "score"
     generate = "generate"
     prep = "prep"
+
+
+@dataclass
+class RunContext:
+    """What a logged call was for, so its cost can be attributed afterwards.
+
+    The run log used to record only the prompt name, which answers "how much
+    went on scoring" and nothing else. It could not say what one application
+    cost end to end, or whether a month's spend was real work or eval runs.
+
+    ``run_id`` exists because `parse_jd` is called before the JD has an id —
+    `jd add` parses the ad, then stores it. The parse is the second largest
+    line in the log, so leaving it unattributable would orphan a fifth of the
+    spend. The command writes one attribution record once it knows the id, and
+    the report joins on ``run_id``.
+    """
+
+    command: str | None = None
+    jd_id: int | None = None
+    # "cli" for real work, "eval" for grading runs. Without this the two are
+    # indistinguishable in the log, and a month of eval runs reads as spend on
+    # applications.
+    source: str = "cli"
+    run_id: str = field(default_factory=lambda: uuid4().hex[:12])
 
 
 @dataclass
@@ -136,10 +161,14 @@ class LLMClient(ABC):
         model: str,
         api_key: str | None = None,
         runs_log_path: Path | None = None,
+        context: RunContext | None = None,
     ) -> None:
         self.model = model
         self._api_key = api_key
         self._runs_log_path = runs_log_path
+        # Mutable: `eval run` walks several cases through one client and sets
+        # the jd_id per case.
+        self.context = context or RunContext()
         self._sdk_client = None  # created lazily on first call
 
     @abstractmethod
@@ -250,6 +279,10 @@ class LLMClient(ABC):
         record = {
             "ts": time.time(),
             "label": response.label,
+            "command": self.context.command,
+            "jd_id": self.context.jd_id,
+            "source": self.context.source,
+            "run_id": self.context.run_id,
             "provider": response.provider.value,
             "model": response.model,
             "input_tokens": response.input_tokens,
@@ -266,6 +299,24 @@ class LLMClient(ABC):
                 handle.write(json.dumps(record) + "\n")
         except OSError:
             pass
+
+
+def log_attribution(runs_log_path: Path | None, run_id: str, jd_id: int) -> None:
+    """Record that a run turned out to be about ``jd_id``.
+
+    `jd add` parses the ad before the JD has an id, so the parse call is logged
+    without one. This is the one line that connects them, appended once the
+    store has assigned the id. Append-only: the call records themselves are
+    never rewritten.
+    """
+    if runs_log_path is None:
+        return
+    record = {"ts": time.time(), "type": "attribution", "run_id": run_id, "jd_id": jd_id}
+    try:
+        with open(runs_log_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+    except OSError:
+        pass
 
 
 def _parse_json(text: str) -> dict:
@@ -296,8 +347,11 @@ class AnthropicClient(LLMClient):
         api_key: str | None = None,
         runs_log_path: Path | None = None,
         workspace_id: str | None = None,
+        context: RunContext | None = None,
     ) -> None:
-        super().__init__(model, api_key=api_key, runs_log_path=runs_log_path)
+        super().__init__(
+            model, api_key=api_key, runs_log_path=runs_log_path, context=context
+        )
         # Identity-linked keys (the kind issued to a user rather than to a
         # workspace) are rejected without an anthropic-workspace-id header.
         # Workspace-scoped keys ignore it, so sending it when set is safe.
@@ -498,8 +552,16 @@ def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
     )
 
 
-def get_client(call_type: CallType, config: "Config | None" = None) -> LLMClient:
-    """Build the configured client for a call type."""
+def get_client(
+    call_type: CallType,
+    config: "Config | None" = None,
+    context: RunContext | None = None,
+) -> LLMClient:
+    """Build the configured client for a call type.
+
+    ``context`` says what the calls are for. The CLI sets it; `core/` never
+    touches it, so a web handler would set the same thing in the same place.
+    """
     if config is None:
         from jobagent.config import get_config
 
@@ -512,9 +574,11 @@ def get_client(call_type: CallType, config: "Config | None" = None) -> LLMClient
             api_key=config.anthropic_api_key,
             runs_log_path=config.runs_log_path,
             workspace_id=config.anthropic_workspace_id,
+            context=context,
         )
     return _CLIENTS[route.provider](
         model=route.model,
         api_key=config.gemini_api_key,
         runs_log_path=config.runs_log_path,
+        context=context,
     )

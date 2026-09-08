@@ -12,7 +12,13 @@ from rich.table import Table
 
 from jobagent.adapters import mhtml, pdf
 from jobagent.adapters.adtext import ExtractedAd
-from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.llm import (
+    CallType,
+    LLMError,
+    RunContext,
+    get_client,
+    log_attribution,
+)
 from jobagent.cli import paths
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
@@ -110,7 +116,11 @@ def add(
             raise typer.Exit(code=2)
 
     try:
-        client = get_client(CallType.parse_jd, config)
+        client = get_client(
+            CallType.parse_jd,
+            config,
+            RunContext(command="jd add"),
+        )
     except LLMError as exc:
         err_console.print(f"[bold red]No model available for JD parsing.[/] {exc}")
         err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
@@ -130,6 +140,9 @@ def add(
         with store.open_store(config.db_path) as conn:
             jd_id = store.add_jd(conn, jd)
             jd.id = jd_id
+            # The parse call was logged before this id existed. One line links
+            # them, so `jobagent spend` can attribute the parse to the ad.
+            log_attribution(config.runs_log_path, client.context.run_id, jd_id)
             seen_before = history.company_history(conn, jd)
     except StoreError as exc:
         err_console.print(f"[bold red]Parsed, but could not save.[/] {exc}")

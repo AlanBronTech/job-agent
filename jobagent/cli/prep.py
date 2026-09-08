@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from jobagent.adapters import docs
-from jobagent.adapters.llm import CallType, LLMError, get_client
+from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.models import InterviewPrep
@@ -61,7 +61,11 @@ def prep(
 
     try:
         profile = load_profile(config.profile_dir)
-        client = get_client(CallType.prep, config)
+        client = get_client(
+            CallType.prep,
+            config,
+            RunContext(command="prep", jd_id=jd.id),
+        )
     except (ProfileError, LLMError) as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=2)
