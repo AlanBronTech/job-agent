@@ -260,7 +260,8 @@ def test_every_number_the_model_may_reuse_is_supported(profile_factory) -> None:
 
     The example profile ships `salary_expectation: TODO`, so the figures are
     written in here — without them this test passes against the very bug it
-    exists to catch.
+    exists to catch. They are invented: this repo is public, and Alan's real
+    expectation is not a number that belongs in it.
 
     Scoped to the text, not the rendered prompt: `_render_catalogue` adds its
     own digits — `easy_signs.0` reference keys and `[2015-17]` date ranges —
@@ -276,7 +277,7 @@ def test_every_number_the_model_may_reuse_is_supported(profile_factory) -> None:
             lambda data: data["explanations"].update(
                 {
                     "salary_expectation": "Targeting $123,000; the floor is $99,000.",
-                    "why_leaving_current": "The contract ends after 18 months.",
+                    "why_leaving_current": "The contract ends after 47 months.",
                 }
             ),
         )
@@ -291,7 +292,7 @@ def test_every_number_the_model_may_reuse_is_supported(profile_factory) -> None:
         ]
     )
 
-    assert {"170000", "150000", "18"} <= _numbers_in(reusable)  # the fixture bites
+    assert {"123000", "99000", "47"} <= _numbers_in(reusable)  # the fixture bites
     assert _numbers_in(reusable) <= _profile_numbers(profile)
 
 
