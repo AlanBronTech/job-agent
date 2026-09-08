@@ -99,7 +99,7 @@ Hard filters
   ✓ work type: permanent is in permanent, contract, fixed_term.
   ? location: Hybrid in Sydney NSW. The 60-minute one-way ceiling
     applies and cannot be checked from the ad.
-  ? salary: No band stated; the floor is $150,000.
+  ? salary: No band stated; the floor is $XXX,XXX.
 
 Requirements 4 of 7 met
   ✓ Demonstrated leadership of software engineers
@@ -109,7 +109,7 @@ Requirements 4 of 7 met
 ...
 Ask before applying
   · Is the office within 60 minutes one way, and how many days on-site?
-  · What is the band? The floor is $150,000.
+  · What is the band? The floor is $XXX,XXX.
 ```
 
 **How to read it.**

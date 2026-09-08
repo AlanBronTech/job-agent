@@ -33,7 +33,9 @@ FILTERS = TargetFilters(
     max_commute_rationale="Hard constraint, one way.",
     onsite_locations=["Sydney CBD", "Sydney North Shore"],
     onsite_rationale="Five days a week is geographic and absolute.",
-    min_salary_aud=150000,
+    # Invented. This repo is public; the real floor lives in `profile/`,
+    # which is gitignored, and belongs nowhere else.
+    min_salary_aud=160000,
     work_types=["permanent", "contract", "fractional"],
 )
 
@@ -197,7 +199,7 @@ def test_a_band_entirely_below_the_floor_is_a_breach(profile_factory) -> None:
 
 
 def test_a_band_straddling_the_floor_is_unresolved(profile_factory) -> None:
-    """Quickli advertised $140,000-$180,000 against a $150,000 floor. Neither
+    """The Quickli shape: an advertised band with the floor inside it. Neither
     a pass nor a breach — it depends where in the band an offer lands."""
     checks = check_constraints(
         make_jd(salary_range=SalaryRange(min_aud=140000, max_aud=180000)),
