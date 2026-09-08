@@ -20,7 +20,9 @@ from jobagent.core import store
 from jobagent.core.models import (
     Application,
     ApplicationStatus,
+    FitAssessment,
     JobDescription,
+    Verdict,
     WorkArrangement,
     WorkType,
     Worth,
@@ -161,3 +163,54 @@ def test_a_company_seen_once_says_nothing(wired) -> None:
     result = runner.invoke(app, ["score", str(jd_id)])
 
     assert "Seen before" not in result.output
+
+
+# --------------------------------------------------------------------------- #
+# `--json` — the free seam
+#
+# `score --last` reads a saved assessment and costs nothing, so it is the path
+# a UI or a spreadsheet can call freely.
+# --------------------------------------------------------------------------- #
+
+
+def save_assessment(config, jd_id: int) -> None:
+    with store.open_store(config.db_path) as conn:
+        store.add_assessment(
+            conn,
+            FitAssessment(
+                jd_id=jd_id,
+                overall_score=64,
+                recruiter_screen_score=52,
+                verdict=Verdict.apply_with_caveats,
+                rationale="Close on the requirements, short on GraphQL.",
+                target_role_match=True,
+                target_role_note="Engineering Manager, first on target_roles.",
+                scored_at=datetime(2026, 9, 7, tzinfo=timezone.utc),
+            ),
+        )
+
+
+def test_score_last_json_is_parseable(wired) -> None:
+    import json
+
+    jd_id = add(wired, WHOLE_AD)
+    save_assessment(wired, jd_id)
+
+    result = runner.invoke(app, ["score", str(jd_id), "--last", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["jd_id"] == jd_id
+    assert payload["verdict"]
+
+
+def test_score_last_json_does_not_reach_a_model(wired, monkeypatch) -> None:
+    """The whole point of the flag being on `--last`."""
+    def explode(*args, **kwargs):  # pragma: no cover - must not be reached
+        raise AssertionError("score --last must not build a client")
+
+    monkeypatch.setattr(score_cli, "get_client", explode)
+    jd_id = add(wired, WHOLE_AD)
+    save_assessment(wired, jd_id)
+
+    assert runner.invoke(app, ["score", str(jd_id), "--last", "--json"]).exit_code == 0

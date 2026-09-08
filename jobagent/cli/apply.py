@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timezone
 
 import typer
@@ -88,6 +89,9 @@ def status_command(
     all: bool = typer.Option(
         False, "--all", help="Include applications that are finished."
     ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Print the pipeline as JSON instead of a table."
+    ),
 ) -> None:
     """Show the pipeline."""
     config = get_config()
@@ -99,7 +103,7 @@ def status_command(
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
 
-    if not applications:
+    if not applications and not as_json:
         console.print(
             "[dim]No applications recorded. `jobagent apply <jd_id>` after you "
             "send one.[/]"
@@ -113,6 +117,13 @@ def status_command(
         ApplicationStatus.interview_2,
     }
     shown = applications if all else [a for a in applications if a.status in live]
+
+    if as_json:
+        # An empty pipeline is `[]`, not a sentence. A caller that has to parse
+        # prose to find out there is nothing has no seam at all.
+        print(json.dumps(_as_records(shown, jds), indent=2, ensure_ascii=False))
+        return
+
     if not shown:
         console.print(
             f"[dim]Nothing live. {len(applications)} finished application(s) — "
@@ -147,6 +158,23 @@ def status_command(
         console.print(
             f"\n[dim]{len(applications) - len(shown)} finished; --all shows them.[/]"
         )
+
+
+def _as_records(applications, jds: dict) -> list[dict]:
+    """One flat record per row, with the JD fields the table shows.
+
+    Flattened rather than nested: this exists so a spreadsheet or a later UI
+    can read the pipeline without importing anything, and a join is the part
+    those callers should not have to do.
+    """
+    records = []
+    for application in applications:
+        jd = jds.get(application.jd_id)
+        record = application.model_dump(mode="json")
+        record["title"] = jd.title if jd else None
+        record["company"] = (jd.company or jd.posted_by) if jd else None
+        records.append(record)
+    return records
 
 
 # --------------------------------------------------------------------------- #

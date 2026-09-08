@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -55,6 +57,11 @@ def score(
         "--force",
         help="Score even when the ad is too short to conclude anything from.",
     ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print the assessment as JSON instead of a table.",
+    ),
 ) -> None:
     """Assess one job description against the profile and say whether to apply."""
     config = get_config()
@@ -81,7 +88,7 @@ def score(
         if previous is None:
             err_console.print(f"[bold red]JD {jd_id} has not been scored yet.[/]")
             raise typer.Exit(code=1)
-        _render(jd.title, jd.company, previous)
+        _emit(jd, previous, as_json=as_json)
         return
 
     if jd.thin and not force:
@@ -96,7 +103,7 @@ def score(
             "reads a whole ad: on JD 23 it assessed five requirements the ad "
             "never stated.[/]"
         )
-        err_console.print("[dim]`--force` scores it anyway, for $0.20.[/]")
+        err_console.print("[dim]`--force` scores it anyway, for $0.11.[/]")
         raise typer.Exit(code=2)
 
     if config.profile_dir is None:
@@ -137,12 +144,25 @@ def score(
     except StoreError as exc:
         err_console.print(f"[bold yellow]Scored, but could not save.[/] {exc}")
 
-    _render(jd.title, jd.company, assessment)
+    _emit(jd, assessment, as_json=as_json)
 
 
 # --------------------------------------------------------------------------- #
 # Rendering
 # --------------------------------------------------------------------------- #
+
+
+def _emit(jd, fit: FitAssessment, *, as_json: bool) -> None:
+    """Print the assessment, as a table or as JSON.
+
+    The JSON goes to stdout on its own so the command can be piped. Everything
+    conversational — the company history, the refusals — already goes to
+    stderr, so `jobagent score 22 --last --json | jq` works unchanged.
+    """
+    if as_json:
+        print(json.dumps(fit.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        return
+    _render(jd.title, jd.company, fit)
 
 
 def _render(title: str, company: str | None, fit: FitAssessment) -> None:
