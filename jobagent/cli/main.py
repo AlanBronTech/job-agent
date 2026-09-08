@@ -6,6 +6,7 @@ import os
 
 import typer
 
+from jobagent.adapters.prices import PRICES_FILE, unpriced_models
 from jobagent.cli import apply as apply_cli
 from jobagent.cli import config as config_cli
 from jobagent.cli import evals as evals_cli
@@ -16,9 +17,34 @@ from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
 from jobagent.config import get_config
 
+
+def report_unpriced_models(result: object = None, budget: bool = False) -> None:
+    """Say so, once, if anything this run had no price for.
+
+    A model missing from the price table costs real money and logs
+    `cost_usd: null`. Left silent that reads as a free call and the spend
+    figures quietly stop counting, which is exactly what happened when a Gemini
+    model was routed to and nothing anywhere mentioned it.
+
+    Registered as Typer's result callback so it runs once after the subcommand
+    rather than once per model call — `generate` builds more than one client.
+    """
+    models = unpriced_models()
+    if not models:
+        return
+    typer.secho(
+        f"Note: no price for {', '.join(models)}. Those calls are logged with "
+        f"price_unknown and are missing from any spend total. Add them to "
+        f"{PRICES_FILE.name} (and update checked_on).",
+        err=True,
+        fg=typer.colors.YELLOW,
+    )
+
+
 app = typer.Typer(
     help="Personal, interactive job-application agent.",
     no_args_is_help=True,
+    result_callback=report_unpriced_models,
 )
 
 
