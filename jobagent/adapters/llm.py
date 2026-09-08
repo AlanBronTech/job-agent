@@ -33,6 +33,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from jobagent.adapters.prices import load_prices, note_unpriced
+
 if TYPE_CHECKING:
     from jobagent.config import Config
 
@@ -104,27 +106,19 @@ class LLMResponse:
 # Cost estimation (best-effort — for the eval harness, not billing)
 # --------------------------------------------------------------------------- #
 
-# (input, output) USD per 1M tokens. Keyed by a substring of the model id so
-# dated snapshots resolve too. Prices drift; treat every figure as an estimate.
-_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
-    "claude-opus-4": (5.0, 25.0),
-    "claude-sonnet-4": (3.0, 15.0),
-    "claude-sonnet-5": (3.0, 15.0),
-    "claude-haiku-4": (1.0, 5.0),
-    "gemini-2.5-pro": (1.25, 10.0),
-    "gemini-2.5-flash": (0.30, 2.50),
-    "gemini-2.0-flash": (0.10, 0.40),
-    "gemini-1.5-pro": (1.25, 5.0),
-    "gemini-1.5-flash": (0.075, 0.30),
-}
-
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float | None:
-    """Estimated USD cost of a call, or None if the model isn't in the table."""
-    for prefix, (in_price, out_price) in _PRICES_PER_MTOK.items():
-        if prefix in model:
-            return (input_tokens * in_price + output_tokens * out_price) / 1_000_000
-    return None
+    """Estimated USD cost of a call, or None if the model has no price.
+
+    Prices come from ``prices.yaml`` — see `jobagent.adapters.prices`. None is a
+    real answer, not a zero: an unpriced model is recorded and reported rather
+    than quietly costing nothing.
+    """
+    prices = load_prices().lookup(model)
+    if prices is None:
+        return None
+    in_price, out_price = prices
+    return (input_tokens * in_price + output_tokens * out_price) / 1_000_000
 
 
 # --------------------------------------------------------------------------- #
@@ -175,6 +169,8 @@ class LLMClient(ABC):
         response.cost_usd = estimate_cost(
             response.model, response.input_tokens, response.output_tokens
         )
+        if response.cost_usd is None:
+            note_unpriced(response.model)
         self._log_run(response)
         return response
 
@@ -259,6 +255,9 @@ class LLMClient(ABC):
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
             "cost_usd": response.cost_usd,
+            # A null cost is ambiguous on its own — a free call and an unpriced
+            # model look identical in the log. This says which it was.
+            "price_unknown": response.cost_usd is None,
             # The one field that explains a failed call after the fact.
             "truncated": response.truncated,
         }

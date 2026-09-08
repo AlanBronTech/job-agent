@@ -1,0 +1,42 @@
+# Model prices in USD per million tokens.
+#
+# Loaded at runtime, so a price change is an edit here rather than a code
+# change. Verified against the vendors' own pricing pages on the date below —
+# do NOT copy figures forward from an earlier version of this file without
+# re-checking them. The hardcoded table this replaced priced Sonnet 5 at Sonnet
+# 4.6's rate and overstated three months of logged spend by about a third.
+#
+# A model absent from this file has no price. That is reported — `price_unknown`
+# in the run log and a line on stderr — never silently treated as free.
+
+checked_on: 2026-09-08
+
+sources:
+  anthropic: https://claude.com/pricing
+  gemini: https://ai.google.dev/gemini-api/docs/pricing
+
+# Matched against the model id: exact match first, then the longest key the id
+# starts with. That resolves dated snapshots (`claude-haiku-4-5-20251001`) while
+# keeping `claude-opus-4-1` — which is three times the price — from being read
+# as `claude-opus-4-8`. The previous table matched on any substring and would
+# have made exactly that mistake.
+models:
+  claude-fable-5-1:      {input: 10.00, output: 50.00}
+  claude-fable-5:        {input: 10.00, output: 50.00}
+  claude-opus-5:         {input:  5.00, output: 25.00}
+  claude-opus-4-8:       {input:  5.00, output: 25.00}
+  claude-opus-4-7:       {input:  5.00, output: 25.00}
+  claude-opus-4-6:       {input:  5.00, output: 25.00}
+  claude-opus-4-1:       {input: 15.00, output: 75.00}
+  claude-sonnet-5:       {input:  2.00, output: 10.00}
+  claude-sonnet-4-6:     {input:  3.00, output: 15.00}
+  claude-sonnet-4-5:     {input:  3.00, output: 15.00}
+  claude-haiku-4-5:      {input:  1.00, output:  5.00}
+
+  # Budget mode runs on Gemini's free tier, where these calls cost nothing at
+  # all. The paid rates are recorded so the log says what the work would have
+  # cost had it been billed — a free call is worth measuring, not hiding.
+  gemini-3.6-flash:      {input:  0.75, output:  3.75}  # promotional to 2026-12-31
+  gemini-2.5-pro:        {input:  1.25, output: 10.00}
+  gemini-2.5-flash:      {input:  0.30, output:  2.50}
+  gemini-2.5-flash-lite: {input:  0.10, output:  0.40}
