@@ -30,6 +30,8 @@ from jobagent.core.models import (
 from jobagent.core.prompts import PromptError, load_prompt
 from jobagent.core.validation import ValidationIssue, validate_rendered
 
+_QUESTION_KEYS = frozenset(PrepQuestion.model_fields)
+
 PROMPT_NAME = "interview_prep"
 # Eight to twelve questions, each with an answer sketch and a story
 # reference, plus the questions to ask them. A dense ad (Ebury, JD 22)
@@ -98,7 +100,7 @@ def prepare(
 
     for entry in parsed.get("questions", []):
         try:
-            question = PrepQuestion.model_validate(entry)
+            question = PrepQuestion.model_validate(_contracted(entry))
         except ValidationError as exc:
             raise PrepError(f"A question did not match the contract.\n{exc}") from exc
         if question.story_ref and question.story_ref not in stories:
@@ -129,6 +131,24 @@ def prepare(
         prepared_at=prepared_at or datetime.now(timezone.utc),
     )
     return prep, issues
+
+
+def _contracted(entry: object) -> object:
+    """Drop keys `PrepQuestion` does not declare, before validating.
+
+    The models set ``extra="forbid"``, so one volunteered field fails the whole
+    prep — a real run died on an ``answer_outline_note`` the prompt never asked
+    for, after the questions had already been written and paid for. `jd.py` has
+    dropped unknown keys from the parser's output for the same reason since
+    Phase 1; this is that treatment, applied where it was missing.
+
+    The key set is read off the model rather than hand-listed. A hand-written
+    copy of a model's fields drifts from it — that is how the number haystack
+    in `validation.py` came to be missing four of them.
+    """
+    if not isinstance(entry, dict):
+        return entry
+    return {key: value for key, value in entry.items() if key in _QUESTION_KEYS}
 
 
 def _questions_to_ask(assessment: FitAssessment, parsed: dict) -> list[str]:
