@@ -399,6 +399,34 @@ def stale_assessments(conn: sqlite3.Connection, jd_id: int) -> int:
     return int(row[0]) if row else 0
 
 
+def latest_assessment_stale(conn: sqlite3.Connection, jd_id: int) -> bool:
+    """True when the *newest* assessment predates the JD's last amendment.
+
+    Distinct from `stale_assessments`, and the distinction is the whole point.
+    The count answers "how much of this history describes an older ad", which
+    is what `jd amend` should report. `score --last` shows exactly one
+    assessment and must ask about that one: an older stale assessment sitting
+    in the history is not a reason to warn about a fresh one. The count-based
+    version shipped and fired on a re-score within the minute.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT j.amended_at, MAX(a.scored_at)
+            FROM job_descriptions j
+            JOIN fit_assessments a ON a.jd_id = j.id
+            WHERE j.id = ?
+            """,
+            (jd_id,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not check assessments for {jd_id}: {exc}") from exc
+    if row is None:
+        return False
+    amended_at, newest = row
+    return bool(amended_at and newest and newest < amended_at)
+
+
 def get_jd(conn: sqlite3.Connection, jd_id: int) -> JobDescription | None:
     """Return one JD by id, or None if there is no such row."""
     try:
