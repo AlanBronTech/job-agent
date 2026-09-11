@@ -375,6 +375,20 @@ def test_a_scorer_only_note_does_not_license_a_number(profile_factory) -> None:
     )
 
 
+def test_a_scorer_only_phrase_matches_across_whitespace(profile) -> None:
+    """Hidden labels are checked as phrases, not raw substrings.
+
+    The old substring match missed the same label split across whitespace. The
+    phrase matcher should still catch it, because the content is the same
+    leakage regardless of line breaks.
+    """
+    issues = validate_prose(
+        "I have an Applied\nML background in production systems.", profile
+    )
+
+    assert "scorer-only content" in rules(issues)
+
+
 def test_voice_md_does_not_license_a_number(profile) -> None:
     """voice.md is the rules, not the evidence.
 
