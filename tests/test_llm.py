@@ -444,3 +444,136 @@ def test_quota_exhausted_is_an_llm_error() -> None:
     from jobagent.adapters.llm import QuotaExhaustedError
 
     assert issubclass(QuotaExhaustedError, LLMError)
+
+
+# --------------------------------------------------------------------------- #
+# The Anthropic client itself — streaming, and what counts as transient
+#
+# `FakeClient` overrides `_complete`, so none of the above touches the real
+# adapter. These do, against a stubbed SDK. Both behaviours here were paid for:
+# a `prep` call died three times running at ~180s with the API reachable, and
+# the failure was then classified as permanent so nothing retried it.
+# --------------------------------------------------------------------------- #
+
+
+import httpx  # the SDK's transport; its errors need a real Request
+
+
+class StubMessage:
+    def __init__(self, text: str, *, stop_reason: str = "end_turn") -> None:
+        block = type("Block", (), {"type": "text", "text": text})()
+        self.content = [block]
+        self.model = "claude-sonnet-5"
+        self.stop_reason = stop_reason
+        self.usage = type("Usage", (), {"input_tokens": 900, "output_tokens": 120})()
+
+
+class StubStream:
+    """Stands in for `client.messages.stream(...)` — a context manager whose
+    `get_final_message()` returns the assembled message."""
+
+    def __init__(self, message=None, raises: Exception | None = None) -> None:
+        self._message = message
+        self._raises = raises
+
+    def __enter__(self):
+        if self._raises is not None:
+            raise self._raises
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def get_final_message(self):
+        return self._message
+
+
+def anthropic_client(monkeypatch, *, message=None, raises=None):
+    """An `AnthropicClient` whose SDK is stubbed, and which records whether the
+    streaming path was used rather than `messages.create`."""
+    from jobagent.adapters.llm import AnthropicClient
+
+    used: dict[str, object] = {}
+
+    class StubMessages:
+        def stream(self, **kwargs):
+            used["stream"] = kwargs
+            return StubStream(message, raises)
+
+        def create(self, **kwargs):  # pragma: no cover - must not be reached
+            raise AssertionError("the call must stream, not create")
+
+    client = AnthropicClient(model="claude-sonnet-5", api_key="k")
+    client._sdk_client = type("SDK", (), {"messages": StubMessages()})()
+    return client, used
+
+
+def test_the_anthropic_call_streams(monkeypatch) -> None:
+    """A long generation on a non-streamed connection is what broke `prep`."""
+    client, used = anthropic_client(monkeypatch, message=StubMessage("the answer"))
+
+    response = client.complete(prompt="hi", max_tokens=16384)
+
+    assert used["stream"]["max_tokens"] == 16384
+    assert response.text == "the answer"
+    assert response.input_tokens == 900
+    assert response.output_tokens == 120
+    assert response.truncated is False
+
+
+def test_a_truncated_stream_is_still_reported(monkeypatch) -> None:
+    """Truncation is a hard failure, not a degraded answer — streaming must not
+    lose the signal that says so."""
+    client, _ = anthropic_client(
+        monkeypatch, message=StubMessage("half an ans", stop_reason="max_tokens")
+    )
+
+    assert client.complete(prompt="hi").truncated is True
+
+
+def test_a_dropped_connection_is_transient(monkeypatch, no_sleep) -> None:
+    """It carries no status code, so it used to fall through to the terminal
+    branch and fail the whole command — despite `RetryableLLMError` naming a
+    network blip as the thing it is for."""
+    import anthropic
+
+    client, _ = anthropic_client(
+        monkeypatch,
+        raises=anthropic.APIConnectionError(request=httpx.Request("POST", "https://x")),
+    )
+
+    with pytest.raises(RetryableLLMError):
+        client.complete(prompt="hi")
+    assert len(no_sleep) == RETRY_ATTEMPTS - 1
+
+
+def test_a_timeout_is_transient(monkeypatch, no_sleep) -> None:
+    import anthropic
+
+    client, _ = anthropic_client(
+        monkeypatch,
+        raises=anthropic.APITimeoutError(request=httpx.Request("POST", "https://x")),
+    )
+
+    with pytest.raises(RetryableLLMError):
+        client.complete(prompt="hi")
+
+
+def test_a_bad_key_is_still_permanent(monkeypatch, no_sleep) -> None:
+    """Widening what counts as transient must not make everything transient: a
+    401 retried four times is four wasted round trips and a slower failure."""
+    import anthropic
+
+    client, _ = anthropic_client(
+        monkeypatch,
+        raises=anthropic.AuthenticationError(
+            "invalid key",
+            response=httpx.Response(401, request=httpx.Request("POST", "https://x")),
+            body=None,
+        ),
+    )
+
+    with pytest.raises(LLMError) as caught:
+        client.complete(prompt="hi")
+    assert not isinstance(caught.value, RetryableLLMError)
+    assert no_sleep == []

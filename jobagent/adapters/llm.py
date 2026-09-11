@@ -384,9 +384,25 @@ class AnthropicClient(LLMClient):
         if system:
             kwargs["system"] = system
         try:
-            message = self._sdk().messages.create(**kwargs)
+            # Streamed, then reassembled. The answer is identical either way —
+            # what changes is that the connection stays busy while the model
+            # thinks. A non-streamed `prep` call died three times running at
+            # ~180s with the API reachable and a small call answering in two
+            # seconds: 8-12 questions with four-sentence answers is simply a
+            # long generation, and the socket closed under it. Anthropic's own
+            # guidance is to stream anything with long input, long output or a
+            # high `max_tokens`; `prep` is all three.
+            with self._sdk().messages.stream(**kwargs) as stream:
+                message = stream.get_final_message()
         except anthropic.APIError as exc:
-            if getattr(exc, "status_code", None) in _RETRYABLE_STATUS:
+            if getattr(exc, "status_code", None) in _RETRYABLE_STATUS or isinstance(
+                exc, (anthropic.APIConnectionError, anthropic.APITimeoutError)
+            ):
+                # A dropped or timed-out connection carries no status code, so
+                # it used to fall past this check into the terminal branch and
+                # fail the whole command — despite `RetryableLLMError` naming
+                # "a network blip" as the thing it exists for. It is the most
+                # retryable failure there is.
                 raise RetryableLLMError(
                     f"Anthropic transient failure ({self.model}): {exc}"
                 ) from exc
