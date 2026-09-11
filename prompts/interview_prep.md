@@ -83,6 +83,10 @@ below.
 
 JSON only. No prose, no markdown fences.
 
+`hard` is required on every question: `true` for the ones answering a
+`challenge_point`, `false` otherwise. It decides which section of the document
+a question is printed in, and omitting it files a hard question as small talk.
+
 {
   "opening": "two or three sentences",
   "questions": [
@@ -90,7 +94,8 @@ JSON only. No prose, no markdown fences.
       "question": "what they will ask",
       "why_asked": "one line on what is being tested",
       "story_ref": "story id or null",
-      "answer_outline": "what to say, three or four sentences"
+      "answer_outline": "what to say, three or four sentences",
+      "hard": true
     }
   ],
   "questions_to_ask": ["what he should ask them"]
