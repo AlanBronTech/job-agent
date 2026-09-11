@@ -15,6 +15,7 @@ import pytest
 
 from jobagent.adapters.llm import LLMResponse, Provider
 from jobagent.core.models import (
+    ChallengePoint,
     FitAssessment,
     JobDescription,
     Verdict,
@@ -23,6 +24,7 @@ from jobagent.core.models import (
 )
 from jobagent.core.prep import PrepError, prepare
 from jobagent.core.profile import load_profile
+from jobagent.core.validation import Severity
 
 NOW = datetime(2026, 9, 9, tzinfo=timezone.utc)
 
@@ -166,3 +168,122 @@ def test_a_story_that_does_not_exist_is_reported(jd, profile, assessment) -> Non
     )
 
     assert any(i.rule == "unknown reference" for i in issues)
+
+
+# --------------------------------------------------------------------------- #
+# Challenge points — written by the model, not copied from the scorer
+#
+# They used to be injected verbatim as finished questions. That produced the
+# worst section of three real prep documents in a row: the scorer writes
+# `point` as a topic for a reader and `response` as prose *about* Alan, and
+# both were printed under "The hard ones" as though they were his answers. One
+# carried `stories.explanations.why_leaving_current` into a document he would
+# have open in an interview.
+# --------------------------------------------------------------------------- #
+
+
+def with_challenges(assessment: FitAssessment, *points: tuple[str, str]):
+    return assessment.model_copy(
+        update={
+            "challenge_points": [
+                ChallengePoint(point=point, response=response)
+                for point, response in points
+            ]
+        }
+    )
+
+
+def test_a_challenge_point_is_not_copied_into_the_document(
+    jd, profile, assessment
+) -> None:
+    """The live failure, three times over. The scorer's prose is about him."""
+    scored = with_challenges(
+        assessment,
+        (
+            "Whether he has built AI products at enterprise scale.",
+            "The honest answer is that he has not; see "
+            "stories.explanations.why_leaving_current.",
+        ),
+    )
+
+    prep, _ = prepare(
+        jd, profile, scored, client=StubClient(payload()), prepared_at=NOW
+    )
+
+    rendered = " ".join(q.question + " " + q.answer_outline for q in prep.questions)
+    assert "the honest answer is that he has not" not in rendered.lower()
+    assert "stories.explanations" not in rendered
+
+
+def test_uncovered_challenge_points_are_reported(jd, profile, assessment) -> None:
+    """Coverage used to be structural. The model writes them now, so it is
+    checked instead — a warning, because it can only count, not read."""
+    scored = with_challenges(
+        assessment, ("Gap one.", "Response one."), ("Gap two.", "Response two.")
+    )
+
+    _, issues = prepare(
+        jd, profile, scored, client=StubClient(payload()), prepared_at=NOW
+    )
+
+    coverage = [i for i in issues if i.rule == "challenge coverage"]
+    assert coverage and coverage[0].severity is Severity.warning
+    assert "2 challenge point(s)" in coverage[0].detail
+
+
+def test_covered_challenge_points_are_not_reported(jd, profile, assessment) -> None:
+    """A guard that fires when nothing is at risk stops being a guard."""
+    scored = with_challenges(assessment, ("Gap one.", "Response one."))
+
+    _, issues = prepare(
+        jd, profile, scored, client=StubClient(payload()), prepared_at=NOW
+    )
+
+    assert not [i for i in issues if i.rule == "challenge coverage"]
+
+
+def test_no_challenge_points_means_no_coverage_warning(jd, profile, assessment) -> None:
+    _, issues = prepare(
+        jd, profile, assessment, client=StubClient(payload()), prepared_at=NOW
+    )
+
+    assert not [i for i in issues if i.rule == "challenge coverage"]
+
+
+def test_one_question_to_ask_is_not_listed_twice(jd, profile, assessment) -> None:
+    """Punctuation, case and word order only. A *rephrasing* is not caught and
+    cannot be: the two real duplicates shared 8 words of 29, and any threshold
+    loose enough to merge them merges questions that differ. That case is the
+    prompt's job."""
+    scored = assessment.model_copy(
+        update={"questions_to_ask": ["Does this role have direct reports?"]}
+    )
+
+    prep, _ = prepare(
+        jd,
+        profile,
+        scored,
+        client=StubClient(
+            payload(questions_to_ask=["does this role have DIRECT reports"])
+        ),
+        prepared_at=NOW,
+    )
+
+    assert prep.questions_to_ask == ["Does this role have direct reports?"]
+
+
+def test_a_genuinely_different_question_to_ask_survives(
+    jd, profile, assessment
+) -> None:
+    """Deduplication must not become swallowing."""
+    scored = assessment.model_copy(update={"questions_to_ask": ["What is the band?"]})
+
+    prep, _ = prepare(
+        jd,
+        profile,
+        scored,
+        client=StubClient(payload(questions_to_ask=["How many squads are in scope?"])),
+        prepared_at=NOW,
+    )
+
+    assert len(prep.questions_to_ask) == 2
