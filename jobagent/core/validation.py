@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from enum import Enum
 
 from jobagent.core.models import Profile, Visibility
@@ -221,10 +222,9 @@ def _check_numbers(text: str, profile: Profile) -> list[ValidationIssue]:
 
 def _check_scorer_only_leakage(text: str, profile: Profile) -> list[ValidationIssue]:
     """``scorer_only`` entries inform the decision and are never rendered."""
-    lowered = text.lower()
     issues = []
     for label in _scorer_only_labels(profile):
-        if len(label) > 8 and label.lower() in lowered:
+        if len(label) > 8 and _scorer_only_pattern(label).search(text):
             issues.append(
                 ValidationIssue(
                     rule="scorer-only content",
@@ -237,6 +237,25 @@ def _check_scorer_only_leakage(text: str, profile: Profile) -> list[ValidationIs
                 )
             )
     return issues
+
+
+@lru_cache(maxsize=128)
+def _scorer_only_pattern(label: str) -> re.Pattern[str]:
+    """Match one hidden label as a phrase, allowing normal whitespace drift.
+
+    Raw substring matching was too brittle: it fired on text where the same
+    words appeared in ordinary prose, and it missed the same phrase split
+    across whitespace. Matching the label as a phrase keeps the guard on the
+    actual leakage surface without depending on exact spacing.
+    """
+    tokens = [re.escape(part) for part in label.split()]
+    if not tokens:
+        return re.compile(r"(?!x)x")
+    if len(tokens) == 1:
+        pattern = rf"(?<!\w){tokens[0]}(?!\w)"
+    else:
+        pattern = rf"(?<!\w){r'\s+'.join(tokens)}(?!\w)"
+    return re.compile(pattern, flags=re.IGNORECASE)
 
 
 def _check_length(text: str, max_words: int, context: str) -> list[ValidationIssue]:
