@@ -14,6 +14,8 @@ than sending Alan into an interview to tell a story that does not exist.
 
 from __future__ import annotations
 
+import re
+
 import json
 from datetime import datetime, timezone
 
@@ -28,7 +30,7 @@ from jobagent.core.models import (
     Profile,
 )
 from jobagent.core.prompts import PromptError, load_prompt
-from jobagent.core.validation import ValidationIssue, validate_rendered
+from jobagent.core.validation import Severity, ValidationIssue, validate_rendered
 
 _QUESTION_KEYS = frozenset(PrepQuestion.model_fields)
 
@@ -83,20 +85,19 @@ def prepare(
     issues: list[ValidationIssue] = []
     questions: list[PrepQuestion] = []
 
-    # The assessment's challenge points come first and are marked hard. They
-    # are not the model's guesses — they are what the scorer already found.
-    for challenge in assessment.challenge_points:
-        questions.append(
-            PrepQuestion(
-                question=challenge.point,
-                why_asked=(
-                    "Raised by the fit assessment as a gap between this ad and "
-                    "the profile."
-                ),
-                answer_outline=challenge.response,
-                hard=True,
-            )
-        )
+    # The assessment's challenge points are NOT injected as finished questions
+    # any more. They were, and it produced the worst section of three real prep
+    # documents in a row: `challenge.point` is a topic the scorer wrote for a
+    # reader ("Whether he has built AI products at enterprise scale versus
+    # adopted AI tools personally") and `challenge.response` is prose written
+    # *about* Alan ("the honest answer is that he has not used either named
+    # framework"). Printed under "The hard ones" they read as neither questions
+    # nor answers, and one carried `stories.explanations.why_leaving_current`
+    # verbatim into a document he would have open in an interview.
+    #
+    # The model now writes them, in his voice, from the same challenge points —
+    # it already receives them in `assessment_json`. Coverage was structural and
+    # is now checked instead: see `_check_challenge_coverage`.
 
     for entry in parsed.get("questions", []):
         try:
@@ -119,6 +120,8 @@ def prepare(
             question.story_ref = None
         questions.append(question)
 
+    issues += _check_challenge_coverage(assessment, questions)
+
     for question in questions:
         issues += validate_rendered(question.answer_outline, context="An answer outline")
 
@@ -131,6 +134,34 @@ def prepare(
         prepared_at=prepared_at or datetime.now(timezone.utc),
     )
     return prep, issues
+
+
+def _check_challenge_coverage(
+    assessment: FitAssessment, questions: list[PrepQuestion]
+) -> list[ValidationIssue]:
+    """Report when the model wrote fewer hard questions than the scorer found.
+
+    The gaps the scorer identified used to be guaranteed a place by being
+    injected verbatim. They are written by the model now, so the guarantee is
+    weaker — this is what replaces it. A warning, not a blocker: it cannot tell
+    whether a hard question *addresses* a given challenge point, only that
+    fewer were written than there were gaps to cover.
+    """
+    wanted = len(assessment.challenge_points)
+    got = sum(1 for question in questions if question.hard)
+    if not wanted or got >= wanted:
+        return []
+    return [
+        ValidationIssue(
+            rule="challenge coverage",
+            severity=Severity.warning,
+            detail=(
+                f"The assessment found {wanted} challenge point(s) and the prep "
+                f"has {got} hard question(s). Check the gaps it flagged are "
+                "actually answered before relying on this."
+            ),
+        )
+    ]
 
 
 def _contracted(entry: object) -> object:
@@ -158,10 +189,22 @@ def _questions_to_ask(assessment: FitAssessment, parsed: dict) -> list[str]:
     thing that decides whether the role is viable at all, and it survives from
     the assessment into the room.
     """
-    questions = list(assessment.questions_to_ask)
-    for extra in parsed.get("questions_to_ask", []):
-        text = str(extra).strip()
-        if text and text not in questions:
+    questions: list[str] = []
+    seen: set[str] = set()
+    for text in [*assessment.questions_to_ask, *parsed.get("questions_to_ask", [])]:
+        text = str(text).strip()
+        # Normalised so punctuation, case and word order do not produce two
+        # copies of one question. It does NOT catch a rephrasing, and one real
+        # run listed four near-identical pairs that survive this: "…or is it a
+        # capability-building function embedded in existing teams?" against
+        # "…or is the team being built out, and at what pace?" share 8 words of
+        # 29. Any threshold loose enough to merge those merges questions that
+        # are genuinely different, so the rephrasing case is handled in the
+        # prompt instead, where the model is told not to restate the
+        # assessment's own questions.
+        key = " ".join(sorted(re.findall(r"[a-z0-9]+", text.lower())))
+        if text and key not in seen:
+            seen.add(key)
             questions.append(text)
     return questions
 

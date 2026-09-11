@@ -15,9 +15,14 @@ walks in.
 
 ## The fit assessment
 
-The `challenge_points` in here are **already being used as the hard questions**
-— you do not need to repeat them. Read them so your questions do not duplicate
-them, and so you know where the gaps are.
+**Write one hard question for every `challenge_point` in here.** Each is a gap
+the scorer found between this ad and the profile, and each is a question he will
+be asked. Phrase it the way an interviewer would ask it out loud — not as the
+topic the scorer named it by — and mark it `"hard": true`.
+
+The `response` on a challenge point is written *about* him, for him to read. Do
+not copy it. Write the answer he would say, in the first person, to the rules
+below.
 
 <assessment>
 {assessment_json}
@@ -41,9 +46,10 @@ them, and so you know where the gaps are.
 
 ## Rules
 
-1. **Eight to twelve questions**, ordered by how likely they are. Cover: the
-   role's stated responsibilities, the technical depth the ad implies, the
-   people-management substance, and one or two on why he is available.
+1. **Eight to twelve questions**, ordered by how likely they are. Cover: every
+   `challenge_point` (marked `hard`), the role's stated responsibilities, the
+   technical depth the ad implies, the people-management substance, and one or
+   two on why he is available.
 2. **`story_ref` must be an id from the story bank above**, or `null`. A
    reference you invent sends him into a room to tell a story that does not
    exist. `null` is the honest answer when no story fits — and a question with
@@ -51,7 +57,11 @@ them, and so you know where the gaps are.
    hardest.
 3. **`answer_outline` is what to say, in his voice** — the specifics, the
    numbers, the outcome. Not a script. Three or four sentences at most. Every
-   figure must come from the story bank or the assessment.
+   figure must come from the story bank or the assessment. Write it as he would
+   say it: "I have not used either framework", never "he has not used either
+   framework". It is read minutes before he walks into a room.
+   Never name a profile field in it. `stories.explanations.why_leaving_current`
+   is where an answer came from, not something a reader should ever see.
 4. **Where `stories.explanations` covers a question — the employment gap, the
    stack mismatch, salary, why he is leaving — use its wording.** Those are
    answers he has already agreed to give.
@@ -62,6 +72,9 @@ them, and so you know where the gaps are.
    unresolved filters are added automatically — add what a manager should ask
    about the team, the delivery record, and what the first six months look
    like. Three or four, specific to this ad.
+   **Do not restate a question the assessment already asks, in any wording.**
+   Rephrasing one is worse than repeating it: a duplicate is obvious and a
+   rephrasing is not, and the list is read as a checklist in a room.
 7. **`opening`** is two or three sentences: how he answers "tell me about
    yourself" for *this* role. Blunt and specific. Never a career length.
 8. Never state or compute a career length, in any answer.
