@@ -70,7 +70,7 @@ def score(
         with store.open_store(config.db_path) as conn:
             jd = store.get_jd(conn, jd_id)
             previous = store.latest_assessment(conn, jd_id) if show_last else None
-            stale = store.stale_assessments(conn, jd_id) if show_last else 0
+            stale = store.latest_assessment_stale(conn, jd_id) if show_last else False
             seen_before = history.company_history(conn, jd) if jd else None
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")

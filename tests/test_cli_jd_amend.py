@@ -283,3 +283,39 @@ def test_an_unamended_jd_never_warns(wired) -> None:
     result = runner.invoke(app, ["score", str(jd_id), "--last"])
 
     assert "predates an amendment" not in flat(result.stderr)
+
+
+def test_a_rescore_after_an_amendment_is_not_flagged_stale(wired, monkeypatch) -> None:
+    """The sequence that actually happens, and that the first version of this
+    guard got wrong within a minute of shipping.
+
+    Score, amend, re-score, read. The old assessment is still in the history —
+    nothing deletes it — so a check that counts stale assessments finds one and
+    warns about a result produced seconds ago. `--last` shows exactly one
+    assessment and the question is whether *that* one is stale.
+    """
+    jd_id = seed(wired)
+    score_it(wired, jd_id, NOW - timedelta(days=8))  # scored against the teaser
+    stub_parse(monkeypatch)
+    write_jd_file(wired, "real.txt", REAL_JD)
+    runner.invoke(app, ["jd", "amend", str(jd_id), "--file", "real.txt"])
+    score_it(wired, jd_id, datetime.now(timezone.utc) + timedelta(seconds=30))
+
+    result = runner.invoke(app, ["score", str(jd_id), "--last"])
+
+    assert result.exit_code == 0
+    assert "predates an amendment" not in flat(result.stderr)
+
+
+def test_the_amendment_still_counts_the_whole_stale_history(wired, monkeypatch) -> None:
+    """`jd amend` asks a different question from `score --last` and should keep
+    asking it: how much of this history describes an older ad."""
+    jd_id = seed(wired)
+    score_it(wired, jd_id, NOW - timedelta(days=8))
+    score_it(wired, jd_id, NOW - timedelta(days=2))
+    stub_parse(monkeypatch)
+    write_jd_file(wired, "real.txt", REAL_JD)
+
+    result = runner.invoke(app, ["jd", "amend", str(jd_id), "--file", "real.txt"])
+
+    assert "2 stored assessment(s) predate this amendment" in flat(result.stderr)
