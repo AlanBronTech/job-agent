@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from jobagent.core.models import Application, FitAssessment, JobDescription
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -52,6 +52,11 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("via_agency", "INTEGER NOT NULL DEFAULT 0"),
         ("hiring_status", "TEXT NOT NULL DEFAULT 'unknown'"),
         ("multiple_roles", "INTEGER NOT NULL DEFAULT 0"),
+        # v9 — `jd amend`. An ad is not immutable: a recruiter sends more
+        # detail, or the real job description arrives after the teaser. Both
+        # happened inside three days.
+        ("amended_at", "TEXT"),
+        ("superseded_text", "TEXT"),
     ],
 }
 
@@ -83,7 +88,9 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     source_url       TEXT,
     source_metadata  TEXT,
     raw_text         TEXT NOT NULL,
-    ingested_at      TEXT NOT NULL
+    ingested_at      TEXT NOT NULL,
+    amended_at       TEXT,
+    superseded_text  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jd_company ON job_descriptions (company);
@@ -303,6 +310,93 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
     if jd_id is None:  # pragma: no cover - sqlite always sets this on insert
         raise StoreError("Insert succeeded but returned no row id")
     return jd_id
+
+
+def update_jd(
+    conn: sqlite3.Connection, jd_id: int, jd: JobDescription, *, amended_at: datetime
+) -> str | None:
+    """Replace a stored JD's parsed fields in place. Returns the text replaced.
+
+    The id survives, which is the whole point: assessments, the application,
+    its notes and its channel all hang off it, and re-adding the ad as a new
+    row splits one role across two records. That happened three times in three
+    days — Upgrowth 46/47, Colonial First State 27/48 — because there was no
+    way to say "the same ad, with more of it".
+
+    ``ingested_at`` is not touched. When the ad first arrived is a fact about
+    the pipeline and does not change because more of it turned up later.
+    """
+    existing = get_jd(conn, jd_id)
+    if existing is None:
+        raise StoreError(f"No job description with id {jd_id}")
+
+    salary = jd.salary_range.model_dump_json() if jd.salary_range else None
+    try:
+        conn.execute(
+            """
+            UPDATE job_descriptions SET
+                title = ?, company = ?, location = ?, work_type = ?,
+                work_arrangement = ?, salary_json = ?, seniority = ?,
+                posted_by = ?, via_agency = ?, hiring_status = ?,
+                multiple_roles = ?, must_haves = ?, nice_to_haves = ?,
+                tech_stack = ?, responsibilities = ?, red_flags = ?,
+                source = ?, source_url = ?, source_metadata = ?,
+                raw_text = ?, amended_at = ?, superseded_text = ?
+            WHERE id = ?
+            """,
+            (
+                jd.title,
+                jd.company,
+                jd.location,
+                jd.work_type.value,
+                jd.work_arrangement.value,
+                salary,
+                jd.seniority.value,
+                jd.posted_by,
+                int(jd.via_agency),
+                jd.hiring_status.value,
+                int(jd.multiple_roles),
+                json.dumps(jd.must_haves),
+                json.dumps(jd.nice_to_haves),
+                json.dumps(jd.tech_stack),
+                json.dumps(jd.responsibilities),
+                json.dumps(jd.red_flags),
+                jd.source,
+                jd.source_url,
+                jd.source_metadata,
+                jd.raw_text,
+                _to_iso(amended_at),
+                existing.raw_text,
+                jd_id,
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not amend job description {jd_id}: {exc}") from exc
+    return existing.raw_text
+
+
+def stale_assessments(conn: sqlite3.Connection, jd_id: int) -> int:
+    """How many stored assessments predate the JD's last amendment.
+
+    An assessment scored against text that has since been replaced is not
+    wrong, it is about a different ad. Nothing deletes it — `eval` reads the
+    history and a deleted row is a hole — so it is counted and reported.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) FROM fit_assessments a
+            JOIN job_descriptions j ON j.id = a.jd_id
+            WHERE a.jd_id = ?
+              AND j.amended_at IS NOT NULL
+              AND a.scored_at < j.amended_at
+            """,
+            (jd_id,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not check assessments for {jd_id}: {exc}") from exc
+    return int(row[0]) if row else 0
 
 
 def get_jd(conn: sqlite3.Connection, jd_id: int) -> JobDescription | None:

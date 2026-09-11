@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -154,6 +155,143 @@ def add(
     # $0.11 scoring it. The company name only exists once the ad is parsed, so
     # this cannot come any earlier than it does.
     render_company_history(err_console, seen_before)
+
+
+@app.command("amend")
+def amend(
+    jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd list`."),
+    file: Path | None = typer.Option(
+        None,
+        "--file",
+        "-f",
+        help="A path, or a fragment of a filename in the JD drop folder.",
+    ),
+    latest: bool = typer.Option(
+        False, "--latest", help="Take the most recently saved ad in the drop folder."
+    ),
+    stdin: bool = typer.Option(False, "--stdin", help="Read the new text from stdin."),
+    append: bool = typer.Option(
+        False,
+        "--append",
+        help="Add to the stored ad rather than replace it, for a thread that grew.",
+    ),
+) -> None:
+    """Re-parse a stored ad in place when more of it arrives.
+
+    An ad is not immutable. A recruiter answers a question in chat, or the real
+    job description turns up a week after the teaser. Both happened inside three
+    days, and without this each one forked the role across two records — the
+    second holding the better text, the first holding the application, its
+    channel and every note.
+
+    `--append` is for a conversation that grew: the stored text and the new text
+    are parsed together. The default replaces, which is right when an official
+    description supersedes an ad. Either way the previous text is kept.
+    """
+    config = get_config()
+    try:
+        file = _resolve_file(
+            file=file, latest=latest, stdin=stdin, jd_dir=config.jd_dir
+        )
+    except (JDError, paths.AdNotFound) as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=2)
+
+    try:
+        with store.open_store(config.db_path) as conn:
+            existing = store.get_jd(conn, jd_id)
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+    if existing is None:
+        err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
+        raise typer.Exit(code=1)
+
+    if file is not None and not stdin:
+        console.print(f"[dim]Reading {file.name}[/]")
+    ad = _extract_saved_page(file) if file is not None and not stdin else None
+    try:
+        new_text = ad.text if ad is not None else _read_input(file=file, stdin=stdin)
+    except JDError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=2)
+
+    if append:
+        new_text = f"{existing.raw_text}\n\n{new_text}"
+        console.print("[dim]Appending to the stored ad and re-parsing both.[/]")
+
+    try:
+        client = get_client(
+            CallType.parse_jd,
+            config,
+            RunContext(command="jd amend", jd_id=jd_id),
+        )
+    except LLMError as exc:
+        err_console.print(f"[bold red]No model available for JD parsing.[/] {exc}")
+        raise typer.Exit(code=2)
+
+    with console.status("Re-parsing…"):
+        try:
+            parsed = parse_jd(new_text, client=client, source=existing.source)
+        except JDError as exc:
+            err_console.print("[bold red]Could not parse the new text.[/]")
+            err_console.print(str(exc))
+            raise typer.Exit(code=1)
+
+    parsed.source_url = existing.source_url
+    parsed.source_metadata = existing.source_metadata
+
+    try:
+        with store.open_store(config.db_path) as conn:
+            store.update_jd(
+                conn, jd_id, parsed, amended_at=datetime.now(timezone.utc)
+            )
+            parsed.id = jd_id
+            stale = store.stale_assessments(conn, jd_id)
+    except StoreError as exc:
+        err_console.print(f"[bold red]Parsed, but could not save.[/] {exc}")
+        raise typer.Exit(code=1)
+
+    _render_jd(parsed)
+    console.print(f"\n[green]JD {jd_id} amended.[/]")
+    _report_changes(existing, parsed)
+
+    if stale:
+        err_console.print(
+            f"\n[bold yellow]{stale} stored assessment(s) predate this "
+            f"amendment[/] and were scored against text that has been replaced."
+        )
+        err_console.print(
+            f"[dim]They are kept — the history is what `eval` reads — but "
+            f"`score {jd_id} --last` is now showing an assessment of a "
+            f"different ad. Re-score before relying on it.[/]"
+        )
+
+
+def _report_changes(before, after) -> None:
+    """Name the fields the re-parse moved.
+
+    The point of an amendment is usually one or two facts — a salary band, a
+    work arrangement, a real requirements list. Printing the whole ad again
+    buries them.
+    """
+    fields = [
+        ("title", before.title, after.title),
+        ("company", before.company, after.company),
+        ("location", before.location, after.location),
+        ("work type", before.work_type.value, after.work_type.value),
+        ("arrangement", before.work_arrangement.value, after.work_arrangement.value),
+        ("seniority", before.seniority.value, after.seniority.value),
+        ("must-haves", len(before.must_haves), len(after.must_haves)),
+        ("responsibilities", len(before.responsibilities), len(after.responsibilities)),
+    ]
+    changed = [(name, was, now) for name, was, now in fields if was != now]
+    if not changed:
+        console.print("[dim]No parsed field changed.[/]")
+        return
+    console.print("\n[bold]Changed[/]")
+    for name, was, now in changed:
+        console.print(f"  {name}: [dim]{was}[/] → {now}")
 
 
 @app.command("list")

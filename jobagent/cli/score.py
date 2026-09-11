@@ -70,6 +70,7 @@ def score(
         with store.open_store(config.db_path) as conn:
             jd = store.get_jd(conn, jd_id)
             previous = store.latest_assessment(conn, jd_id) if show_last else None
+            stale = store.stale_assessments(conn, jd_id) if show_last else 0
             seen_before = history.company_history(conn, jd) if jd else None
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
@@ -88,6 +89,20 @@ def score(
         if previous is None:
             err_console.print(f"[bold red]JD {jd_id} has not been scored yet.[/]")
             raise typer.Exit(code=1)
+        if stale:
+            # The free read is the one most likely to be trusted without
+            # thinking, because it costs nothing. An assessment of text that
+            # has since been replaced is not wrong — it is about a different
+            # ad — and nothing says so unless this does.
+            err_console.print(
+                f"[bold yellow]This assessment predates an amendment to JD "
+                f"{jd_id}[/] and was scored against text that has been "
+                f"replaced."
+            )
+            err_console.print(
+                f"[dim]`jobagent score {jd_id}` re-scores against the ad as it "
+                f"now stands.[/]"
+            )
         _emit(jd, previous, as_json=as_json)
         return
 
