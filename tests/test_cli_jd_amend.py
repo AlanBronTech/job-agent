@@ -143,7 +143,7 @@ def test_append_parses_the_old_text_with_the_new(wired, monkeypatch) -> None:
     the conversation that named the company."""
     jd_id = seed(wired)
     seen = stub_parse(monkeypatch)
-    write_jd_file(wired, "more.txt", "And the band is $185,000.")
+    write_jd_file(wired, "more.txt", "And the band is $123,000.")
 
     result = runner.invoke(
         app, ["jd", "amend", str(jd_id), "--file", "more.txt", "--append"]
@@ -151,7 +151,7 @@ def test_append_parses_the_old_text_with_the_new(wired, monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert TEASER.strip() in seen["raw_text"]
-    assert "185,000" in seen["raw_text"]
+    assert "123,000" in seen["raw_text"]
 
 
 def test_the_superseded_text_is_kept(wired, monkeypatch) -> None:
