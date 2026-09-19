@@ -22,6 +22,8 @@ _STATUS_WORDS = {
     ApplicationStatus.interview_1: ("first interview", "green"),
     ApplicationStatus.interview_2: ("second interview", "green"),
     ApplicationStatus.offer: ("offer", "bold green"),
+    ApplicationStatus.rejected_after_interview: ("rejected after interview", "red"),
+    ApplicationStatus.ghosted_after_contact: ("ghosted after contact", "yellow"),
     ApplicationStatus.withdrew: ("withdrew", "dim"),
     ApplicationStatus.not_applied: ("not applied", "dim"),
 }

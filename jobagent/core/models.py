@@ -609,6 +609,22 @@ class ApplicationStatus(str, Enum):
     `applied` is the live state — sent, nothing back yet. `applied_no_reply`
     is the terminal one: enough time has passed to call it ghosted. Only the
     second is a result.
+
+    The same distinction is why `rejected_after_interview` and
+    `ghosted_after_contact` exist. Without them the only terminal values were
+    `rejected_screen` and `applied_no_reply`, so closing an application that
+    had reached an interview destroyed the fact that it had. That is not
+    hypothetical: four rows were flattened that way on 2026-09-19, and the
+    next analysis read the flattening as evidence — it reported that LinkedIn
+    applications had produced no human contact, when one of them had produced
+    the only interview of the batch. A status the record cannot express is a
+    conclusion waiting to be drawn wrongly.
+
+    These two guarantee a *floor*, not an exact stage: `rejected_after_interview`
+    means at least one interview happened, and `ghosted_after_contact` means at
+    least a recruiter call did. Where the exact stage matters — two interviews
+    rather than one — the application note carries it. Encoding the count as
+    well would need a second field, and no question has yet needed one.
     """
 
     identified = "identified"
@@ -619,6 +635,9 @@ class ApplicationStatus(str, Enum):
     interview_1 = "interview_1"
     interview_2 = "interview_2"
     offer = "offer"
+    # Terminal, and both sit above a screen rejection in depth reached.
+    rejected_after_interview = "rejected_after_interview"
+    ghosted_after_contact = "ghosted_after_contact"
     withdrew = "withdrew"
     not_applied = "not_applied"
 

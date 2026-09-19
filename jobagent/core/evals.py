@@ -60,7 +60,14 @@ _OUTCOME_RANK: dict[ApplicationStatus, int] = {
     ApplicationStatus.applied_no_reply: 1,
     ApplicationStatus.rejected_screen: 2,
     ApplicationStatus.recruiter_call: 3,
+    # Terminal, ranked by the depth they guarantee rather than the depth they
+    # may have reached — the note carries the exact stage. Ranking them with
+    # the screen rejections, which is what closing an interviewed application
+    # used to force, understates the scorer on precisely the cases where it
+    # was most right.
+    ApplicationStatus.ghosted_after_contact: 3,
     ApplicationStatus.interview_1: 4,
+    ApplicationStatus.rejected_after_interview: 4,
     ApplicationStatus.interview_2: 5,
     ApplicationStatus.offer: 6,
 }

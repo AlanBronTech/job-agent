@@ -213,3 +213,26 @@ def test_status_without_json_still_prints_the_table(wired) -> None:
     # Not the full company name: rich sizes columns to the terminal and wraps
     # it, so asserting the whole string tests the width of the test runner.
     assert "Colonial" in result.stdout
+
+
+def test_the_new_terminal_statuses_are_accepted_and_rendered(wired) -> None:
+    """They have to survive the whole round trip — CLI argument, store, and
+    the status table — or they are decoration."""
+    import json
+
+    from jobagent.core.models import ApplicationStatus
+
+    jd_id = seed(wired)
+    runner.invoke(app, ["apply", str(jd_id), "--channel", "linkedin"])
+
+    result = runner.invoke(
+        app, ["outcome", str(jd_id), "rejected_after_interview", "--worth", "yes"]
+    )
+
+    assert result.exit_code == 0
+    assert stored(wired, jd_id).status is ApplicationStatus.rejected_after_interview
+    # Terminal: it leaves the live pipeline.
+    assert json.loads(runner.invoke(app, ["status", "--json"]).stdout) == []
+    assert "rejected_after_interview" in runner.invoke(
+        app, ["status", "--all", "--json"]
+    ).stdout

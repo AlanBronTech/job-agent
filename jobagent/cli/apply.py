@@ -26,6 +26,8 @@ _STATUS_STYLE = {
     ApplicationStatus.interview_1: "green",
     ApplicationStatus.interview_2: "bold green",
     ApplicationStatus.offer: "bold green",
+    ApplicationStatus.rejected_after_interview: "red",
+    ApplicationStatus.ghosted_after_contact: "yellow",
     ApplicationStatus.withdrew: "dim",
     ApplicationStatus.not_applied: "dim",
 }

@@ -442,3 +442,55 @@ def test_the_override_flag_carries_from_the_pipeline() -> None:
     cases = cases_from_applications([application(12, overrode_scorer=True)], {})
 
     assert cases[0].overrode_scorer is True
+
+
+# --------------------------------------------------------------------------- #
+# Every status must be ranked, or an analysis silently misreads the record
+#
+# Closing an interviewed application used to force `rejected_screen` or
+# `applied_no_reply`, because nothing else was terminal. Four rows were
+# flattened that way, and the next analysis read the flattening as evidence:
+# it reported that LinkedIn had produced no human contact when one of those
+# rows was the only interview of the batch.
+# --------------------------------------------------------------------------- #
+
+
+def test_every_outcome_status_is_ranked() -> None:
+    """A status absent from the ranking is invisible to the depth correlation.
+
+    Hand-maintained tables drift from the enums they mirror — the number
+    haystack in `validation.py` did exactly this. Derive the expectation from
+    the enum so adding a value fails here rather than in a conclusion.
+    """
+    from jobagent.core.evals import _LIVE_STATUSES, _OUTCOME_RANK
+    from jobagent.core.models import ApplicationStatus
+
+    unranked = set(ApplicationStatus) - set(_OUTCOME_RANK) - _LIVE_STATUSES
+    assert unranked == {ApplicationStatus.withdrew}, unranked
+
+
+def test_a_terminal_interview_outranks_a_screen_rejection() -> None:
+    """The bug, stated as an assertion. Reaching an interview and then being
+    turned down is further than being screened out, and the record has to say
+    so — the scorer is judged on this ranking."""
+    from jobagent.core.evals import _OUTCOME_RANK
+    from jobagent.core.models import ApplicationStatus
+
+    assert (
+        _OUTCOME_RANK[ApplicationStatus.rejected_after_interview]
+        > _OUTCOME_RANK[ApplicationStatus.rejected_screen]
+    )
+    assert (
+        _OUTCOME_RANK[ApplicationStatus.ghosted_after_contact]
+        > _OUTCOME_RANK[ApplicationStatus.applied_no_reply]
+    )
+
+
+def test_terminal_statuses_are_not_live() -> None:
+    """A closed application that still shows as live is the other half of the
+    same error — it never leaves the pipeline and never gets graded."""
+    from jobagent.core.evals import _LIVE_STATUSES
+    from jobagent.core.models import ApplicationStatus
+
+    assert ApplicationStatus.rejected_after_interview not in _LIVE_STATUSES
+    assert ApplicationStatus.ghosted_after_contact not in _LIVE_STATUSES
