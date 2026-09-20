@@ -42,7 +42,7 @@ def make_jd(**overrides) -> JobDescription:
         "work_type": WorkType.permanent,
         "work_arrangement": WorkArrangement.hybrid,
         "seniority": Seniority.manager,
-        "salary_range": SalaryRange(min_aud=170000, max_aud=200000, includes_super=False),
+        "salary_range": SalaryRange(min_aud=123000, max_aud=200000, includes_super=False),
         "must_haves": ["A strong software engineering background"],
         "nice_to_haves": ["Retail domain exposure"],
         "tech_stack": ["Kubernetes", "GitLab"],
