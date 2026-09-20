@@ -68,10 +68,12 @@ readable stdlib beats clever abstractions.
 
 ## Document format (non-negotiable)
 
-Source of truth: `~/Documents/AlanBronResumeMaster2026.docx`, written Aug 2026.
-Every value below was measured from that file, not chosen. The earlier version
-of this section was wrong on all six values — if a future spec and the master
-disagree, the master wins, and this section gets corrected.
+Source of truth: `~/Documents/AlanBronResumeMaster092026.docx`, revised Sep 2026.
+Every value below was measured from that file, not chosen, and re-measured on
+2026-09-20 when the September revision superseded the August one — all of them
+held, because that revision changed content rather than format. The earlier
+version of this section was wrong on all six values — if a future spec and the
+master disagree, the master wins, and this section gets corrected.
 
 ### Typography
 
