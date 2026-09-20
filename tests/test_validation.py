@@ -351,10 +351,13 @@ def test_an_agreed_explanation_is_not_an_invented_number(profile_factory) -> Non
 def test_a_scorer_only_note_does_not_license_a_number(profile_factory) -> None:
     """The reason the haystack is not simply every string in the model.
 
-    A real `note_for_scorer` reads "NEVER PUBLISH THE USER COUNT. The
-    deployment has [REDACTED] users." Scanning it would make 22 a supported figure, so
-    a draft publishing the one number the profile forbids would validate
-    clean — the invariant inverted by the check meant to enforce it.
+    A real `note_for_scorer` records a deployment's user count under an
+    instruction never to publish it. Scanning that note would make the figure
+    a *supported* number, so a draft publishing the one thing the profile
+    forbids would validate clean — the invariant inverted by the check meant
+    to enforce it. The figure itself is deliberately not repeated here: this
+    file is public, and quoting a never-publish number to explain why it must
+    not be published is the same mistake one level up.
     """
     from tests.conftest import edit_yaml
     from jobagent.core.validation import _profile_numbers
