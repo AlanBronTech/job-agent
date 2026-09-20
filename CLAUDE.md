@@ -135,21 +135,39 @@ on a tab stop at **16.93cm**.
 - Prompts live in `prompts/*.md` as versioned files, loaded at runtime. Never
   inline a long prompt in Python.
 - Structured output: instruct JSON-only, parse defensively, retry once on
-  parse failure with the error fed back.
+  parse failure with the error fed back. Drop keys the model volunteers rather
+  than failing the whole call on one stray field — the models set
+  `extra="forbid"`, and an `answer_outline_note` nobody asked for destroyed a
+  finished `prep` run after the tokens were paid for.
+- **Stream anything with a long output.** `prep` died three times at ~180s with
+  the API reachable and a small call answering in two seconds: a long
+  generation on a non-streamed connection, with the socket closing while the
+  model was still thinking. Connection errors and timeouts are transient and
+  are retried; a 401 is not.
 - Log every call to `runs.jsonl` — prompt name, tokens, cost, and what it was
   for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
   see the invariants below for why each field is there.
 
-## Where the project is — 2026-09-08
+## Where the project is — 2026-09-20
 
 **Built and working. Phases 0-5 and 7 are done; only Phase 8 (a local UI) is
 left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-465 tests pass, none touching the network. `main` is pushed to a **public**
-GitHub repo; `.env`, `profile/`, the database, `runs.jsonl` and
-`evals/cases.yaml` are gitignored and must stay that way.
+499 tests pass, none touching the network. `main` is pushed to a **public**
+GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`, `evals/cases.yaml`
+and `REVIEW-*.md` are gitignored and must stay that way.
+
+**The history was purged on 2026-09-20 and the repo re-verified.**
+`evals/cases.yaml` had been committed on 2026-09-01 and deleted the same day —
+deleting a file does not remove it from history, and fourteen named
+applications with candid judgments stayed reachable for nineteen days. Two more
+figures went with it: a salary expectation left in a test fixture, and a
+deployment user count the profile marks NEVER PUBLISH that had been quoted
+verbatim in a public test docstring to explain why it must never be published.
+A mirror of the pre-purge state is kept locally and must stay off any public
+host.
 
 The commands, and what each costs. These are **measured** — the mean per call
 over 183 real calls, from `jobagent spend` — not estimates. They were roughly
@@ -158,6 +176,7 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
 
     jobagent jd add --latest           ~$0.03   parse the ad just saved
     jobagent jd add --file <fragment>  ~$0.03   or name one in JD_DIR
+    jobagent jd amend <id> --file <f>  ~$0.03   re-parse in place; --append
     jobagent score <id>                ~$0.11   verdict, two scores, filters
     jobagent generate <id> --resume --cover  ~$0.13  documents + assessment
     jobagent prep <id>                 ~$0.11   interview questions
@@ -251,6 +270,35 @@ exists.
   id — `jd add` parses, then stores — so the command appends one attribution
   record once the id is known and `spend` joins on it. The call records are
   never rewritten; the log is append-only.
+- **A record that cannot express what happened will be read as evidence that
+  it did not.** `ApplicationStatus` had two terminal values, neither able to say
+  "reached an interview, then ended". Closing four such rows forced them to
+  `rejected_screen` or `applied_no_reply`, and the next analysis read the
+  flattening as fact: it reported that LinkedIn applications had produced no
+  human contact when one of them was the only interview of the batch. The
+  conclusion drawn was about which channel to trust. Before inferring anything
+  from a status field, ask what the enum is incapable of saying.
+- **A rule that only forbids gets satisfied by omission.** The DataLlama note
+  said never to imply Alan ran the Perpetual deployment. A generated CAREER
+  HIGHLIGHT obeyed it by stating the deployment and dropping his authorship
+  entirely, which implied ownership more strongly than the forbidden sentence
+  would have. Strengthening it to *require* naming his contribution then made
+  the model drop the entry rather than compose a compliant highlight. A
+  constraint changes what gets written; check what it displaced, not only that
+  the banned thing is absent.
+- **An ad is not immutable.** A recruiter answers a question in chat, or the
+  real job description arrives a week after the teaser — both happened inside
+  three days, and each forked one role across two records, the second holding
+  the better text and the first holding the application and every note.
+  `jd amend` re-parses in place; `--append` is for a conversation that grew.
+  The superseded text is kept, `ingested_at` is not touched, and any assessment
+  that predates the amendment is reported rather than silently trusted.
+- **A public repo is audited, not trusted.** "Public on GitHub" on a resume is
+  an invitation to look. Before making that claim, check the *history*, not the
+  working tree — at blob level, for salary figures, candid judgments about
+  named employers, and anything the profile marks never-publish. Two of the
+  three exposures found on 2026-09-20 had been introduced by tidying that only
+  touched the current version.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment
@@ -294,10 +342,23 @@ exists.
   does not distinguish a good scorer from a mediocre one and will not at the
   rate applications accumulate. Report it as "no regression", never as "71%
   accurate".
-- Current standing: the scorer agrees on 10 of 14, and **all four of its errors
-  are false negatives** — it says skip on roles Alan judges he fits. It weights
-  role shape and ad structure; he weights requirement match. **Do not tune this
-  on fourteen cases.** `generate --force` records each time he overrules it, and
+- Current standing, 2026-09-20: the scorer agrees on **26 of 31** labelled
+  cases, with **3 false negatives and, for the first time, 2 false positives**.
+  Separation between the cases worth applying to and the rest is 18 points of
+  mean score. Accuracy fell from 89% when the September labels were added —
+  that is not a regression, it is what happens when hard cases replace easy
+  agreements. **The separation is the number to watch, not the percentage.**
+- One of those false positives matters more than a number. Pet Circle scored
+  skip at 32/30; the verdict moved to apply only after `profile/roles.yaml` was
+  corrected to name the offshore teams, and Alan then judged the day not worth
+  it. **Adding true evidence to the profile moved a verdict the wrong way.**
+  The other is a false positive on *process*, not fit: the role matched, and
+  the day was spent without confirming an office location that could have
+  breached an absolute filter. The eval grades the day, not the scorer, and
+  here the two come apart.
+- Most labels are still `not_applied` cases where Alan agreed with a skip he
+  had just read. That is not independent evidence. **Do not tune on this.**
+  `generate --force` records each time he overrules the scorer, and
   `eval report` reports who was right; the threshold moves on that evidence.
 - That 10 is itself **±1 between runs of the same prompt**. Measured on
   2026-09-01: same-prompt score movement averages 6.3 points, and the cases
