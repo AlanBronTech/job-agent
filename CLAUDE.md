@@ -279,6 +279,19 @@ exists.
   human contact when one of them was the only interview of the batch. The
   conclusion drawn was about which channel to trust. Before inferring anything
   from a status field, ask what the enum is incapable of saying.
+- **An omission is invisible in a finished document.** `generate` prints every
+  profile entry the model used nowhere, because the same entry was dropped from
+  two resumes and both times the only way to notice was to already know it
+  should have been there — the second one was flagged in writing and sent
+  unedited anyway. It is a list, not a warning, and it is printed on clean runs
+  too: which evidence an ad rewards is the model's judgement and usually it is
+  right, so a validator cannot make the call and a warning that fired on every
+  run would be ignored within a week. Entry granularity, not bullet — "bullet 4
+  was not used" is noise on every run. An ongoing venture sorts first, because a
+  CAREER HIGHLIGHT is its only route onto the page and missing it there means
+  the entry is absent entirely. The list can name an entry whose substance
+  appears elsewhere under a different id; that is the cost of reporting rather
+  than enforcing, and it is the right cost.
 - **A rule that only forbids gets satisfied by omission.** The DataLlama note
   said never to imply Alan ran the Perpetual deployment. A generated CAREER
   HIGHLIGHT obeyed it by stating the deployment and dropping his authorship

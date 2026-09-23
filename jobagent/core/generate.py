@@ -37,6 +37,7 @@ from jobagent.adapters.docx_writer import (
 )
 from jobagent.adapters.llm import LLMClient, LLMError
 from jobagent.core.models import (
+    EvidenceStrength,
     FounderEntry,
     FitAssessment,
     JobDescription,
@@ -107,10 +108,28 @@ class _ResumeSelection(BaseModel):
     earlier_career_ids: list[str] = Field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class UnusedEntry:
+    """A profile entry the model was shown and then used nowhere.
+
+    Reported, never enforced. Which evidence an ad rewards is the model's
+    judgement and usually it is right — the point is that the judgement should
+    be visible while the documents are still being reviewed, not inferred
+    afterwards from a resume that has already been sent.
+    """
+
+    id: str
+    group: str
+    label: str
+    strong: bool
+    highlight_only: bool
+
+
 @dataclass
 class GeneratedResume:
     content: ResumeContent
     issues: list[ValidationIssue] = field(default_factory=list)
+    unused: list[UnusedEntry] = field(default_factory=list)
 
 
 @dataclass
@@ -151,7 +170,11 @@ def build_resume(
     content, reference_issues = _assemble(
         selection, profile, catalogue, today=today or date.today()
     )
-    return GeneratedResume(content=content, issues=issues + reference_issues)
+    return GeneratedResume(
+        content=content,
+        issues=issues + reference_issues,
+        unused=unused_entries(selection, profile),
+    )
 
 
 def _ask_for_selection(
@@ -486,6 +509,96 @@ def build_citable(profile: Profile) -> set[str]:
             continue
         citable.add(entry.id)
     return citable
+
+
+def unused_entries(
+    selection: "_ResumeSelection", profile: Profile
+) -> list[UnusedEntry]:
+    """Entries offered to the model that reached none of the generated sections.
+
+    Entry granularity, not bullet. "Bullet 4 of easy_signs was not used" is
+    noise on every run and would train the reader to skip the list; "datallama
+    appears nowhere" is the thing worth seeing, and it was missed twice because
+    nothing said it out loud.
+
+    An entry counts as used if it is a selected role, an earlier-career id, or
+    the evidence behind a highlight — cited either as the entry itself or as one
+    of its bullets.
+    """
+    used: set[str] = set()
+    for role in selection.roles:
+        used.add(role.role_id)
+        for ref in role.bullet_refs:
+            used.add(ref.split(".", 1)[0])
+    used.update(selection.earlier_career_ids)
+    for highlight in selection.highlights:
+        used.add(highlight.source_ref.split(".", 1)[0])
+
+    roles = profile.roles
+    groups = (
+        ("roles", roles.roles),
+        ("founder_track_record", roles.founder_track_record),
+        ("ai_capability", roles.ai_capability),
+        ("earlier_career", roles.earlier_career),
+    )
+    unused: list[UnusedEntry] = []
+    for group_name, group in groups:
+        for entry in group:
+            if entry.visibility is Visibility.scorer_only:
+                continue
+            if entry.id in used:
+                continue
+            unused.append(
+                UnusedEntry(
+                    id=entry.id,
+                    group=group_name,
+                    label=_entry_label(entry),
+                    strong=_is_strong(entry),
+                    highlight_only=isinstance(entry, FounderEntry)
+                    and _is_ongoing(entry),
+                )
+            )
+
+    # Most consequential first, so the ordering does not depend on where an
+    # entry happens to sit in the YAML. An ongoing venture leads because a
+    # highlight is its only route onto the page at all: miss it there and it is
+    # absent from the resume entirely, which is how DataLlama went twice.
+    order = {name: index for index, (name, _) in enumerate(groups)}
+    unused.sort(
+        key=lambda e: (not e.highlight_only, not e.strong, order[e.group], e.id)
+    )
+    return unused
+
+
+def _entry_label(entry) -> str:
+    """A human-readable name, whichever group the entry came from.
+
+    The four groups do not share field names — a role has `title`, a founder
+    entry has `role`, an AI capability entry has only `label`.
+    """
+    label = getattr(entry, "label", None)
+    if label:
+        return str(label)
+    company = getattr(entry, "company", None) or ""
+    role = getattr(entry, "title", None) or getattr(entry, "role", None) or ""
+    if company and role:
+        return f"{company} · {role}"
+    return str(company or role or entry.id)
+
+
+def _is_strong(entry) -> bool:
+    """Whether the profile rates this entry's evidence as strong.
+
+    `evidence_strength` sits on each bullet for the three grouped types and on
+    the entry itself for earlier-career roles, which have no bullets.
+    """
+    own = getattr(entry, "evidence_strength", None)
+    if own is not None:
+        return own is EvidenceStrength.strong
+    return any(
+        bullet.evidence_strength is EvidenceStrength.strong
+        for bullet in getattr(entry, "bullets", [])
+    )
 
 
 def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:

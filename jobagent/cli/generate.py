@@ -23,6 +23,7 @@ from jobagent.cli.history import render_company_history
 from jobagent.core import history, store
 from jobagent.core.generate import (
     GenerateError,
+    UnusedEntry,
     build_answers,
     build_cover_letter,
     build_resume,
@@ -134,6 +135,7 @@ def generate(
     folder = docs.application_folder(config.output_dir, jd, when=today)
     issues: list[ValidationIssue] = []
     written: list[Path] = []
+    unused: list[UnusedEntry] = []
 
     if resume:
         with console.status("Selecting content for the resume…"):
@@ -143,6 +145,7 @@ def generate(
                 err_console.print(f"[bold red]Could not build the resume.[/] {exc}")
                 raise typer.Exit(code=1)
         issues += built.issues
+        unused = built.unused
         try:
             written.append(
                 write_resume(
@@ -197,7 +200,7 @@ def generate(
     )
     written.append(docs.write_text(folder, "job-ad.md", docs.job_ad_markdown(jd)))
 
-    _report(folder, written, issues)
+    _report(folder, written, issues, unused)
 
 
 def _planned_documents(
@@ -260,11 +263,53 @@ def _refuse_to_clobber(
 # --------------------------------------------------------------------------- #
 
 
-def _report(folder: Path, written: list[Path], issues: list[ValidationIssue]) -> None:
+def _report(
+    folder: Path,
+    written: list[Path],
+    issues: list[ValidationIssue],
+    unused: list[UnusedEntry] | None = None,
+) -> None:
     console.print(f"\n[bold]{folder}[/]")
     for path in written:
         console.print(f"  [green]·[/] {path.name}")
 
+    _report_issues(issues)
+    _report_unused(unused or [])
+
+
+def _report_unused(unused: list[UnusedEntry]) -> None:
+    """Profile entries the model used nowhere.
+
+    Printed every run, after the validation result, and deliberately not a
+    warning: which evidence an ad rewards is the model's judgement and usually
+    it is right. It exists because an omission is invisible in a finished
+    document — DataLlama was dropped from a resume twice, and both times the
+    only way to notice was to already know it should have been there. A
+    validator cannot decide this; a reader can, and only while still reading.
+    """
+    if not unused:
+        return
+
+    console.print(f"\n[bold]Not used[/] [dim]{len(unused)} profile entr(ies)[/]")
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column()
+    for entry in unused:
+        notes = []
+        if entry.strong:
+            notes.append("strong evidence")
+        if entry.highlight_only:
+            notes.append("ongoing venture — a CAREER HIGHLIGHT is its only slot")
+        suffix = f"  [yellow]({'; '.join(notes)})[/]" if notes else ""
+        table.add_row(entry.id, f"{entry.label}{suffix}")
+    console.print(table)
+    console.print(
+        "[dim]Selection is the model's call and is usually right. Check this "
+        "list against the ad before sending, not after.[/]"
+    )
+
+
+def _report_issues(issues: list[ValidationIssue]) -> None:
     if not issues:
         console.print("\n[green]No validation issues.[/]")
         return
