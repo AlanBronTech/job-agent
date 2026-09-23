@@ -312,6 +312,15 @@ def _assemble(
 # A salutation the model wrote itself. Short, opens with "Dear" or "To", and
 # ends at a comma or colon — a body sentence beginning "Dear" would not.
 _SALUTATION = re.compile(r"^(dear|to)\b[^.]{0,60}[,:]$", re.IGNORECASE)
+# Bare closings only. A line has to be nothing but the sign-off to match, so a
+# sentence like "Thanks for contacting me." — which one real letter ends on —
+# is left alone.
+_SIGNOFF = re.compile(
+    r"^(regards|kind regards|warm regards|best regards|sincerely|"
+    r"yours (sincerely|faithfully)|best wishes|best|cheers|thanks|thank you)"
+    r"\s*[,.]?$",
+    re.IGNORECASE,
+)
 
 
 def strip_letter_salutation(text: str) -> str:
@@ -331,6 +340,55 @@ def strip_letter_salutation(text: str) -> str:
     while lines and _SALUTATION.match(lines[0].strip()):
         lines.pop(0)
     return "\n".join(lines).lstrip("\n")
+
+
+def strip_letter_signoff(text: str, *, name: str | None = None) -> str:
+    """Drop a closing the model supplied despite being told not to.
+
+    The mirror of `strip_letter_salutation`, for the same reason and found the
+    same way: the renderer writes the closing and the name from
+    `CoverLetterContent`, so a model that also signs off produces a letter
+    ending "Regards, Alan Bron" twice. One went to an employer before anyone
+    noticed, because the very end of a document is the last place a reader
+    looks — the salutation fix caught the top of the letter and nobody checked
+    the bottom.
+
+    Trailing blank lines, a bare sign-off and a line that is just Alan's name
+    are dropped in any order until real content is reached. Only a *bare*
+    sign-off matches: one letter's final sentence is "Thanks for contacting
+    me.", and a rule loose enough to treat that as a closing would delete it.
+    """
+    lines = text.rstrip().splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    # A bare sign-off inside the last three lines ends the body, and everything
+    # after it goes with it. Walking up one line at a time instead would stop at
+    # whatever name the model signed: an unrecognised spelling blocked the strip
+    # entirely and left the closing in place, which is how this was first
+    # written and why a test caught it.
+    for offset in range(1, min(3, len(lines)) + 1):
+        if _SIGNOFF.match(lines[-offset].strip()):
+            lines = lines[: -offset]
+            break
+
+    while lines:
+        last = lines[-1].strip()
+        if not last or (name and _is_name_line(last, name)):
+            lines.pop()
+        else:
+            break
+    return "\n".join(lines).rstrip("\n")
+
+
+def _is_name_line(line: str, name: str) -> bool:
+    """Whether a line is just the candidate's name, however it was decorated.
+
+    One letter signed off `-- Alan Bron`, so the leading dashes have to go
+    before comparing.
+    """
+    candidate = line.strip().lstrip("-–—*_ ").strip()
+    return candidate.casefold() == name.strip().casefold()
 
 
 def build_cover_letter(
@@ -359,7 +417,9 @@ def build_cover_letter(
         profile,
         max_words=COVER_LETTER_MAX_WORDS,
         context="The cover letter",
-        clean=strip_letter_salutation,
+        clean=lambda text: strip_letter_signoff(
+            strip_letter_salutation(text), name=profile.roles.person.name
+        ),
     )
 
 

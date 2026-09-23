@@ -22,6 +22,7 @@ from jobagent.core.generate import (
     build_cover_letter,
     build_citable,
     strip_letter_salutation,
+    strip_letter_signoff,
     build_resume,
     format_dates,
 )
@@ -545,6 +546,66 @@ def test_prose_that_merely_opens_with_dear_survives() -> None:
     assert strip_letter_salutation(text) == text
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Body text here.\n\nRegards,\nAlan Bron",
+        "Body text here.\nRegards,\nAlan Bron\n\n",
+        "Body text here.\n\nKind regards,\nAlan Bron",
+        "Body text here.\n\nSincerely,\n-- Alan Bron",
+        "Body text here.\n\nAlan Bron",
+        "Body text here.\n\nCheers,",
+    ],
+)
+def test_a_signoff_the_model_wrote_is_removed(text: str) -> None:
+    """The renderer writes the closing and the name, so a model that signs off
+    too produces a letter ending 'Regards, Alan Bron' twice. One went out to an
+    employer before anyone noticed: the salutation fix caught the top of the
+    letter and nobody checked the bottom."""
+    assert strip_letter_signoff(text, name="Alan Bron") == "Body text here."
+
+
+def test_a_closing_sentence_is_not_mistaken_for_a_signoff() -> None:
+    """One real letter's final sentence is exactly this. A rule loose enough to
+    treat any line opening with 'thanks' as a closing would delete it."""
+    text = "I'd like to talk.\n\nThanks for contacting me."
+
+    assert strip_letter_signoff(text, name="Alan Bron") == text
+
+
+def test_a_letter_without_a_signoff_is_untouched() -> None:
+    text = "Worth a conversation if the location and comp line up."
+
+    assert strip_letter_signoff(text, name="Alan Bron") == text
+
+
+def test_the_name_is_only_stripped_when_it_is_the_whole_line() -> None:
+    """A sentence that happens to contain the name is body text."""
+    text = "The platform Alan Bron built is still in production."
+
+    assert strip_letter_signoff(text, name="Alan Bron") == text
+
+
+def test_stripping_without_a_name_still_removes_the_closing() -> None:
+    text = "Body text here.\n\nRegards,"
+
+    assert strip_letter_signoff(text) == "Body text here."
+
+
+@pytest.mark.parametrize("signature", ["A. Bron-Smith", "alan bron", "Alan"])
+def test_an_unrecognised_signature_does_not_block_the_strip(signature: str) -> None:
+    """The regression a test caught before this shipped.
+
+    The first version walked up one line at a time and stopped at whatever the
+    model signed, so a name it did not recognise left the closing in place —
+    exactly the defect being fixed. A bare sign-off now ends the body whatever
+    follows it.
+    """
+    text = f"Body text here.\n\nRegards,\n{signature}"
+
+    assert strip_letter_signoff(text, name="Alan Bron") == "Body text here."
+
+
 def test_the_generated_letter_is_addressed_once(profile, jd, assessment) -> None:
     """End to end, through the builder that renders into the .docx."""
     client = TextClient("Dear Hiring Manager,\n\nI led 15 engineers.")
@@ -553,3 +614,13 @@ def test_the_generated_letter_is_addressed_once(profile, jd, assessment) -> None
 
     assert letter.text.lower().count("dear hiring manager") == 0
     assert letter.text.startswith("I led 15 engineers.")
+
+
+def test_the_generated_letter_is_signed_off_once(profile, jd, assessment) -> None:
+    """End to end. The renderer appends the closing, so the body must not."""
+    client = TextClient("I led 15 engineers.\n\nRegards,\nAlan Bron")
+
+    letter = build_cover_letter(jd, profile, assessment, client=client)
+
+    assert "regards" not in letter.text.lower()
+    assert letter.text == "I led 15 engineers."

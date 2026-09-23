@@ -312,6 +312,22 @@ exists.
   the entry is absent entirely. The list can name an entry whose substance
   appears elsewhere under a different id; that is the cost of reporting rather
   than enforcing, and it is the right cost.
+- **A fix at the top of a document does not cover the bottom.** The prompt says
+  to return the letter body only, because the renderer writes the salutation,
+  the closing and the name. Two early letters were addressed twice and
+  `strip_letter_salutation` was added to drop what the model sent anyway. The
+  same model then signed off as well, so a letter ended "Regards, Alan Bron"
+  twice and went to an employer that way — nobody checks the last line of a
+  document they have already read. Both ends are stripped in `core/` now, and
+  only a *bare* closing matches: one letter's final sentence is "Thanks for
+  contacting me." and a looser rule would delete it. The first version of the
+  strip walked up one line at a time and stopped at whatever name was signed,
+  so an unfamiliar spelling left the closing in place — a test caught that
+  before it shipped. **The length rule was already enforced and needed nothing:
+  `_check_length` is a blocker at 350 words and every letter's body passes it.
+  Measure the body, not the rendered page — counting the name, contact line,
+  date, salutation and closing puts a compliant letter over the limit and
+  invents a defect that is not there.**
 - **A rule that only forbids gets satisfied by omission.** The DataLlama note
   said never to imply Alan ran the Perpetual deployment. A generated CAREER
   HIGHLIGHT obeyed it by stating the deployment and dropping his authorship
