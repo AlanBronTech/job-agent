@@ -177,6 +177,7 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent jd add --latest           ~$0.03   parse the ad just saved
     jobagent jd add --file <fragment>  ~$0.03   or name one in JD_DIR
     jobagent jd amend <id> --file <f>  ~$0.03   re-parse in place; --append
+    jobagent jd delete <id>            free     a duplicate record; cascades
     jobagent score <id>                ~$0.11   verdict, two scores, filters
     jobagent generate <id> --resume --cover  ~$0.13  documents + assessment
     jobagent prep <id>                 ~$0.11   interview questions
@@ -286,6 +287,21 @@ exists.
   the model drop the entry rather than compose a compliant highlight. A
   constraint changes what gets written; check what it displaced, not only that
   the banned thing is absent.
+- **Deleting an ad is not the same as deleting a decision.** `jd delete` exists
+  for a genuine duplicate — a recruiter thread ingested twice as JD 46 and 47 —
+  and refuses when an application row exists, because foreign keys cascade and
+  that row is the pipeline record `eval` is built from. It names the assessments
+  it will take with it before it takes them, and it never touches OUTPUT_DIR:
+  46 and 47 both resolved to the *same* folder, so deleting documents alongside
+  the row would have destroyed the resume that was actually sent. A skip is a
+  result worth keeping, not rubbish to tidy away.
+- **When a record has forked, amend the one holding the application.** Do not
+  move the application to the record with the better text. Repointing it swaps
+  the ad out from under the application with no marker, and the fuller text
+  usually arrived *after* the decision to apply — so `eval`, which builds from
+  the `applications` table, would grade that decision against text that was not
+  observable when it was made. `jd amend` keeps `superseded_text`, sets
+  `amended_at`, leaves `ingested_at` alone and flags the stale assessment.
 - **An ad is not immutable.** A recruiter answers a question in chat, or the
   real job description arrives a week after the teaser — both happened inside
   three days, and each forked one role across two records, the second holding

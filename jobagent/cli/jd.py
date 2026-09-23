@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from jobagent.adapters import mhtml, pdf
+from jobagent.adapters import docs, mhtml, pdf
 from jobagent.adapters.adtext import ExtractedAd
 from jobagent.adapters.llm import (
     CallType,
@@ -345,6 +345,127 @@ def show(jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd lis
         raise typer.Exit(code=1)
 
     _render_jd(jd)
+
+
+@app.command("delete")
+def delete(
+    jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd list`."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Delete even though an application is recorded against it.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip the confirmation prompt.",
+    ),
+) -> None:
+    """Delete a stored ad, for a duplicate record that should never have existed.
+
+    This is for a genuine duplicate — the same ad ingested twice — not for an
+    ad that turned out to be a skip. A skip is a result worth keeping: it is
+    what `eval` grades the scorer against, and `history` reads it back when the
+    same company posts again.
+
+    Foreign keys cascade, so the assessments go with it. That is the cost, and
+    it is reported before anything is removed rather than discovered after.
+    Documents already written to OUTPUT_DIR are never touched — two ads can
+    resolve to the same folder, so deleting files here could destroy another
+    application's documents.
+    """
+    config = get_config()
+    try:
+        with store.open_store(config.db_path) as conn:
+            jd = store.get_jd(conn, jd_id)
+            if jd is None:
+                err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
+                raise typer.Exit(code=1)
+
+            application = store.get_application(conn, jd_id)
+            assessments = store.list_assessments(conn, jd_id)
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    label = f"JD {jd_id} — {jd.title}" + (f" · {jd.company}" if jd.company else "")
+    console.print(f"[bold]{label}[/]")
+
+    if application is not None and not force:
+        err_console.print(
+            f"\n[bold yellow]An application is recorded against this ad.[/] "
+            f"Status [bold]{application.status.value}[/], "
+            f"{len(application.notes.splitlines())} line(s) of notes."
+        )
+        err_console.print(
+            "\n[dim]Deleting the ad deletes that row with it — the status, the "
+            "channel, the worth label and every note. That is the pipeline "
+            "record and what `eval` is built from, and none of it is "
+            "recoverable. Move the application to the record you are keeping "
+            "first, or pass --force if the row is genuinely worthless.[/]"
+        )
+        raise typer.Exit(code=2)
+
+    console.print("\n[bold]This will remove:[/]")
+    console.print(f"  the ad itself, ingested {jd.ingested_at:%-d %B %Y}")
+    if assessments:
+        console.print(
+            f"  [bold yellow]{len(assessments)} assessment(s)[/], by cascade — "
+            "a hole in what `eval` reads"
+        )
+        for item in assessments:
+            console.print(
+                f"    [dim]{item.scored_at:%Y-%m-%d}  {item.overall_score}/100  "
+                f"{item.verdict.value}[/]"
+            )
+    if application is not None:
+        console.print(
+            f"  [bold red]the application row[/] ({application.status.value}), "
+            "by cascade — forced"
+        )
+
+    for folder in _folders_for(config.output_dir, jd):
+        console.print(
+            f"\n[dim]{folder} stays on disk, untouched. Documents are state; "
+            "another ad may resolve to the same folder.[/]"
+        )
+
+    if not yes:
+        console.print()
+        if not typer.confirm("Delete it? This cannot be undone"):
+            err_console.print("[dim]Left alone.[/]")
+            raise typer.Exit(code=1)
+
+    try:
+        with store.open_store(config.db_path) as conn:
+            removed = store.delete_jd(conn, jd_id)
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    if not removed:
+        err_console.print(f"[bold red]Nothing was deleted for id {jd_id}.[/]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Deleted[/] {label}.")
+
+
+def _folders_for(output_dir: Path, jd: JobDescription) -> list[Path]:
+    """Output folders that belong to this ad, in any month.
+
+    `application_folder_path` names one month. The same ad generated in an
+    earlier month sits in a differently prefixed folder, and the point here is
+    to report everything that survives the delete, not just this month's.
+    """
+    this_month = docs.application_folder_path(output_dir, jd)
+    _, _, suffix = this_month.name.partition("_")
+    if not suffix:
+        return []
+    parent = this_month.parent
+    if not parent.is_dir():
+        return []
+    return sorted(path for path in parent.glob(f"*_{suffix}") if path.is_dir())
 
 
 # --------------------------------------------------------------------------- #
