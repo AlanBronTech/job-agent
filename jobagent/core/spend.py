@@ -55,6 +55,11 @@ class SpendReport:
     # 4.6's rate, so every record before 2026-09-08 overstates by about a third.
     repriced_usd: float | None
     unpriced_calls: int
+    # Calls that produced nothing: a timeout or a dropped connection, logged
+    # with `outcome: error`. Held apart from `calls` because a failure has no
+    # token counts to price and would otherwise be indistinguishable from a
+    # free call — which is how a timed-out parse went unnoticed entirely.
+    failed_calls: int
     models: tuple[str, ...]
     first_ts: float | None
     last_ts: float | None
@@ -141,10 +146,19 @@ def build_report(
     if since is not None:
         calls = [r for r in calls if (r.get("ts") or 0) >= since]
 
-    timestamps = [r["ts"] for r in calls if isinstance(r.get("ts"), (int, float))]
+    # Separated before any aggregation. A failed call is real — it was billed
+    # for whatever it generated — but it has no usable cost, so folding it into
+    # the totals would add a zero and hide the fact that money went missing.
+    failed = [r for r in calls if _is_failure(r)]
+    calls = [r for r in calls if not _is_failure(r)]
+
+    timestamps = [
+        r["ts"] for r in calls + failed if isinstance(r.get("ts"), (int, float))
+    ]
 
     return SpendReport(
         calls=len(calls),
+        failed_calls=len(failed),
         total_usd=sum(r.get("cost_usd") or 0.0 for r in calls),
         repriced_usd=_reprice(calls, price_lookup),
         unpriced_calls=sum(1 for r in calls if _is_unpriced(r)),
@@ -202,6 +216,16 @@ def _source_of(record: dict) -> str:
     "unknown" — would put most of the history in a bucket that means nothing.
     """
     return str(record.get("source") or "cli")
+
+
+def _is_failure(record: dict) -> bool:
+    """A call that produced nothing.
+
+    Absence of `outcome` means success: every record written before failures
+    were logged at all predates the field, and treating those as failures would
+    rewrite the whole history as broken.
+    """
+    return str(record.get("outcome") or "ok") == "error"
 
 
 def _is_unpriced(record: dict) -> bool:

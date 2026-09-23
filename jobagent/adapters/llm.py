@@ -192,7 +192,7 @@ class LLMClient(ABC):
         single overloaded response should not lose a batch of job ads midway.
         """
         response = self._complete_with_retry(
-            system=system, prompt=prompt, max_tokens=max_tokens
+            system=system, prompt=prompt, max_tokens=max_tokens, label=label
         )
         response.label = label
         response.cost_usd = estimate_cost(
@@ -204,7 +204,12 @@ class LLMClient(ABC):
         return response
 
     def _complete_with_retry(
-        self, *, system: str | None, prompt: str, max_tokens: int
+        self,
+        *,
+        system: str | None,
+        prompt: str,
+        max_tokens: int,
+        label: str | None = None,
     ) -> LLMResponse:
         delay = RETRY_BASE_DELAY
         for attempt in range(1, RETRY_ATTEMPTS + 1):
@@ -212,11 +217,38 @@ class LLMClient(ABC):
                 return self._complete(
                     system=system, prompt=prompt, max_tokens=max_tokens
                 )
-            except RetryableLLMError:
-                if attempt == RETRY_ATTEMPTS:
+            except LLMError as exc:
+                if not isinstance(exc, RetryableLLMError):
+                    # Terminal: a 401, or a daily quota that backing off cannot
+                    # clear. Logged all the same — it produced nothing, and
+                    # "no record" read as "never happened" is the bug here.
+                    self._log_failure(label, exc, attempt=attempt, retrying=False)
                     raise
-                time.sleep(delay)
-                delay *= 2
+                failure: RetryableLLMError = exc
+            except Exception as exc:  # noqa: BLE001 - narrowed immediately
+                # A transport failure that got past the provider's own handler.
+                # Classified here as well as there, so the guarantee lives in
+                # this provider-agnostic loop instead of depending on every
+                # client to remember. `httpx.ReadTimeout` escaped the Anthropic
+                # handler exactly this way and killed a command outright.
+                if not _is_transport_failure(exc):
+                    raise
+                failure = RetryableLLMError(
+                    f"Transport failure ({self.model}): "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                failure.__cause__ = exc
+
+            # Every failed attempt is logged, not only the one that ends the
+            # command. An attempt a retry later rescues still generated tokens
+            # and was still billed; omitting it is how a timed-out `jd add`
+            # charged for a parse that `spend` could not see.
+            last = attempt == RETRY_ATTEMPTS
+            self._log_failure(label, failure, attempt=attempt, retrying=not last)
+            if last:
+                raise failure
+            time.sleep(delay)
+            delay *= 2
         raise AssertionError("unreachable")  # pragma: no cover
 
     def complete_json(
@@ -293,6 +325,63 @@ class LLMClient(ABC):
             "price_unknown": response.cost_usd is None,
             # The one field that explains a failed call after the fact.
             "truncated": response.truncated,
+            # Explicit on new records; readers treat its absence as success,
+            # because every record written before failures were logged at all
+            # predates the field.
+            "outcome": "ok",
+        }
+        try:
+            with open(self._runs_log_path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record) + "\n")
+        except OSError:
+            pass
+
+
+    def _log_failure(
+        self,
+        label: str | None,
+        exc: Exception,
+        *,
+        attempt: int,
+        retrying: bool,
+    ) -> None:
+        """Append a record for a call that produced nothing.
+
+        A failed call is still billed for whatever it generated before the
+        socket closed, and the log was written on success only — so a timeout
+        left no trace at all and `jobagent spend` was silently low by the cost
+        of the attempt. "No record" and "never happened" looked identical.
+
+        Token counts are null because there is no response to read them from:
+        the failure happens inside the provider call, before any usage is
+        returned. That is a real limit, and `outcome` says so rather than
+        letting a null cost imply a free call — the same reasoning as
+        `price_unknown`, one layer earlier.
+        """
+        if self._runs_log_path is None:
+            return
+        # `provider` is declared by each concrete client, not by the base class.
+        provider = getattr(self, "provider", None)
+        record = {
+            "ts": time.time(),
+            "label": label,
+            "command": self.context.command,
+            "jd_id": self.context.jd_id,
+            "source": self.context.source,
+            "run_id": self.context.run_id,
+            "provider": provider.value if provider is not None else None,
+            "model": self.model,
+            "input_tokens": None,
+            "output_tokens": None,
+            "cost_usd": None,
+            # Not a pricing gap: the price table is fine, there is simply no
+            # usage to price. `outcome` is what distinguishes the two.
+            "price_unknown": False,
+            "truncated": False,
+            "outcome": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+            "attempt": attempt,
+            "retried": retrying,
         }
         try:
             with open(self._runs_log_path, "a", encoding="utf-8") as handle:
@@ -414,6 +503,13 @@ class AnthropicClient(LLMClient):
                     "Workspaces), or issue a workspace-scoped key instead."
                 ) from exc
             raise LLMError(f"Anthropic call failed ({self.model}): {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - narrowed immediately below
+            if _is_transport_failure(exc):
+                raise RetryableLLMError(
+                    f"Anthropic transport failure ({self.model}): "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            raise
 
         text = "".join(
             block.text for block in message.content if block.type == "text"
@@ -472,6 +568,13 @@ class GeminiClient(LLMClient):
                     f"Gemini transient failure ({self.model}): {exc}"
                 ) from exc
             raise LLMError(f"Gemini call failed ({self.model}): {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - narrowed immediately below
+            if _is_transport_failure(exc):
+                raise RetryableLLMError(
+                    f"Gemini transport failure ({self.model}): "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            raise
 
         usage = result.usage_metadata
         return LLMResponse(
@@ -481,6 +584,28 @@ class GeminiClient(LLMClient):
             input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
             output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
         )
+
+
+def _is_transport_failure(exc: BaseException) -> bool:
+    """A transport-level failure from the HTTP stack underneath a provider SDK.
+
+    `anthropic.APIError` does not cover these. A stream that dies while the
+    model is still generating raises the raw transport exception out of the
+    iteration, not an SDK error — `httpx.ReadTimeout` surfaced as an unhandled
+    traceback and killed a `jd add` mid-batch, while the retry wrapper that
+    exists for exactly this never saw it. A plain re-run of the same command
+    succeeded immediately, which is the definition of transient.
+
+    Matched by class name rather than by importing httpx, which is a transitive
+    dependency of the provider SDKs and not one this project declares. Every
+    timeout and network error in that library descends from `TransportError`,
+    so one name covers the family.
+    """
+    return any(
+        klass.__module__.split(".")[0] == "httpx"
+        and klass.__name__ == "TransportError"
+        for klass in type(exc).__mro__
+    )
 
 
 def _is_daily_quota(exc: Exception) -> bool:

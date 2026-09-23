@@ -68,7 +68,7 @@ def spend(
         price_lookup=load_prices().lookup,
     )
 
-    if not report.calls:
+    if not report.calls and not report.failed_calls:
         console.print("[dim]No calls match.[/]")
         return
 
@@ -115,6 +115,15 @@ def _render_header(report) -> None:
         console.print(
             f"[yellow]{report.unpriced_calls} call(s) had no price and are "
             f"missing from the total.[/] Add the model to prices.yaml."
+        )
+
+    if report.failed_calls:
+        console.print(
+            f"[yellow]{report.failed_calls} call(s) failed and produced "
+            f"nothing.[/] They were billed for whatever was generated before "
+            f"the connection dropped, and there is no usage to price it from, "
+            f"so the total above is low by an unknown amount. Before this was "
+            f"logged, a failed call left no record at all."
         )
 
 

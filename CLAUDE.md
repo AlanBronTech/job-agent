@@ -144,6 +144,26 @@ on a tab stop at **16.93cm**.
   generation on a non-streamed connection, with the socket closing while the
   model was still thinking. Connection errors and timeouts are transient and
   are retried; a 401 is not.
+- **A stream dies outside the SDK's exception hierarchy.** `except
+  anthropic.APIError` does not catch `httpx.ReadTimeout` raised out of the
+  iteration while the model is still generating, so the retry wrapper built for
+  precisely that never saw it and a `jd add` died on an unhandled traceback — a
+  plain re-run succeeded immediately. Transport failures are now classified in
+  `_complete_with_retry`, the provider-agnostic loop, as well as in each
+  client: a guarantee that depends on every future client remembering is not a
+  guarantee. Match on `httpx.TransportError` in the MRO by name rather than
+  importing httpx, which is the SDKs' dependency and not this project's.
+- **A failed call is logged, or its cost disappears.** The run log was written
+  on success only, so a timed-out parse left no record at all while still
+  being billed for what it generated — `spend` was silently low and "no
+  record" was indistinguishable from "never happened". Every failed attempt now
+  appends `outcome: "error"`, including attempts a retry later rescues, because
+  those were billed too. Token counts are null and honestly so: the failure
+  happens inside the provider call, before any usage comes back. `price_unknown`
+  stays false — the price table is fine, there is simply nothing to price, and
+  conflating the two would send the next reader to `prices.yaml` for no reason.
+  Anything reading the log treats a missing `outcome` as success, because every
+  record predating the field is one.
 - Log every call to `runs.jsonl` — prompt name, tokens, cost, and what it was
   for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
   see the invariants below for why each field is there.
