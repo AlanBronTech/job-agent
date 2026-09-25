@@ -245,7 +245,8 @@ exists.
   write* parked there bound only the model that does not write: the DataLlama
   attribution rule sat in `note_for_scorer` for a week and a highlight broke
   it. `note_for_writer` is printed into the generator's catalogue under its
-  entry or bullet and excluded from the number haystack. Rules only — never a
+  entry or bullet, and under each story the letter and answers prompts are
+  given, and is excluded from the number haystack. Rules only — never a
   fact the writer has to be kept from. Brightside's `sector: insurance` was
   the same shape of bug the other way round: a field the writer *did* see,
   contradicting a note it did not.

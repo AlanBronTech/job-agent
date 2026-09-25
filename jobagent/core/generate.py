@@ -744,6 +744,7 @@ def _render_stories(profile: Profile) -> str:
             f"  action: {story.action}\n"
             f"  result: {story.result}"
         )
+        _append_writer_note(lines, story.note_for_writer, "  ")
     explanations = profile.stories.explanations.model_dump(exclude_none=True)
     if explanations:
         lines.append("\n## Agreed explanations — use these words, do not invent others")

@@ -230,6 +230,9 @@ class Story(_Base):
     result: str
     what_id_do_differently: str | None = None
     note_for_scorer: str | None = None
+    # The cover letter and answers prompts see the story but not its notes.
+    # See Bullet.note_for_writer.
+    note_for_writer: str | None = None
 
 
 class Explanations(_Base):

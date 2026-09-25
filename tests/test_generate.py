@@ -186,6 +186,35 @@ def test_a_writer_note_reaches_the_generator_and_a_scorer_note_does_not(
     assert not any("SECRET CONTEXT" in line for line in rendered)
 
 
+def test_a_story_writer_note_reaches_the_letter_and_its_scorer_note_does_not(
+    profile_factory,
+) -> None:
+    """The cover letter and answers prompts are given the stories, so a story's
+    writing rule has to travel with it — the underperformer story's rule about
+    what evidence to cite had been invisible to the letter."""
+    from tests.conftest import edit_yaml
+    from jobagent.core.generate import _render_stories
+
+    def add_notes(dst):
+        edit_yaml(
+            dst / "stories.yaml",
+            lambda data: data["stories"][0].update(
+                {"note_for_writer": "Cite the output record only.",
+                 "note_for_scorer": "SECRET CONTEXT"}
+            ),
+        )
+
+    profile = load_profile(profile_factory(add_notes))
+    story = profile.stories.stories[0]
+    rendered = _render_stories(profile).splitlines()
+
+    result = next(
+        i for i, line in enumerate(rendered) if line == f"  result: {story.result}"
+    )
+    assert rendered[result + 1] == "  writer note: Cite the output record only."
+    assert not any("SECRET CONTEXT" in line for line in rendered)
+
+
 def test_a_writer_note_is_not_copied_into_the_bullet_catalogue(profile_factory) -> None:
     """The catalogue is what gets copied verbatim onto the page."""
     from tests.conftest import edit_yaml
