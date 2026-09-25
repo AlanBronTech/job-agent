@@ -126,7 +126,8 @@ on a tab stop at **16.93cm**.
 ### Length
 
 - Cover letters: one page, under 350 words (see `profile/voice.md`)
-- Resumes: two pages max
+- Resumes: two pages preferred, three acceptable (Alan, 2026-09-25). Not a
+  reason to cut evidence or to flag a finished resume as a defect.
 
 ## LLM usage
 
