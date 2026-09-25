@@ -378,6 +378,34 @@ def test_a_scorer_only_note_does_not_license_a_number(profile_factory) -> None:
     )
 
 
+def test_a_writer_note_does_not_license_a_number(profile_factory) -> None:
+    """A writer note is a rule, not a claim. "Never quote the 4711 figure"
+    must not make 4711 a supported number."""
+    from tests.conftest import edit_yaml
+
+    def add_note(dst):
+        edit_yaml(
+            dst / "roles.yaml",
+            lambda data: data["founder_track_record"][0]["bullets"][0].update(
+                {"note_for_writer": "Never quote the 4711 figure."}
+            ),
+        )
+
+    profile = load_profile(profile_factory(add_note))
+
+    assert "unsupported number" in rules(
+        validate_prose("The deployment has 4711 users.", profile)
+    )
+
+
+def test_a_writer_note_label_in_a_bullet_is_caught() -> None:
+    from jobagent.core.validation import validate_rendered
+
+    issues = validate_rendered("Delivered the platform. writer note: lead with it.")
+
+    assert [issue.rule for issue in issues] == ["internal reference"]
+
+
 def test_a_scorer_only_phrase_matches_across_whitespace(profile) -> None:
     """Hidden labels are checked as phrases, not raw substrings.
 

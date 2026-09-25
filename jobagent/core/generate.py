@@ -667,16 +667,24 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
     lines: list[str] = []
     roles = profile.roles
 
+    lines.append(
+        "(A `writer note:` line is a rule about how the entry or bullet above it "
+        "may be written about. It is not content: never copy it onto the page. "
+        "It binds every highlight, PROFILE sentence and letter sentence that "
+        "draws on that material.)\n"
+    )
     lines.append("## Roles (EXPERIENCE section)")
     for role in roles.roles:
         if role.visibility is Visibility.scorer_only:
             continue
         lines.append(f"\n{role.id} — {role.title} · {role.company} ({role.sector})")
+        _append_writer_note(lines, role.note_for_writer, "  ")
         for index, bullet in enumerate(role.bullets):
             lines.append(
                 f"  {role.id}.{index}  [{bullet.evidence_strength.value}] "
                 f"{bullet.text}"
             )
+            _append_writer_note(lines, bullet.note_for_writer, "    ")
 
     lines.append(
         "\n## Founder track record"
@@ -690,8 +698,10 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         dates = _founder_dates(entry.start, entry.end)
         when = "ongoing" if _is_ongoing(entry) else (dates or "undated")
         lines.append(f"\n{entry.id} [{when}] — {entry.role}, {entry.company}")
+        _append_writer_note(lines, entry.note_for_writer, "  ")
         for index, bullet in enumerate(entry.bullets):
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
+            _append_writer_note(lines, bullet.note_for_writer, "    ")
 
     lines.append(
         "\n## AI capability"
@@ -702,8 +712,10 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         if entry.visibility is Visibility.scorer_only:
             continue
         lines.append(f"\n{entry.id} — {entry.label}")
+        _append_writer_note(lines, entry.note_for_writer, "  ")
         for index, bullet in enumerate(entry.bullets):
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
+            _append_writer_note(lines, bullet.note_for_writer, "    ")
 
     lines.append(
         "\n## Earlier career (undated, one condensed line each)"
@@ -716,6 +728,11 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         lines.append(f"  {entry.id} — {entry.company}: {entry.summary}")
 
     return "\n".join(lines)
+
+
+def _append_writer_note(lines: list[str], note: str | None, indent: str) -> None:
+    if note:
+        lines.append(f"{indent}writer note: {' '.join(note.split())}")
 
 
 def _render_stories(profile: Profile) -> str:

@@ -96,6 +96,15 @@ class Bullet(_Base):
     tags: list[str] = Field(default_factory=list)
     evidence_strength: EvidenceStrength
     note_for_scorer: str | None = None
+    # A rule for whoever writes prose from this bullet — a highlight, a
+    # PROFILE paragraph, a cover letter. Printed into the generator's
+    # catalogue, where note_for_scorer never goes: the generator is kept away
+    # from scorer notes because they hold facts that must never be published.
+    # So a writing rule parked in note_for_scorer bound only the model that
+    # does not write — the DataLlama attribution rule sat there for a week,
+    # and a highlight broke it on 2026-09-25. Rules only; never a fact the
+    # writer has to be kept from.
+    note_for_writer: str | None = None
     linked_story: str | None = None
 
 
@@ -144,6 +153,7 @@ class FounderEntry(_Base):
     # HIGHLIGHTS, which is a different and larger channel.
     summary: str | None = None
     note_for_scorer: str | None = None
+    note_for_writer: str | None = None
 
 
 class AiCapabilityEntry(_Base):
@@ -152,6 +162,7 @@ class AiCapabilityEntry(_Base):
     visibility: Visibility
     bullets: list[Bullet]
     note_for_scorer: str | None = None
+    note_for_writer: str | None = None
     caveats: list[str] = Field(default_factory=list)
 
 
@@ -172,6 +183,7 @@ class Role(_Base):
     # e.g. a title that understates the scope, or a correction worth not
     # re-making. Bullet-level notes live on Bullet.
     note_for_scorer: str | None = None
+    note_for_writer: str | None = None
     anchor_story: bool = False
     bullets: list[Bullet]
 

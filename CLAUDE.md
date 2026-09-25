@@ -239,6 +239,16 @@ exists.
   out of `voice.md` at runtime, explicit patterns for the age-signal policy.
 - **In `profile/`, `text` is rendered and `note_for_scorer` is not.** A
   cross-reference left in a bullet's `text` was copied onto a real resume.
+- **The generator never sees `note_for_scorer`; a writing rule goes in
+  `note_for_writer`.** Scorer notes are kept from the model that writes
+  because they hold facts never to be published. So a rule about *how to
+  write* parked there bound only the model that does not write: the DataLlama
+  attribution rule sat in `note_for_scorer` for a week and a highlight broke
+  it. `note_for_writer` is printed into the generator's catalogue under its
+  entry or bullet and excluded from the number haystack. Rules only — never a
+  fact the writer has to be kept from. Brightside's `sector: insurance` was
+  the same shape of bug the other way round: a field the writer *did* see,
+  contradicting a note it did not.
 - **The number haystack is built by exclusion, and the exclusions are the
   point.** `_profile_numbers` walks the loaded model, so a field added to the
   schema is licensed without editing the validator — the hand-written list it
@@ -329,14 +339,18 @@ exists.
   Measure the body, not the rendered page — counting the name, contact line,
   date, salutation and closing puts a compliant letter over the limit and
   invents a defect that is not there.**
-- **A rule that only forbids gets satisfied by omission.** The DataLlama note
-  said never to imply Alan ran the Perpetual deployment. A generated CAREER
-  HIGHLIGHT obeyed it by stating the deployment and dropping his authorship
-  entirely, which implied ownership more strongly than the forbidden sentence
-  would have. Strengthening it to *require* naming his contribution then made
-  the model drop the entry rather than compose a compliant highlight. A
-  constraint changes what gets written; check what it displaced, not only that
-  the banned thing is absent.
+- **A rule that only forbids gets satisfied by omission — and check the rule
+  was delivered before crediting it with anything.** A generated CAREER
+  HIGHLIGHT stated the DataLlama deployment and dropped Alan's authorship,
+  which implied ownership more strongly than the sentence the note forbade.
+  That was read as the model obeying a prohibition by omission; strengthening
+  the note to *require* his contribution, and the model then dropping the
+  entry, was read as the requirement backfiring. Both readings were wrong:
+  the whole note lived in `note_for_scorer`, which the generator never sees,
+  so neither run was a response to it. The highlight simply paraphrased the
+  bullet it was shown. The principle still holds — a constraint changes what
+  gets written, so check what it displaced, not only that the banned thing is
+  absent — but first confirm the model that writes was ever shown it.
 - **Deleting an ad is not the same as deleting a decision.** `jd delete` exists
   for a genuine duplicate — a recruiter thread ingested twice as JD 46 and 47 —
   and refuses when an application row exists, because foreign keys cascade and

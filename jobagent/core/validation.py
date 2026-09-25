@@ -75,6 +75,7 @@ _INTERNAL_REFERENCE_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bsee\s+[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", "points at another profile entry"),
     (r"\bsee\s+(?:roles|assets|stories)\.yaml", "points at a profile file"),
     (r"\bnote_for_scorer\b", "names an internal field"),
+    (r"\bnote_for_writer\b|\bwriter note:", "names an internal field"),
     (r"\bevidence_strength\b", "names an internal field"),
     (r"\bvisibility:\s*\w+", "names an internal field"),
 )
@@ -346,6 +347,9 @@ def _profile_numbers(profile: Profile) -> set[str]:
 #                    that neither is ever to be published. A haystack covering
 #                    them would have this check bless the one number the
 #                    profile forbids.
+#   note_for_writer  a rule about how to write, not a claim. "Never estimate
+#                    its users" would otherwise license whatever number the
+#                    rule mentions.
 #   phone            rendered onto the contact line deterministically, never
 #                    through generated prose. Its digits are not evidence, and
 #                    including them licensed "379" as a headcount.
@@ -353,7 +357,7 @@ def _profile_numbers(profile: Profile) -> set[str]:
 #
 # Entries marked ``visibility: scorer_only`` are skipped for the same reason as
 # ``note_for_scorer``: they inform the decision and are never rendered.
-_NON_EVIDENCE_KEYS = frozenset({"voice", "note_for_scorer", "phone"})
+_NON_EVIDENCE_KEYS = frozenset({"voice", "note_for_scorer", "note_for_writer", "phone"})
 
 
 def _evidence_text(profile: Profile) -> list[str]:

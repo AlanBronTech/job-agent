@@ -156,6 +156,53 @@ def test_the_catalogue_keys_every_bullet_by_entry_and_index(profile) -> None:
     assert catalogue[f"{first.id}.0"] == first.bullets[0].text
 
 
+def test_a_writer_note_reaches_the_generator_and_a_scorer_note_does_not(
+    profile_factory,
+) -> None:
+    """The generator never sees note_for_scorer, so a writing rule parked there
+    bound only the model that does not write. The DataLlama attribution rule
+    did, and a highlight broke it. note_for_writer is the channel that arrives;
+    note_for_scorer stays out because it holds facts never to be published."""
+    from tests.conftest import edit_yaml
+    from jobagent.core.generate import _render_catalogue
+
+    def add_notes(dst):
+        def change(data):
+            entry = data["founder_track_record"][0]
+            entry["note_for_writer"] = "Lead with what he built."
+            entry["bullets"][0]["note_for_writer"] = "Name his part\n  first."
+            entry["bullets"][0]["note_for_scorer"] = "SECRET CONTEXT"
+
+        edit_yaml(dst / "roles.yaml", change)
+
+    profile = load_profile(profile_factory(add_notes))
+    entry = profile.roles.founder_track_record[0]
+    rendered = _render_catalogue(profile, build_catalogue(profile)).splitlines()
+
+    header = next(i for i, line in enumerate(rendered) if line.startswith(entry.id))
+    assert rendered[header + 1] == "  writer note: Lead with what he built."
+    assert rendered[header + 2].startswith(f"  {entry.id}.0  ")
+    assert rendered[header + 3] == "    writer note: Name his part first."
+    assert not any("SECRET CONTEXT" in line for line in rendered)
+
+
+def test_a_writer_note_is_not_copied_into_the_bullet_catalogue(profile_factory) -> None:
+    """The catalogue is what gets copied verbatim onto the page."""
+    from tests.conftest import edit_yaml
+
+    def add_note(dst):
+        edit_yaml(
+            dst / "roles.yaml",
+            lambda data: data["roles"][0]["bullets"][0].update(
+                {"note_for_writer": "Never round this up."}
+            ),
+        )
+
+    profile = load_profile(profile_factory(add_note))
+
+    assert not any("Never round" in text for text in build_catalogue(profile).values())
+
+
 def test_scorer_only_entries_are_absent_from_the_catalogue(profile) -> None:
     """They inform the decision and are never rendered, so the model that
     selects content is never shown them."""
