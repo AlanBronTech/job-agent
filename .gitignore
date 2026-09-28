@@ -45,3 +45,6 @@ evals/cases.yaml
 # working notes that act on a review belong in the commits; the review itself
 # does not belong in a public repository.
 REVIEW-*.md
+
+# LibreOffice lock files
+.~lock.*#

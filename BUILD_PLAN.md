@@ -252,5 +252,29 @@ documents — happens without typing a command.
 - **Prompt caching for the scorer.** Every `score` call re-sends the whole
   ~26k-token profile, at $0.16-$0.21 and up to nine minutes per ad. Phase 7
   runs the scorer repeatedly over the eval set and will feel it.
+- **Interview crib sheet.** Proposed 2026-09-28, after an interview was
+  prepared from a hand-made one, kept as a PDF in that application's folder.
+  `interview-prep.md` is for studying the night before; the crib sheet is for
+  glancing at mid-interview: one A4 page, two columns,
+  each likely question a heading with 2-4 terse cues, opened by "Headline. One
+  example. Stop." and closed by the questions to ask. A second output of
+  `prep`, not a replacement for it.
+  - A separate call (~$0.03) that condenses the finished `interview-prep.md`,
+    not folded into the prep call, so it can be re-run after a hand edit of
+    the prep — which is how the hand-made one was produced.
+  - `.docx` via `docx_writer.py`, two-column section. No PDF library;
+    LibreOffice exports it.
+  - Blanks for what only Alan can decide (`$____/day`, "decide tonight")
+    rather than filled-in guesses. Most of the hand-made sheet's value was
+    content from conversations, not the profile, so the generated sheet is a
+    draft he adds to.
+  - Same validation as every other artefact: numbers traced to the profile,
+    banned list from `voice.md`. A cue is where an invented figure survives,
+    because nobody rereads one.
+  - Same overwrite guard as the other artefacts: a hand-edited sheet in
+    OUTPUT_DIR is state.
+
+  **Exit:** a generated sheet needs fewer than five hand edits before it goes
+  into an interview.
 - Multi-user support and a hosted version (this is the fractional-consulting
   product, if there is one)
