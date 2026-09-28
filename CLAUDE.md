@@ -176,9 +176,9 @@ left, and it is deferred until the CLI has been used on real applications.**
 Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
 for the reasoning, which matters more than the decisions.
 
-499 tests pass, none touching the network. `main` is pushed to a **public**
-GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`, `evals/cases.yaml`
-and `REVIEW-*.md` are gitignored and must stay that way.
+559 tests pass as of 2026-09-28, none touching the network. `main` is pushed
+to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
+`evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
 
 **The history was purged on 2026-09-20 and the repo re-verified.**
 `evals/cases.yaml` had been committed on 2026-09-01 and deleted the same day —
