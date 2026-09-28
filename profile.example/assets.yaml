@@ -52,10 +52,17 @@ target_roles:
 
 target_filters:
   location: Melbourne, or fully remote AU
-  max_commute_minutes: 45
-  max_commute_rationale: >-
-    Hard constraint. A previous role ended over commute load; treat a breach as
-    a skip regardless of how well the role scores otherwise.
+  commute:
+    hybrid:
+      train: 45
+      car: 45
+    onsite:
+      train: 45
+      car: 30
+    hybrid_max_office_days: 3
+  commute_rationale: >-
+    Hard constraint, one way. A previous role ended over commute load; treat a
+    breach as a skip regardless of how well the role scores otherwise.
   min_salary_aud: 000000
   work_types: [permanent, contract, fractional]
   avoid:

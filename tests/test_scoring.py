@@ -17,6 +17,8 @@ from jobagent.core.models import (
     AssetsFile,
     ConstraintStatus,
     HiringStatus,
+    CommuteCeilings,
+    CommuteLimit,
     JobDescription,
     SalaryRange,
     TargetFilters,
@@ -28,11 +30,13 @@ from jobagent.core.scoring import ScoringError, check_constraints, score_fit
 
 FILTERS = TargetFilters(
     location="Sydney CBD, Sydney North Shore, train-accessible",
-    max_commute_minutes=60,
-    max_commute_basis="hybrid",
-    max_commute_rationale="Hard constraint, one way.",
+    commute=CommuteCeilings(
+        hybrid=CommuteLimit(train=90, car=60),
+        onsite=CommuteLimit(train=75, car=30),
+    ),
+    commute_rationale="Hard constraint, one way.",
     onsite_locations=["Sydney CBD", "Sydney North Shore"],
-    onsite_rationale="Five days a week is geographic and absolute.",
+    onsite_rationale="Exceptions to the on-site ceiling.",
     # Invented. This repo is public; the real floor lives in `profile/`,
     # which is gitignored, and belongs nowhere else.
     min_salary_aud=160000,
@@ -176,6 +180,47 @@ def test_hybrid_always_raises_the_commute_question(profile_factory) -> None:
 
     assert check.status is ConstraintStatus.unknown
     assert "60" in check.question
+
+
+def test_hybrid_question_names_both_ceilings_and_the_office_days(
+    profile_factory,
+) -> None:
+    """Hybrid up to 3 office days is 90 by train or 60 by car; more days is
+    judged as on-site. The ad rarely says which, so the question has to."""
+    checks = check_constraints(
+        make_jd(work_arrangement=WorkArrangement.hybrid, location="Norwest"),
+        make_profile(profile_factory),
+    )
+    question = constraint(checks, "location").question
+
+    assert "90 minutes by train or 60 by car" in question
+    assert "75 minutes by train or 30 by car" in question
+    assert "3 days" in question
+
+
+def test_onsite_elsewhere_is_asked_against_the_onsite_ceiling(profile_factory) -> None:
+    checks = check_constraints(
+        make_jd(work_arrangement=WorkArrangement.onsite, location="Parramatta"),
+        make_profile(profile_factory),
+    )
+    check = constraint(checks, "location")
+
+    assert check.status is ConstraintStatus.unknown
+    assert "75 minutes by train or 30 by car" in check.question
+    assert "Parramatta" in check.question
+
+
+def test_onsite_with_no_exceptions_listed_is_a_question_not_a_breach(
+    profile_factory,
+) -> None:
+    """The on-site list is exceptions now, not the only places that pass."""
+    filters = FILTERS.model_copy(update={"onsite_locations": []})
+    checks = check_constraints(
+        make_jd(work_arrangement=WorkArrangement.onsite, location="Sydney CBD"),
+        make_profile(profile_factory, filters),
+    )
+
+    assert constraint(checks, "location").status is ConstraintStatus.unknown
 
 
 # --------------------------------------------------------------------------- #

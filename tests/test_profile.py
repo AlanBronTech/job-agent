@@ -28,7 +28,7 @@ def test_loads_example_profile(example_dir: Path) -> None:
     assert len(profile.roles.roles) == 6
     assert len(profile.stories.stories) == 6
     assert "Voice" in profile.voice
-    assert profile.assets.target_filters.max_commute_minutes == 45
+    assert profile.assets.target_filters.commute.hybrid.train == 45
 
 
 def test_scorer_only_visibility_parses(example_dir: Path) -> None:
@@ -292,8 +292,9 @@ def test_role_tech_is_preserved(profile_factory) -> None:
     assert profile.roles.roles[0].tech == ["C#/.NET", "Angular 5+", "MS SQL Server"]
 
 
-def test_max_commute_basis_is_optional(example_dir: Path) -> None:
-    assert load_profile(example_dir).assets.target_filters.max_commute_basis is None
+def test_office_days_for_hybrid_default_to_three(example_dir: Path) -> None:
+    commute = load_profile(example_dir).assets.target_filters.commute
+    assert commute.hybrid_max_office_days == 3
 
 
 def test_narrative_defaults_to_empty(example_dir: Path) -> None:

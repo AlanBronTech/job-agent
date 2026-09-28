@@ -267,16 +267,34 @@ class Differentiator(_Base):
     note_for_scorer: str | None = None
 
 
+class CommuteLimit(_Base):
+    """One-way minutes, by how the trip is made."""
+
+    train: int
+    car: int
+
+
+class CommuteCeilings(_Base):
+    """One-way commute ceilings, by work arrangement and mode of travel.
+
+    Hybrid means at most ``hybrid_max_office_days`` a week in the office; a
+    role asking for more is judged by the on-site ceiling. None of it can be
+    computed from an ad — the trip depends on where Alan starts — so the
+    scorer turns these into a question, never a pass.
+    """
+
+    hybrid: CommuteLimit
+    onsite: CommuteLimit
+    hybrid_max_office_days: int = 3
+
+
 class TargetFilters(_Base):
     location: str
-    max_commute_minutes: int
-    # What the commute ceiling is measured against (e.g. "hybrid"). The limit
-    # is meaningless to the scorer without it.
-    max_commute_basis: str | None = None
-    max_commute_rationale: str
-    # Fully on-site roles are filtered by location, not by commute minutes —
-    # five days a week is a different constraint from two, so the ceiling above
-    # does not apply. An empty list means no on-site role passes.
+    commute: CommuteCeilings
+    commute_rationale: str
+    # On-site in one of these passes whatever the on-site ceiling says — the
+    # CBD by train can exceed it and is still accepted. On-site anywhere else
+    # is judged by ``commute.onsite``.
     onsite_locations: list[str] = Field(default_factory=list)
     onsite_rationale: str | None = None
     min_salary_aud: int
@@ -345,7 +363,7 @@ class WorkArrangement(str, Enum):
 
     Not in the BUILD_PLAN field list, but Alan's hardest filter is a commute
     ceiling that applies differently to hybrid and on-site roles
-    (``target_filters.max_commute_basis``). Without this the scorer cannot
+    (``target_filters.commute``). Without this the scorer cannot
     apply that constraint at all.
     """
 

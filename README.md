@@ -97,8 +97,10 @@ what to lead with, and what they will push back on.
 Hard filters
   ✓ hiring status: Open, or the ad does not say it is closed.
   ✓ work type: permanent is in permanent, contract, fixed_term.
-  ? location: Hybrid in Sydney NSW. The 60-minute one-way ceiling
-    applies and cannot be checked from the ad.
+  ? location: Hybrid in Sydney NSW. Up to 3 office days a week the
+    ceiling is 90 minutes by train or 60 by car one way; more days than
+    that and it is 75 minutes by train or 30 by car. Neither can be
+    checked from the ad.
   ? salary: No band stated; the floor is $XXX,XXX.
 
 Requirements 4 of 7 met
@@ -108,7 +110,9 @@ Requirements 4 of 7 met
       Absent from the profile.
 ...
 Ask before applying
-  · Is the office within 60 minutes one way, and how many days on-site?
+  · How many days a week in the office, and is it within 90 minutes by
+    train or 60 by car one way (75 minutes by train or 30 by car if more
+    than 3 days)?
   · What is the band? The floor is $XXX,XXX.
 ```
 

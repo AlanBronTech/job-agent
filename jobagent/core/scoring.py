@@ -188,9 +188,11 @@ def _check_work_type(jd: JobDescription, accepted: list[str]) -> ConstraintCheck
 def _check_location(jd: JobDescription, filters) -> ConstraintCheck:
     """On-site and hybrid are different constraints, per ``target_filters``.
 
-    Five days a week is filtered geographically and absolutely; two days is
-    filtered by the commute ceiling. Neither can be decided from an ad that
-    names no suburb, which is the CareGP case and is why ``unknown`` exists.
+    Each has its own one-way ceiling, by train and by car, and a hybrid role
+    asking for more office days than ``hybrid_max_office_days`` is judged as
+    on-site. No ceiling can be checked from an ad, so each becomes a question.
+    The one pass without asking is on-site in a named accepted place. An ad
+    that names no suburb is the CareGP case, and is why ``unknown`` exists.
     """
     if jd.work_arrangement is WorkArrangement.remote:
         return ConstraintCheck(
@@ -199,43 +201,47 @@ def _check_location(jd: JobDescription, filters) -> ConstraintCheck:
             detail="Remote — no commute constraint applies.",
         )
 
+    commute = filters.commute
+    onsite = _describe_limit(commute.onsite)
+    where = jd.location or "an unstated location"
+
     if jd.work_arrangement is WorkArrangement.onsite:
         allowed = filters.onsite_locations
-        if not allowed:
-            return ConstraintCheck(
-                name="location",
-                status=ConstraintStatus.breach,
-                detail="On-site, and no on-site location is accepted.",
-            )
         if jd.location and _names_an_allowed_place(jd.location, allowed):
             return ConstraintCheck(
                 name="location",
                 status=ConstraintStatus.ok,
                 detail=f"On-site in {jd.location}, which is on the accepted list.",
             )
+        named = f", which is not one of {', '.join(allowed)}" if allowed else ""
         return ConstraintCheck(
             name="location",
             status=ConstraintStatus.unknown,
             detail=(
-                f"On-site in {jd.location or 'an unstated location'}, which does "
-                f"not name one of {', '.join(allowed)}. On-site outside those is "
-                "an absolute skip, so this cannot be scored until it is known."
+                f"On-site in {where}{named}. The on-site ceiling is {onsite} one "
+                "way, and it cannot be checked from the ad."
             ),
-            question=f"Which office is this based in? Accepted: {', '.join(allowed)}.",
+            question=(
+                f"Where is the office, and is it within {onsite} one way?"
+                if not jd.location
+                else f"Is {jd.location} within {onsite} one way?"
+            ),
         )
 
     if jd.work_arrangement is WorkArrangement.hybrid:
+        days = commute.hybrid_max_office_days
+        hybrid = _describe_limit(commute.hybrid)
         return ConstraintCheck(
             name="location",
             status=ConstraintStatus.unknown,
             detail=(
-                f"Hybrid in {jd.location or 'an unstated location'}. The "
-                f"{filters.max_commute_minutes}-minute one-way ceiling applies "
-                "and cannot be checked from the ad."
+                f"Hybrid in {where}. Up to {days} office days a week the ceiling "
+                f"is {hybrid} one way; more days than that and it is {onsite}. "
+                "Neither can be checked from the ad."
             ),
             question=(
-                f"Is the office within {filters.max_commute_minutes} minutes "
-                "one way, and how many days on-site?"
+                "How many days a week in the office, and is it within "
+                f"{hybrid} one way ({onsite} if more than {days} days)?"
             ),
         )
 
@@ -247,12 +253,16 @@ def _check_location(jd: JobDescription, filters) -> ConstraintCheck:
     )
 
 
+def _describe_limit(limit) -> str:
+    return f"{limit.train} minutes by train or {limit.car} by car"
+
+
 def _names_an_allowed_place(location: str, allowed: list[str]) -> bool:
     """True if the ad's location names one of the accepted places.
 
     Deliberately literal. "Sydney NSW" does not name "Sydney CBD" and must not
-    be treated as if it did — the whole point of the on-site filter is that
-    somewhere else in Sydney is a skip.
+    be treated as if it did — a pass here skips the commute question, and
+    somewhere else in Sydney has to answer it.
 
     Known limitation, left in on purpose: a location naming two places —
     "Sydney CBD office, relocating to Parramatta in Q1" — passes on the first
