@@ -28,6 +28,9 @@ jobagent = "jobagent.cli.main:app"
 
 [dependency-groups]
 dev = [
+    # Starlette's TestClient warns on every run unless this is installed; the
+    # web tests use it. Test-only: the model SDKs keep their own httpx.
+    "httpx2>=2.13.1",
     "pytest>=8.0",
 ]
 
