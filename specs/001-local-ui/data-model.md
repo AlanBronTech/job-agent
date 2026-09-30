@@ -4,7 +4,7 @@ Existing entities (`JobDescription`, `FitAssessment`, `Application`,
 `ApplicationStatus`, run-log records) are unchanged. This feature adds one table,
 one folder-naming rule and two derived views.
 
-## 1. `ui_runs` table (schema v9 → v10)
+## 1. `ui_runs` table (owned by `services/runs.py`; core schema stays v9)
 
 One row per action started from the UI. It records a run, not a model call:
 calls stay in `runs.jsonl`, and the two join on `run_id`.
@@ -28,8 +28,11 @@ calls stay in `runs.jsonl`, and the two join on `run_id`.
 - At most one `running` row per non-null `jd_id`. Enforced by a check-and-insert
   inside `BEGIN IMMEDIATE`, plus a partial unique index
   `ON ui_runs(jd_id) WHERE status = 'running'` as a backstop.
-- `add_ad` rows have no `jd_id` while running, so FR-006 for them is keyed on the
-  file name held in `request`. The same file cannot be parsing twice.
+- `add_ad` rows have no `jd_id` while running, so FR-006 for them is keyed on
+  `request["input_key"]`: the file name, or `sha256:<hex>` of pasted text.
+  The same input cannot be parsing twice.
+- Created by `services/runs.py` with `CREATE TABLE IF NOT EXISTS` on first use.
+  `core/store.py` and `SCHEMA_VERSION` are not touched (Constitution II).
 - On startup: `UPDATE ui_runs SET status='interrupted', finished_at=now WHERE
   status='running'`.
 - `result` holds only what the UI already displayed. It is a copy of service
@@ -61,7 +64,8 @@ OUTPUT_DIR/
 
 ## 3. Documents on disk (derived)
 
-`services.outputs.documents_for(jd) → OutputFolders`:
+`services.outputs.documents_for(ws, jd) → OutputFolders`. The `OutputFolders`
+type is defined and built in `adapters/document_store.py`:
 
 | Field | Meaning |
 |---|---|
@@ -80,8 +84,8 @@ row, or the status is `identified`.
 
 | Field | Meaning |
 |---|---|
-| `per_label` | `{label: (mean_usd, samples) \| None}` |
-| `total_usd` | sum over labels with a measurement; `None` if any selected label has none |
+| `per_label` | `{label: (mean_usd, samples) \| "unknown" \| None}` |
+| `total_usd` | sum over the selected labels; `None` if any has no measurement; `"unknown"` if any is unknown. Never a partial sum |
 | `model` | the model the route resolves to now |
 | `budget` | True in budget mode: shown as free tier |
 

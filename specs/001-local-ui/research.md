@@ -107,7 +107,9 @@ action costing two calls), and averages across run_ids. The result per label is
 under-state an action that retries. Filtering by the routed model stops a
 budget-mode or Gemini history pricing a Sonnet run. When there is no sample:
 "no measurement for <model> yet" is shown, and confirmation is still allowed
-(spec edge case). In budget mode: "free tier" is shown.
+(spec edge case). In budget mode: "free tier" is shown. A sample with `price_unknown` or
+a null `cost_usd` makes that label "price unknown", never a partial sum.
+Summing it as zero is the silent-`None` bug CLAUDE.md records.
 
 **Alternatives**: the constants in CLAUDE.md (they go stale; that is the price-table lesson);
 `by_command` from `build_report` (mean per call, not per action, and mixes models).

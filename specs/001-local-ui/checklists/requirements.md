@@ -36,9 +36,8 @@
   requirement, and those are product behaviour, not implementation choices. No
   framework, language or storage technology is named — BUILD_PLAN's
   FastAPI/HTMX suggestion is left to `/speckit-plan`.
-- FR-017 (no overwrite from the UI) is a default with a real trade-off, recorded
-  in Assumptions. Put it to Alan in `/speckit-clarify` rather than treating it
-  as settled.
+- FR-017 was settled in `/speckit-clarify` on 2026-09-29: move aside, never
+  overwrite.
 - The duplicate-ad check was removed from FR-002 in the first pass: `jd add`
   has none, so claiming parity with it would have specified new business logic.
 - All examples are invented (Constitution VI). Check the diff before committing.

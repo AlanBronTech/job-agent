@@ -36,7 +36,8 @@ changes.
 `python-multipart` (see research R2). HTMX is vendored as one static file, with
 no CDN and no build step.
 
-**Storage**: the existing SQLite store, plus one new table `ui_runs` (schema v10).
+**Storage**: the existing SQLite store, plus one new table `ui_runs`, created and owned by
+`services/runs.py`. `core/store.py` and its schema version are unchanged.
 Output folder on disk unchanged, except for the superseded-folder naming (data-model §2).
 
 **Testing**: `pytest`; FastAPI `TestClient` (on `httpx`, already present through
@@ -64,7 +65,7 @@ fragments, eight actions.
 | Principle | Status | How |
 |---|---|---|
 | I. Assistive, never autonomous | Pass | Ads enter only as uploaded files or pasted text (FR-007). No page fetches a URL. Output is files in `OUTPUT_DIR`. `source_url` is shown as text, not a link the server follows. |
-| II. `core/` callable from anywhere | Pass, with the justification below | Orchestration moves *out of `cli/`*, not into web handlers. Web handlers call the service layer only. See Complexity Tracking for where that layer lives. |
+| II. `core/` callable from anywhere | Pass | Orchestration moves *out of `cli/`* into `services/`, and web handlers call only that. Exactly one `core/` change, justified as a `core/` defect rather than a UI need: `expected_cost` in `core/spend.py`. CLAUDE.md requires stating a command's cost before spending, and the CLI never did, so the CLI prints it too. The `ui_runs` registry is UI state and lives in `services/runs.py`, not `core/store.py` (analysis C1, 2026-09-30). |
 | III. Enforce mechanically | Pass | Cost confirmation, one run per ad, move-aside-not-overwrite, 127.0.0.1-only, Host check and CSRF are enforced in code and each has a test. Validation is unchanged and shown in full. |
 | IV. Tests never touch the network | Pass | Model clients mocked; `TestClient` is in-process; the browser opener and `open` are injected and faked. |
 | V. Money stated before spent | Pass | Every spending action goes through a cost estimate built from `runs.jsonl` (research R5). Expected cost per action: parse ~$0.03, score ~$0.11, generate resume + cover ~$0.13, prep ~$0.11. These are the measured figures from CLAUDE.md, and the UI recomputes them live rather than quoting them. The UI adds no new model call. |
@@ -93,8 +94,8 @@ specs/001-local-ui/
 ```text
 jobagent/
   core/
-    spend.py            # + expected_cost(): measured mean per action
-    store.py            # + ui_runs table, schema v10
+        spend.py            # + expected_cost(): measured mean per action (a core/ fix: the CLI never stated cost)
+
   services/             # NEW — workflow orchestration shared by cli/ and web/
     __init__.py         # typed Refusal / result types
     workspace.py        # Workspace: profile dir, db, runs log, jd dir, DocumentStore, owner id
@@ -103,7 +104,8 @@ jobagent/
     documents.py        # generate: preconditions, overrule record, clash check, supersede, write
     prep.py             # prep
     pipeline.py         # apply / outcome with date validation; board grouping
-    outputs.py          # documents on disk per ad, current + superseded
+        outputs.py          # documents on disk per ad, current + superseded
+    runs.py             # ui_runs registry: owns its table, plain SQL
   adapters/
     docs.py             # + supersede_folder(), folders_for() (moved from cli/jd.py)
     document_store.py   # NEW — DocumentStore protocol + LocalFolderStore (wraps docs.py)
@@ -134,7 +136,7 @@ the same facts its own way.
 | Deviation | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | New `services/` layer not in CLAUDE.md's architecture | The orchestration FR-002 requires both front ends to share writes files through `adapters/docs.py` and `docx_writer`. `core/` is specified as "no I/O side effects beyond the store". | **Into `core/`**: breaks that rule for the first time and blurs the line that keeps `core/` testable without a filesystem. **Leave it in `cli/` and call CLI functions from the web**: they print and raise `typer.Exit`, so the web would parse exit codes. **Duplicate it in `web/`**: two copies of every guard. That is the thing FR-002 exists to prevent. |
-| New table `ui_runs` | FR-016a/b: a run outlives its page, is announced once, and is known to be interrupted after a restart. | **In-memory registry**: loses FR-016b across a restart, and cannot tell "interrupted" from "never happened". That is the same shape as the failed-call logging bug. **A JSON file**: a second persistence mechanism beside SQLite for no gain. |
+| New table `ui_runs`, owned by `services/runs.py`, not `core/store.py` | FR-016a/b: a run outlives its page, is announced once, and is known to be interrupted after a restart. | **In-memory registry**: loses FR-016b across a restart, and cannot tell "interrupted" from "never happened". That is the same shape as the failed-call logging bug. **A JSON file**: a second persistence mechanism beside SQLite for no gain. |
 | `Workspace` and `DocumentStore` abstractions with one implementation each | FR-021–023. A hosted version is the stated direction (2026-09-29). Threading config through later means touching every service and every test again. | **Wait until hosting is real**: the services are being written now, and passing a context in now costs a parameter; retrofitting it costs a second pass over the same code. **A full multi-tenant model now**: builds sign-in and per-user storage nobody uses yet. |
 | Four new dependencies | See research R2. | **stdlib `http.server`**: hand-rolled routing, form and multipart parsing, and templating. That is more code for Alan to read than the dependencies cost. |
 

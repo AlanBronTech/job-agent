@@ -206,7 +206,8 @@ the content shown match `jobagent prep`.
 **Parity with the command line**
 
 - **FR-001**: Every action the UI offers MUST produce the same stored records,
-  files, run-log entries and validation results as the equivalent command.
+  files, run-log entries (apart from `source`, which is `ui`) and validation
+  results as the equivalent command.
 - **FR-002**: The UI MUST contain no business logic of its own. Any guard the
   command line enforces today MUST apply identically to the UI, including the
   overwrite guard, the skip-verdict overrule record, company-history
@@ -225,7 +226,7 @@ the content shown match `jobagent prep`.
 
 **Hard rules**
 
-- **FR-007**: The UI MUST NOT fetch, open or embed any job-board page. Ads enter
+- **FR-007**: The UI MUST NOT fetch or embed any job-board page. Ads enter
   only as files Alan saved himself or text he pastes.
 - **FR-008**: The UI MUST NOT submit, fill in or link-through to any application
   form. Its output is files in the local output folder.
@@ -251,8 +252,8 @@ the content shown match `jobagent prep`.
   tab or browser MUST NOT cancel it; reopening the ad MUST show it still
   running or its outcome.
 - **FR-016b**: A run that finishes, or fails, while its page is closed MUST be
-  announced on the next page Alan opens, once, naming the ad and the outcome,
-  until he has viewed it.
+  announced on every page Alan opens, naming the ad and the outcome, until he
+  has viewed it.
 - **FR-016c**: For every generated document on disk — current or superseded —
   the UI MUST offer to open it in its default application and to reveal its
   folder in Finder. The UI MUST NOT render a preview of a document's content;
