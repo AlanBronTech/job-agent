@@ -52,6 +52,10 @@ class Runner:
         """Runs still going, for the Ctrl-C warning."""
         return runs.running(ws)
 
+    def wait(self) -> None:
+        """Block until work already started has finished. Nothing new starts."""
+        self._pool.shutdown(wait=True, cancel_futures=True)
+
     def shutdown(self) -> None:
         self._pool.shutdown(wait=False, cancel_futures=True)
 

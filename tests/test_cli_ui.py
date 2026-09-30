@@ -83,3 +83,77 @@ def test_busy_port_exits_2(served):
 def test_there_is_no_host_option():
     result = runner.invoke(app, ["ui", "--host", "0.0.0.0"])
     assert result.exit_code != 0
+
+
+def _server(tmp_path, active):
+    from jobagent.web.runner import Runner
+    from tests.ui_seed import workspace
+
+    runner = Runner()
+    runner.active = lambda ws: active
+    import uvicorn
+
+    server = ui_cli._Server(uvicorn.Config(app=None), runner=runner, ws=workspace(tmp_path))
+    return server, runner
+
+
+def test_first_ctrl_c_with_a_run_active_only_warns(tmp_path, capsys):
+    import signal
+    from types import SimpleNamespace
+
+    server, runner = _server(tmp_path, [SimpleNamespace(kind="prep", jd_id=3)])
+    server.handle_exit(signal.SIGINT, None)
+    assert not server.should_exit
+    assert "Still running: prep (JD 3)" in capsys.readouterr().err  # and it says it will wait
+    server.handle_exit(signal.SIGINT, None)
+    assert server.should_exit
+    runner.shutdown()
+
+
+def test_ctrl_c_with_nothing_running_stops(tmp_path):
+    import signal
+
+    server, runner = _server(tmp_path, [])
+    server.handle_exit(signal.SIGINT, None)
+    assert server.should_exit
+    runner.shutdown()
+
+
+def test_start_marks_leftover_runs_interrupted(served, tmp_path):
+    from jobagent.services import runs
+    from jobagent.services.workspace import Workspace
+
+    config = ui_cli.get_config()
+    ws = Workspace.from_config(config)
+    runs.start_run(ws, kind="score", jd_id=None, run_id="r", request={"input_key": "x"})
+    result = runner.invoke(app, ["ui", "--port", str(free_port()), "--no-browser"])
+    assert "marked interrupted" in result.output
+    assert [r.status for r in runs.unseen_finished(ws)] == ["interrupted"]
+
+
+def test_stopping_waits_for_a_run_and_says_so(tmp_path, capsys):
+    from types import SimpleNamespace
+
+    server, runner = _server(tmp_path, [SimpleNamespace(kind="prep", jd_id=3)])
+    waited = []
+    runner.wait = lambda: waited.append(True)
+    ui_cli._finish_runs(runner, server._ws)
+    assert waited == [True]
+    assert "Waiting for prep (JD 3) to finish" in capsys.readouterr().err
+
+
+def test_ctrl_c_while_waiting_abandons(tmp_path, capsys, monkeypatch):
+    from types import SimpleNamespace
+
+    server, runner = _server(tmp_path, [SimpleNamespace(kind="prep", jd_id=3)])
+
+    def interrupted():
+        raise KeyboardInterrupt
+
+    runner.wait = interrupted
+    exits = []
+    monkeypatch.setattr(ui_cli, "_hard_exit", exits.append)
+    ui_cli._finish_runs(runner, server._ws)
+    assert exits == [130]
+    assert "Abandoned" in capsys.readouterr().err
+    runner.shutdown()
