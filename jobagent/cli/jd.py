@@ -425,7 +425,7 @@ def delete(
             "by cascade — forced"
         )
 
-    for folder in _folders_for(config.output_dir, jd):
+    for folder in docs.folders_for(config.output_dir, jd):
         console.print(
             f"\n[dim]{folder} stays on disk, untouched. Documents are state; "
             "another ad may resolve to the same folder.[/]"
@@ -449,23 +449,6 @@ def delete(
         raise typer.Exit(code=1)
 
     console.print(f"[bold]Deleted[/] {label}.")
-
-
-def _folders_for(output_dir: Path, jd: JobDescription) -> list[Path]:
-    """Output folders that belong to this ad, in any month.
-
-    `application_folder_path` names one month. The same ad generated in an
-    earlier month sits in a differently prefixed folder, and the point here is
-    to report everything that survives the delete, not just this month's.
-    """
-    this_month = docs.application_folder_path(output_dir, jd)
-    _, _, suffix = this_month.name.partition("_")
-    if not suffix:
-        return []
-    parent = this_month.parent
-    if not parent.is_dir():
-        return []
-    return sorted(path for path in parent.glob(f"*_{suffix}") if path.is_dir())
 
 
 # --------------------------------------------------------------------------- #

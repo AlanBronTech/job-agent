@@ -70,6 +70,26 @@ def application_folder(
     return folder
 
 
+def folders_for(output_dir: Path, jd: JobDescription) -> list[Path]:
+    """Output folders that belong to this ad, in any month.
+
+    `application_folder_path` names one month. The same ad generated in an
+    earlier month sits in a differently prefixed folder. `jd delete` reports
+    everything that survives the delete, and the UI lists everything on disk
+    for an ad, so both need every month's, not just this one's. Matching on the
+    text after the first `_` is what lets a superseded folder, whose prefix
+    carries no underscore, be found by the same lookup.
+    """
+    this_month = application_folder_path(output_dir, jd)
+    _, _, suffix = this_month.name.partition("_")
+    if not suffix:
+        return []
+    parent = this_month.parent
+    if not parent.is_dir():
+        return []
+    return sorted(path for path in parent.glob(f"*_{suffix}") if path.is_dir())
+
+
 def existing_documents(folder: Path, names: Iterable[str]) -> list[Path]:
     """Which of `names` are already on disk, so a caller can refuse to clobber.
 
