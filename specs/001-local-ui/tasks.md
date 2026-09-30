@@ -37,7 +37,7 @@ mocked; nothing here touches the network.
 
 - [X] T001 Add `fastapi`, `uvicorn`, `jinja2`, `python-multipart` to `dependencies` in `pyproject.toml`, with a one-line comment giving the reason (research R2). Run `uv sync` and `uv run pytest -q` (562 pass).
 - [X] T002 [P] Create empty packages `jobagent/services/__init__.py` and `jobagent/web/__init__.py`, plus directories `jobagent/web/templates/` and `jobagent/web/static/`. Confirm `uv build` includes non-Python files under `jobagent/web/`, and add a hatch `include` in `pyproject.toml` if it does not.
-- [ ] T003 [P] Vendor HTMX 2.x minified into `jobagent/web/static/htmx.min.js`. Record its version, source URL and BSD-2 licence in `jobagent/web/static/README.md`. No page may reference a CDN.
+- [X] T003 [P] Vendor HTMX 2.x minified into `jobagent/web/static/htmx.min.js`. Record its version, source URL and BSD-2 licence in `jobagent/web/static/README.md`. No page may reference a CDN.
 - [ ] T004 [P] Update the Architecture section of `CLAUDE.md`: add `services/` (workflow orchestration shared by `cli/` and `web/`, with the rules above) and `web/` (routes and templates only, calling `services/`). Note the decision date, 2026-09-29.
 
 ---
