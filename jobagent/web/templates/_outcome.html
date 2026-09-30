@@ -1,0 +1,48 @@
+{# What a finished run did. Only generate has more to show than its status, for now. #}
+{% if run.kind == "generate" and run.result %}
+{% set r = run.result %}
+<div class="outcome">
+  {% if r.blocked %}<p><span class="pill verdict-skip">not ready: blocker</span>
+    Do not send these without fixing the blockers. An unsupported number means the claim is either invented or missing from the profile — check which before editing.</p>{% endif %}
+  {% if r.superseded %}<p class="detail">Earlier documents kept in <code>{{ r.superseded }}</code>.</p>{% endif %}
+  {% for w in r.warnings %}<p class="detail">{{ w }}</p>{% endfor %}
+  <ul class="files">
+  {% for name in r.written %}
+    <li>
+      <form class="inline" method="post" action="/ads/{{ run.jd_id }}/documents/open">
+        <input type="hidden" name="csrf" value="{{ token }}">
+        <input type="hidden" name="folder" value="{{ r.folder }}">
+        <input type="hidden" name="name" value="{{ name }}">
+        <button type="submit">Open</button>
+      </form>
+      <span>{{ name }}</span>
+    </li>
+  {% endfor %}
+  </ul>
+  {% set blockers = r.issues | selectattr("severity", "equalto", "blocker") | list %}
+  {% set warnings = r.issues | rejectattr("severity", "equalto", "blocker") | list %}
+  {% if not r.issues %}<p>No validation issues.</p>{% endif %}
+  {% for group, label in [(blockers, "Blockers"), (warnings, "Warnings")] %}
+    {% if group %}
+    <p><strong>{{ label }}</strong> <span class="muted">{{ group | length }}</span></p>
+    <ul class="checks">
+    {% for i in group %}
+      <li><span class="mark {{ 'breach' if i.severity == 'blocker' else 'unknown' }}">{{ "✗" if i.severity == "blocker" else "!" }}</span>
+        <span><code>{{ i.rule }}</code> {{ i.detail }}{% if i.excerpt %}<div class="detail">{{ i.excerpt }}</div>{% endif %}</span></li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+  {% endfor %}
+  {% if r.unused %}
+  <p><strong>Not used</strong> <span class="muted">{{ r.unused | length }} profile entr(ies)</span></p>
+  <ul class="checks">
+  {% for u in r.unused | sort(attribute="highlight_only", reverse=true) %}
+    <li><span class="mark muted">·</span><span><code>{{ u.id }}</code> {{ u.label }}
+      {% if u.strong %}<span class="pill warn">strong evidence</span>{% endif %}
+      {% if u.highlight_only %}<span class="pill warn">ongoing venture — a CAREER HIGHLIGHT is its only slot</span>{% endif %}</span></li>
+  {% endfor %}
+  </ul>
+  <p class="detail">Selection is the model's call and is usually right. Check this list against the ad before sending, not after.</p>
+  {% endif %}
+</div>
+{% endif %}
