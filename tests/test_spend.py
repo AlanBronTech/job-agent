@@ -488,3 +488,15 @@ def test_expected_cost_unknown_when_today_has_no_price():
     assert expected_cost(records, ["score_fit"], "claude-sonnet-5", lambda m: None) == {
         "score_fit": UNKNOWN
     }
+
+
+def test_ui_source_is_its_own_row_and_real_work():
+    from jobagent.core.spend import build_report
+
+    records = [
+        {"label": "score_fit", "model": "m", "cost_usd": 0.1, "price_unknown": False, "source": "ui"},
+        {"label": "score_fit", "model": "m", "cost_usd": 0.1, "price_unknown": False, "source": "cli"},
+        {"label": "score_fit", "model": "m", "cost_usd": 0.1, "price_unknown": False, "source": "eval"},
+    ]
+    report = build_report(records)
+    assert {g.key: g.calls for g in report.by_source} == {"ui": 1, "cli": 1, "eval": 1}

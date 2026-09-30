@@ -100,9 +100,10 @@ class RunContext:
 
     command: str | None = None
     jd_id: int | None = None
-    # "cli" for real work, "eval" for grading runs. Without this the two are
-    # indistinguishable in the log, and a month of eval runs reads as spend on
-    # applications.
+    # "cli" for real work from the terminal, "ui" for real work from the local
+    # UI, "eval" for grading runs. Without this, eval runs are
+    # indistinguishable from applications in the log. "ui" is kept apart from
+    # "cli" so the log can show whether the UI is actually being used (SC-001).
     source: str = "cli"
     run_id: str = field(default_factory=lambda: uuid4().hex[:12])
 
