@@ -1,0 +1,15 @@
+{% set kinds = {"add_ad": "Adding an ad", "score": "Scoring", "generate": "Generating documents", "prep": "Interview prep"} %}
+{% for r in unseen %}
+<div class="banner {{ 'bad' if r.status != 'succeeded' else 'done' }}">
+  <strong>{{ kinds[r.kind] }}{% if r.request.title %} for {{ r.request.title }}{% endif %}
+    {% if r.status == "succeeded" %}finished.{% elif r.status == "failed" %}failed.{% else %}was interrupted when the UI stopped.{% endif %}</strong>
+  {% if r.status == "failed" %}<span>{{ r.error }}</span>{% endif %}
+  {% if r.status == "interrupted" %}<span>Its cost may be missing from <code>jobagent spend</code>.</span>{% endif %}
+  {% if r.jd_id %}<a href="/ads/{{ r.jd_id }}">Open the ad</a>{% endif %}
+  <form class="inline" method="post" action="/runs/{{ r.id }}/seen">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <input type="hidden" name="next" value="{{ here }}">
+    <button type="submit">Dismiss</button>
+  </form>
+</div>
+{% endfor %}

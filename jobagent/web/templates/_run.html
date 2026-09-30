@@ -1,0 +1,18 @@
+{# One run's state. Polls itself while running; when it finishes the page reloads to show the new state. #}
+{% set kinds = {"add_ad": "Adding the ad", "score": "Scoring", "generate": "Generating documents", "prep": "Interview prep"} %}
+{% if run.status == "running" %}
+<div class="banner running" id="run-{{ run.id }}"
+     hx-get="/runs/{{ run.id }}" hx-trigger="every 2s" hx-swap="outerHTML">
+  <strong>{{ kinds[run.kind] }}…</strong>
+  <span>started {{ run.started_at.astimezone().strftime("%H:%M:%S") }}. You can close this page; it keeps going.</span>
+</div>
+{% else %}
+<div class="banner {{ 'done' if run.status == 'succeeded' else 'bad' }}" id="run-{{ run.id }}">
+  <strong>{{ kinds[run.kind] }}
+    {% if run.status == "succeeded" %}finished{% elif run.status == "failed" %}failed{% else %}was interrupted{% endif %}</strong>
+  <span class="muted">{{ run.finished_at.astimezone().strftime("%-d %b %H:%M") if run.finished_at }}</span>
+  {% if run.error %}<div>{{ run.error }}</div>{% endif %}
+  {% if run.status == "interrupted" %}<div>The UI stopped while this was running. Its cost may be missing from <code>jobagent spend</code>.</div>{% endif %}
+  {% include "_outcome.html" ignore missing %}
+</div>
+{% endif %}

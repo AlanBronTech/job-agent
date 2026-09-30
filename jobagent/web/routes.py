@@ -9,9 +9,9 @@ from __future__ import annotations
 import subprocess
 
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 
-from jobagent.services import listing, outputs
+from jobagent.services import listing, outputs, runs
 from jobagent.services.refusals import NoSuchAd
 from jobagent.web.app import checked_form, render, workspace
 
@@ -36,7 +36,17 @@ def ad(request: Request, jd_id: int):
             {"heading": "No such ad", "detail": f"There is no job description with id {jd_id}."},
             status_code=404,
         )
-    return render(request, "detail.html", {"nav": "ads", "d": detail})
+    ws = workspace(request)
+    runs.mark_seen_for_jd(ws, jd_id)
+    return render(
+        request,
+        "detail.html",
+        {
+            "nav": "ads",
+            "d": detail,
+            "run": runs.active_run_for(ws, jd_id) or _recent(runs.last_run_for(ws, jd_id)),
+        },
+    )
 
 
 # Plain form POSTs answered with 204: the browser stays on the page, and the
@@ -72,3 +82,39 @@ def _desktop(action) -> Response:
     except subprocess.CalledProcessError as exc:
         return PlainTextResponse(f"Could not open it: {exc}", 500)
     return Response(status_code=204)
+
+
+@router.get("/runs/{run_id}")
+def run_status(request: Request, run_id: int):
+    """The run fragment, polled every 2 s while running.
+
+    When a poll finds the run finished, HX-Refresh reloads the page, which then
+    shows the new state of the ad and marks the run seen.
+    """
+    run = runs.get_run(workspace(request), run_id)
+    if run is None:
+        return PlainTextResponse("No such run.", 404)
+    response = render(request, "_run.html", {"run": run})
+    if run.finished and request.headers.get("HX-Request"):
+        response.headers["HX-Refresh"] = "true"
+    return response
+
+
+@router.post("/runs/{run_id}/seen")
+async def run_seen(request: Request, run_id: int):
+    form = await checked_form(request)
+    runs.mark_seen(workspace(request), run_id)
+    back = str(form.get("next") or "/")
+    # Only ever back to a page of this UI.
+    if not back.startswith("/") or back.startswith("//"):
+        back = "/"
+    return RedirectResponse(back, status_code=303)
+
+
+def _recent(run):
+    """A finished run is shown on its ad's page for half a day, then left to history."""
+    if run is None or run.finished_at is None:
+        return run
+    from datetime import datetime, timedelta, timezone
+
+    return run if datetime.now(timezone.utc) - run.finished_at < timedelta(hours=12) else None

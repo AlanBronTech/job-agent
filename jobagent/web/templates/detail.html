@@ -21,6 +21,8 @@
 </p>
 {% endif %}
 
+{% if run %}{% include "_run.html" %}{% endif %}
+
 {% if d.stale %}
 <div class="banner warn"><strong>This assessment predates an amendment to the ad.</strong>
   It was scored against text that has since been replaced. Re-score with <code>jobagent score {{ jd.id }}</code>.</div>

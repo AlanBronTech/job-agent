@@ -103,7 +103,19 @@ def workspace(request: Request) -> Workspace:
 
 
 def render(request: Request, name: str, context: dict, status_code: int = 200):
-    context = {"token": request.app.state.token, **context}
+    """Render a page. Every page carries the banner of finished, unseen runs (FR-016b)."""
+    from jobagent.services import runs
+
+    try:
+        unseen = runs.unseen_finished(workspace(request))
+    except Exception:  # the banner must never take a page down with it
+        unseen = []
+    context = {
+        "token": request.app.state.token,
+        "unseen": unseen,
+        "here": request.url.path,
+        **context,
+    }
     return request.app.state.templates.TemplateResponse(
         request, name, context, status_code=status_code
     )
