@@ -32,7 +32,7 @@ def spend(
         None, "--model", help="Only calls to models matching this string."
     ),
     source: str | None = typer.Option(
-        None, "--source", help="Only `cli` (real work) or `eval` (grading runs)."
+        None, "--source", help="Only `cli` or `ui` (real work, from the terminal or the UI) or `eval` (grading runs)."
     ),
     since: str | None = typer.Option(
         None, "--since", help="Only calls on or after this date (YYYY-MM-DD)."
