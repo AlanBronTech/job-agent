@@ -32,6 +32,12 @@ including the `?t=…` part, or the buttons will be refused.
   with the same company, and the ad text as parsed.
 - **Documents.** Every folder for that ad, current, superseded or from an
   earlier month, with **Open** (in Word) and **Reveal in Finder**.
+- **Add an ad.** *Add an ad* in the menu: the newest file in
+  `~/job-agent-jds/`, a file you drop on the page (kept in that folder), or
+  pasted text. You see how much text was read and the cost before it parses; a
+  capture cut off at "…more" is refused, and a thin one is flagged.
+- **Score.** A button on every ad, and *Re-score* on a scored or stale one. A
+  stub needs a box ticked before it will score, as `--force` does.
 - **Generate.** Tick resume and letter, paste application questions if there
   are any, and you get a confirmation page first: the files it will write, the
   measured cost, the scorer's reasons if it said skip (with a box to overrule
@@ -49,8 +55,8 @@ confirmation says so and the old folder is kept under a dated name next to the
 new one (`2026-09.superseded-20260929T140512_Acme_EngineeringManager`), edits
 and all.
 
-**Still in the terminal for now:** `jd add`, `score`, `apply`, `outcome` and
-`prep`. Adding and scoring from the browser is next.
+**Still in the terminal for now:** `apply`, `outcome`, `prep`, and anything
+under `jd amend`, `jd delete`, `eval` and `spend`.
 
 ---
 

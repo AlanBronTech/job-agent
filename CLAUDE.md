@@ -189,13 +189,13 @@ on a tab stop at **16.93cm**.
 way on branch `001-local-ui`, not yet merged.** Its spec, plan and task list
 are in `specs/001-local-ui/` (Spec Kit). The MVP is built: `jobagent ui` shows
 the shortlist and full assessments, opens documents, and generates from a
-button behind a cost confirmation. Adding and scoring ads from the browser
-(User Story 3) is next; `jd add`, `score`, `apply`, `outcome` and `prep` are
-still terminal-only. Phase 6 (Gmail triage) and the Drive upload were
+button behind a cost confirmation; User Story 3 adds and scores ads from the
+browser too. The pipeline board and prep (User Stories 4-5) are next; `apply`,
+`outcome` and `prep` are still terminal-only. Phase 6 (Gmail triage) and the Drive upload were
 dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
 decisions.
 
-706 tests pass as of 2026-10-01 on `001-local-ui` (562 on `main`), none
+731 tests pass as of 2026-10-01 on `001-local-ui` (562 on `main`), none
 touching the network. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
