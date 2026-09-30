@@ -400,3 +400,75 @@ def test_spend_costs_nothing(wired, monkeypatch) -> None:
     monkeypatch.setattr("jobagent.adapters.llm.get_client", explode)
 
     assert runner.invoke(app, ["spend"]).exit_code == 0
+
+
+# --------------------------------------------------------------------------- #
+# expected_cost — the estimate shown before spending
+# --------------------------------------------------------------------------- #
+
+from jobagent.core.spend import UNKNOWN, expected_cost  # noqa: E402
+
+
+def _call(label, cost, run_id, model="claude-sonnet-5-20260101", **extra):
+    return {
+        "label": label,
+        "model": model,
+        "cost_usd": cost,
+        "price_unknown": cost is None,
+        "run_id": run_id,
+        "outcome": "ok",
+        **extra,
+    }
+
+
+def test_expected_cost_means_per_action():
+    records = [
+        _call("score_fit", 0.10, "a"),
+        _call("score_fit", 0.12, "b"),
+    ]
+    assert expected_cost(records, ["score_fit"], "claude-sonnet-5") == {
+        "score_fit": (pytest.approx(0.11), 2)
+    }
+
+
+def test_a_retried_call_counts_as_one_action():
+    records = [
+        _call("parse_jd", 0.03, "a"),
+        _call("parse_jd", 0.03, "a"),  # the retry, same run
+        _call("parse_jd", 0.03, "b"),
+    ]
+    mean, samples = expected_cost(records, ["parse_jd"], "claude-sonnet-5")["parse_jd"]
+    assert samples == 2 and mean == pytest.approx(0.045)
+
+
+def test_other_models_are_ignored():
+    records = [
+        _call("score_fit", 0.50, "a", model="claude-opus-5"),
+        _call("score_fit", 0.10, "b"),
+    ]
+    assert expected_cost(records, ["score_fit"], "claude-sonnet-5")["score_fit"] == (
+        pytest.approx(0.10),
+        1,
+    )
+
+
+def test_no_samples_is_none():
+    assert expected_cost([], ["interview_prep"], "claude-sonnet-5") == {"interview_prep": None}
+
+
+def test_an_unpriced_sample_makes_it_unknown_never_zero():
+    records = [_call("score_fit", 0.10, "a"), _call("score_fit", None, "b")]
+    assert expected_cost(records, ["score_fit"], "claude-sonnet-5")["score_fit"] == UNKNOWN
+
+
+def test_failures_and_attributions_are_left_out():
+    records = [
+        _call("score_fit", 0.10, "a"),
+        {"label": "score_fit", "model": "claude-sonnet-5", "cost_usd": None,
+         "price_unknown": False, "run_id": "b", "outcome": "error"},
+        {"type": "attribution", "run_id": "a", "jd_id": 3},
+    ]
+    assert expected_cost(records, ["score_fit"], "claude-sonnet-5")["score_fit"] == (
+        pytest.approx(0.10),
+        1,
+    )

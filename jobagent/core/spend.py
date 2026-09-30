@@ -259,3 +259,50 @@ def _group(calls: list[dict], key) -> tuple[SpendGroup, ...]:
         for name, rows in buckets.items()
     ]
     return tuple(sorted(groups, key=lambda g: (-g.cost_usd, g.key)))
+
+
+UNKNOWN = "unknown"
+
+
+def expected_cost(
+    records: list[dict], labels: list[str], model: str
+) -> dict[str, "tuple[float, int] | str | None"]:
+    """What one more call of each prompt is likely to cost, from what they have cost.
+
+    Per label: `(mean_usd, samples)`, `"unknown"`, or None when there is no
+    sample at all. This lives in `core/` as a fix to the CLI, not for the UI's
+    sake: CLAUDE.md says to state a command's cost before spending it, and
+    nothing did.
+
+    - Only calls on `model`, matched as `build_report` matches it (a substring,
+      since the provider reports a dated id). A Gemini history must not price a
+      Sonnet run.
+    - Summed per `run_id` before averaging, so a parse that was retried counts
+      as one action that cost two calls, which is what the next one may do too.
+    - Failed calls are left out. They were billed, but carry no cost to add.
+    - One unpriced sample makes the label `"unknown"`. Summing a null as zero
+      is how two Gemini calls cost nothing for a week; an estimate built on
+      that would say $0.00 and be believed.
+    """
+    calls = [
+        r
+        for r in records
+        if r.get("type") != "attribution"
+        and not _is_failure(r)
+        and model in str(r.get("model") or "")
+    ]
+    estimates: dict[str, tuple[float, int] | str | None] = {}
+    for label in labels:
+        mine = [r for r in calls if r.get("label") == label]
+        if not mine:
+            estimates[label] = None
+            continue
+        if any(_is_unpriced(r) for r in mine):
+            estimates[label] = UNKNOWN
+            continue
+        per_action: dict[str, float] = {}
+        for index, record in enumerate(mine):
+            key = str(record.get("run_id") or f"unkeyed-{index}")
+            per_action[key] = per_action.get(key, 0.0) + float(record["cost_usd"])
+        estimates[label] = (sum(per_action.values()) / len(per_action), len(per_action))
+    return estimates
