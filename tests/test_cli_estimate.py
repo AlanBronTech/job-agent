@@ -84,8 +84,11 @@ def stop_at(monkeypatch, module, name, printed):
 
 
 def test_score(config, monkeypatch, printed):
+    from jobagent.services import scoring
+
     monkeypatch.setattr(score_cli, "get_config", lambda: config)
-    stop_at(monkeypatch, score_cli, "score_fit", printed)
+    monkeypatch.setattr(score_cli, "get_client", lambda *a, **k: object())
+    stop_at(monkeypatch, scoring, "score_fit", printed)
     runner.invoke(app, ["score", str(seed(config))])
     assert printed == [("score", {})]
 

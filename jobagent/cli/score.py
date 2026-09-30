@@ -9,8 +9,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
+from jobagent.adapters.llm import CallType, RunContext, get_client
 from jobagent.config import get_config
+from jobagent.services import scoring
+from jobagent.services.refusals import NoModel, ProfileInvalid, ProfileMissing, ThinAd
+from jobagent.services.workspace import Workspace
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.core import history, store
@@ -20,8 +23,7 @@ from jobagent.core.models import (
     MatchStatus,
     Verdict,
 )
-from jobagent.core.profile import ProfileError, load_profile
-from jobagent.core.scoring import ScoringError, score_fit
+from jobagent.core.scoring import ScoringError
 from jobagent.core.store import StoreError
 
 console = Console()
@@ -107,9 +109,22 @@ def score(
         _emit(jd, previous, as_json=as_json)
         return
 
-    if jd.thin and not force:
+    try:
+        with console.status("Scoring…"):
+            result = scoring.score(
+                Workspace.from_config(config),
+                config,
+                RunContext(command="score", jd_id=jd.id),
+                jd_id,
+                force=force,
+                before_spend=lambda: print_estimate(config, "score"),
+                client_factory=lambda: get_client(
+                    CallType.score, config, RunContext(command="score", jd_id=jd.id)
+                ),
+            )
+    except ThinAd as refusal:
         err_console.print(
-            f"[bold red]JD {jd_id} holds only {len(jd.raw_text):,} characters "
+            f"[bold red]JD {jd_id} holds only {refusal.chars:,} characters "
             "of ad text[/] — too little to score."
         )
         err_console.print(
@@ -121,46 +136,27 @@ def score(
         )
         err_console.print("[dim]`--force` scores it anyway, for $0.11.[/]")
         raise typer.Exit(code=2)
-
-    if config.profile_dir is None:
+    except ProfileMissing:
         err_console.print(
             "[bold red]No profile directory.[/] Set PROFILE_DIR in .env."
         )
         raise typer.Exit(code=2)
-
-    try:
-        profile = load_profile(config.profile_dir)
-    except ProfileError as exc:
+    except ProfileInvalid as refusal:
         err_console.print(f"[bold red]Profile invalid[/] ({config.profile_dir})")
+        err_console.print(refusal.detail)
+        raise typer.Exit(code=1)
+    except NoModel as refusal:
+        err_console.print(f"[bold red]No model available for scoring.[/] {refusal.detail}")
+        err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
+        raise typer.Exit(code=2)
+    except ScoringError as exc:
+        err_console.print("[bold red]Could not score this job description.[/]")
         err_console.print(str(exc))
         raise typer.Exit(code=1)
 
-    try:
-        client = get_client(
-            CallType.score,
-            config,
-            RunContext(command="score", jd_id=jd.id),
-        )
-    except LLMError as exc:
-        err_console.print(f"[bold red]No model available for scoring.[/] {exc}")
-        err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
-        raise typer.Exit(code=2)
-
-    print_estimate(config, "score")
-    with console.status("Scoring…"):
-        try:
-            assessment = score_fit(jd, profile, client=client)
-        except ScoringError as exc:
-            err_console.print("[bold red]Could not score this job description.[/]")
-            err_console.print(str(exc))
-            raise typer.Exit(code=1)
-
-    try:
-        with store.open_store(config.db_path) as conn:
-            assessment.id = store.add_assessment(conn, assessment)
-    except StoreError as exc:
-        err_console.print(f"[bold yellow]Scored, but could not save.[/] {exc}")
-
+    for warning in result.warnings:
+        err_console.print(f"[bold yellow]{warning}[/]")
+    assessment = result.assessment
     _emit(jd, assessment, as_json=as_json)
 
 
