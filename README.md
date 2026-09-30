@@ -11,6 +11,49 @@ hard rules are in `CLAUDE.md`.
 
 ---
 
+## The UI
+
+```
+jobagent ui
+```
+
+Opens the tool in your browser, served from this Mac only. Leave the terminal
+it prints to open while you use it; Ctrl-C stops it. If the browser does not
+open, `jobagent ui --no-browser` prints a link to paste — use the whole link,
+including the `?t=…` part, or the buttons will be refused.
+
+**What it does today:**
+
+- **The shortlist.** Every ad with its verdict, both scores, where it is in the
+  pipeline and whether documents exist. Sort by date or score.
+- **The assessment.** Click an ad for everything `score` would print — hard
+  filters (a breach says so; an unstated one says "not stated", never met),
+  requirements, what they will push on, questions to ask — plus any history
+  with the same company, and the ad text as parsed.
+- **Documents.** Every folder for that ad, current, superseded or from an
+  earlier month, with **Open** (in Word) and **Reveal in Finder**.
+- **Generate.** Tick resume and letter, paste application questions if there
+  are any, and you get a confirmation page first: the files it will write, the
+  measured cost, the scorer's reasons if it said skip (with a box to overrule
+  it, recorded as `--force` records it), and any documents already there.
+  Nothing is spent until you confirm. The result shows every validation issue
+  and the profile entries it left out, as the command does.
+
+**Close the tab whenever you like.** A run keeps going on this Mac, and the next
+page you open says when it finished. Ctrl-C with a run going asks you to press
+it again; the UI then waits for the run so its result and cost are recorded,
+and a third Ctrl-C abandons it.
+
+**It never overwrites documents.** If a folder already holds them, the
+confirmation says so and the old folder is kept under a dated name next to the
+new one (`2026-09.superseded-20260929T140512_Acme_EngineeringManager`), edits
+and all.
+
+**Still in the terminal for now:** `jd add`, `score`, `apply`, `outcome` and
+`prep`. Adding and scoring from the browser is next.
+
+---
+
 ## The loop
 
 Five commands per application. Two of them are optional. The whole thing takes
@@ -141,7 +184,8 @@ If you disagree, see step 3.
 jobagent generate 22 --resume --cover
 ```
 
-Costs about 30 cents. If the verdict was `skip`, it refuses:
+Costs about 14 cents; the command prints its measured estimate before it
+spends. If the verdict was `skip`, it refuses:
 
 ```
 The assessment says skip. Wrong-shaped role: this is IT infrastructure
@@ -165,12 +209,16 @@ holds documents for this application, most recently 4 September 2026 at 09:07.
   2026-09-04 09:07  assessment.md
 
 Re-running would replace these in place, including any edits made by hand
-since. Move or rename the folder to keep them, or pass --overwrite to replace
-them.
+since. Move or rename the folder to keep them, pass --supersede to keep them
+under a dated name, or pass --overwrite to replace them.
 ```
 
-**`--overwrite` replaces them.** Only the files that run would write are
-listed — an `interview-prep.md` from `jobagent prep` is never at risk. The
+**`--supersede` keeps them**: the folder is renamed with a timestamp,
+`2026-09.superseded-20260904T090700_Acme_EngineeringManager`, and a fresh one
+is written beside it. The rename happens only once every other check has
+passed, just before the first model call, so a run that is refused for another
+reason leaves the folder alone. **`--overwrite` replaces them.** Only the files
+that run would write are listed — an `interview-prep.md` from `jobagent prep` is never at risk. The
 folder name carries the month, so regenerating in a later month starts a fresh
 folder and leaves the old one alone.
 
@@ -290,11 +338,14 @@ whole ad. Expand the description, save the page again, re-add it.
 - `--answers <path>` — a text file of application questions, one per line;
   writes `answers.md`.
 - `--force` — generate even against a `skip`, and record the disagreement.
+- `--supersede` — keep documents already generated: move their folder aside
+  under a dated name, then write a fresh one.
 - `--overwrite` — replace documents already generated for this application.
-  Without it, a folder that already holds them stops the run before any model
-  call.
+  Without one of these, a folder that already holds them stops the run before
+  any model call.
 
-Costs roughly $0.07 per document. The job must be scored first — the
+Costs about $0.14 for a resume and letter; the estimate is printed before it
+spends. The job must be scored first — the
 assessment is what shapes the selection.
 
 ### The pipeline
@@ -369,6 +420,7 @@ stale through neglect.
 |---|---|
 | `jobagent profile validate` | Check `profile/*.yaml` loads and cross-references. |
 | `jobagent config check` | Which model each call uses, and whether keys are set. |
+| `jobagent ui` | The browser UI, on this Mac only. `--port`, `--no-browser`. |
 
 ---
 
@@ -426,8 +478,17 @@ which was two errors compounding: the estimates were conservative, and the
 hardcoded price table costed Sonnet 5 at Sonnet 4.6's rate and overstated every
 logged call by a third.
 
+**Every paid command says what it expects to cost before it spends** —
+`jd add`, `score`, `generate` and `prep` print a line like `Expected cost ~$0.11
+(mean of 80 runs on claude-sonnet-5)`, and the UI shows the same figure on its
+confirmation page. It is your own past calls' tokens priced at today's rates in
+`prices.yaml`, not a figure typed in anywhere. When it cannot say, it says why:
+no measurement yet for that model, a price missing from `prices.yaml`, or
+budget mode.
+
 Run `jobagent spend` for the real numbers, broken down by job description, by
-call and by whether it was real work or an eval run. `jobagent spend --jd 22`
+call and by where it came from: `cli` and `ui` are real work, from the terminal
+and the browser; `eval` is grading runs. `jobagent spend --jd 22`
 answers what one application cost end to end.
 
 ---
