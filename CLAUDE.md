@@ -73,7 +73,9 @@ exceptions carrying facts; `cli/` and `web/` word them. Decided 2026-09-29
 - `anthropic` (LLM), `python-docx` (documents), `PyYAML` (profile)
 - `pypdf` (reading job ads saved as PDF)
 - `sqlite3` from stdlib — plain SQL, no ORM
-- `pytest` for tests
+- `fastapi`, `uvicorn`, `jinja2`, `python-multipart` (the local UI); HTMX
+  vendored as one static file, no build step, nothing loaded from a CDN
+- `pytest` for tests; `httpx2` so Starlette's TestClient does not warn
 
 Keep the dependency list short. Alan's Python is his weakest recent language;
 readable stdlib beats clever abstractions.
@@ -181,14 +183,20 @@ on a tab stop at **16.93cm**.
   for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
   see the invariants below for why each field is there.
 
-## Where the project is — 2026-09-20
+## Where the project is — 2026-10-01
 
-**Built and working. Phases 0-5 and 7 are done; only Phase 8 (a local UI) is
-left, and it is deferred until the CLI has been used on real applications.**
-Phase 6 (Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`
-for the reasoning, which matters more than the decisions.
+**Built and working. Phases 0-5 and 7 are done; Phase 8 (a local UI) is under
+way on branch `001-local-ui`, not yet merged.** Its spec, plan and task list
+are in `specs/001-local-ui/` (Spec Kit). The MVP is built: `jobagent ui` shows
+the shortlist and full assessments, opens documents, and generates from a
+button behind a cost confirmation. Adding and scoring ads from the browser
+(User Story 3) is next; `jd add`, `score`, `apply`, `outcome` and `prep` are
+still terminal-only. Phase 6 (Gmail triage) and the Drive upload were
+dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
+decisions.
 
-559 tests pass as of 2026-09-28, none touching the network. `main` is pushed
+706 tests pass as of 2026-10-01 on `001-local-ui` (562 on `main`), none
+touching the network. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
 
@@ -213,16 +221,19 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent jd delete <id>            free     a duplicate record; cascades
     jobagent score <id>                ~$0.11   verdict, two scores, filters
     jobagent generate <id> --resume --cover  ~$0.13  documents + assessment
+    jobagent generate <id> ... --supersede   keep earlier documents, dated
     jobagent prep <id>                 ~$0.11   interview questions
     jobagent apply|outcome|status      free     the pipeline
     jobagent spend [--jd N]            free     where the bill went
     jobagent eval report|diff|export   free     grade the scorer
     jobagent eval run                  ~$0.11/case
     jobagent --budget <cmd>            free tier, 20 requests/day, worse
+    jobagent ui                        free     the browser UI, this Mac only
 
 About 28 cents per application end to end. Do not quote a cost from memory or
 from this file if `jobagent spend` can answer it — that is the whole reason it
-exists.
+exists. Every paid command, and the UI's confirmation page, now prints its own
+expected cost before spending (`services/costs.py`).
 
 `README.md` documents the loop for Alan. Keep it accurate — he uses it.
 
@@ -309,9 +320,10 @@ exists.
   end of the command. A silent `None` in a spend log is how two Gemini calls
   cost nothing at all for a week.
 - **The run log records what a call was for, not just what it cost.** Every
-  record carries `command`, `jd_id`, `source` (`cli` or `eval`) and `run_id`.
-  Without `source`, a month of eval runs is indistinguishable from a month of
-  applications. `run_id` exists because `parse_jd` runs before the JD has an
+  record carries `command`, `jd_id`, `source` (`cli`, `ui` or `eval`) and
+  `run_id`. Without `source`, a month of eval runs is indistinguishable from a
+  month of applications; `ui` is kept apart from `cli` so the log can show
+  whether the UI is actually used. `run_id` exists because `parse_jd` runs before the JD has an
   id — `jd add` parses, then stores — so the command appends one attribution
   record once the id is known and `spend` joins on it. The call records are
   never rewritten; the log is append-only.
@@ -392,6 +404,19 @@ exists.
   named employers, and anything the profile marks never-publish. Two of the
   three exposures found on 2026-09-20 had been introduced by tidying that only
   touched the current version.
+- **An average of logged costs inherits every pricing error ever logged.** The
+  first cost estimate averaged `cost_usd` from `runs.jsonl` and put `score` at
+  $0.15 against a true $0.11, because every record before 2026-09-08 was
+  written at Sonnet 4.6's rate. The question an estimate answers is what the
+  next call will cost, so `expected_cost` prices past calls' tokens at today's
+  `prices.yaml`. One unpriced sample makes the estimate "unknown", never a
+  partial sum and never $0.00.
+- **A guard that moves things runs after every refusal, not before.** The first
+  `--supersede` renamed the application folder before the profile and model
+  checks, so a run refused a moment later left the documents renamed for
+  nothing. The move now happens last — after every refusal, before the first
+  model call — so a refused run touches nothing and a failed move spends
+  nothing.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment
