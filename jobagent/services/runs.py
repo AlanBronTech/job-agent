@@ -151,6 +151,15 @@ def last_run_for(ws: Workspace, jd_id: int, kind: str | None = None) -> Run | No
     return _row(row) if row else None
 
 
+def running(ws: Workspace) -> list[Run]:
+    with _open(ws) as conn:
+        rows = conn.execute(
+            "SELECT * FROM ui_runs WHERE owner = ? AND status = 'running' ORDER BY id",
+            (ws.owner,),
+        ).fetchall()
+    return [_row(r) for r in rows]
+
+
 def unseen_finished(ws: Workspace) -> list[Run]:
     """Finished runs nobody has looked at yet: the banner on every page."""
     with _open(ws) as conn:
