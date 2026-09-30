@@ -24,6 +24,9 @@ from jobagent.cli import paths
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
+from jobagent.services import ads
+from jobagent.services.refusals import UnreadableAd
+from jobagent.services.workspace import Workspace
 from jobagent.core import history, store
 from jobagent.core.jd import JDError, parse_jd
 from jobagent.core.models import HiringStatus, JobDescription
@@ -64,9 +67,6 @@ def add(
     `--file` takes a path, or enough of a saved ad's name to identify it:
     `--file ebury` beats quoting 'Engineering Manager (L5_L6) ... .pdf'.
     """
-    source_url: str | None = None
-    source_metadata: str | None = None
-
     config = get_config()
     try:
         file = _resolve_file(
@@ -78,17 +78,27 @@ def add(
     if file is not None and not stdin:
         console.print(f"[dim]Reading {file.name}[/]")
 
-    ad = _extract_saved_page(file) if file is not None and not stdin else None
-    if ad is not None:
-        raw_text = ad.text
-        source_url = ad.source_url
-        source_metadata = ad.posting_metadata
+    if file is not None and not stdin:
+        page = _extract_saved_page(file)
+        try:
+            ad = ads.AdInput.from_page(page, file.name) if page else ads.read_ad(file=file)
+        except UnreadableAd as exc:
+            err_console.print(f"[bold red]{exc}[/]")
+            raise typer.Exit(code=2)
+    else:
+        try:
+            ad = ads.AdInput(raw_text=_read_input(file=file, stdin=stdin))
+        except JDError as exc:
+            err_console.print(f"[bold red]{exc}[/]")
+            raise typer.Exit(code=2)
+
+    if ad.page_chars is not None:
         console.print(
-            f"[dim]Saved page: {len(ad.full_text):,} chars → "
-            f"{len(ad.text):,} after removing platform furniture.[/]"
+            f"[dim]Saved page: {ad.page_chars:,} chars → "
+            f"{len(ad.raw_text):,} after removing platform furniture.[/]"
         )
-        if source_metadata:
-            console.print(f"[dim]Posting: {source_metadata}[/]")
+        if ad.posting_metadata:
+            console.print(f"[dim]Posting: {ad.posting_metadata}[/]")
         if ad.truncated:
             err_console.print(
                 "[bold yellow]The description ends at a '…more' toggle — this "
@@ -99,9 +109,9 @@ def add(
                 "re-run. Parsing half an ad gives a confident, wrong answer.[/]"
             )
             raise typer.Exit(code=2)
-        if ad.thin:
+        if ad.thin_chars is not None:
             err_console.print(
-                f"[bold yellow]Only {len(ad.text):,} characters of ad text — "
+                f"[bold yellow]Only {ad.thin_chars:,} characters of ad text — "
                 "this is more likely a collapsed description than a short "
                 "advertisement.[/]"
             )
@@ -110,47 +120,35 @@ def add(
                 "and re-run. Scoring a stub costs $0.11 to be told the ad is "
                 "empty. Continuing anyway.[/]"
             )
-    else:
-        try:
-            raw_text = _read_input(file=file, stdin=stdin)
-        except JDError as exc:
-            err_console.print(f"[bold red]{exc}[/]")
-            raise typer.Exit(code=2)
 
+    context = RunContext(command="jd add")
     try:
-        client = get_client(
-            CallType.parse_jd,
-            config,
-            RunContext(command="jd add"),
-        )
+        client = get_client(CallType.parse_jd, config, context)
     except LLMError as exc:
         err_console.print(f"[bold red]No model available for JD parsing.[/] {exc}")
         err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
         raise typer.Exit(code=2)
 
-    print_estimate(config, "add_ad")
-    with console.status("Parsing…"):
-        try:
-            jd = parse_jd(raw_text, client=client, source=source)
-            jd.source_url = source_url
-            jd.source_metadata = source_metadata
-        except JDError as exc:
-            err_console.print(f"[bold red]Could not parse the job description.[/]")
-            err_console.print(str(exc))
-            raise typer.Exit(code=1)
-
     try:
-        with store.open_store(config.db_path) as conn:
-            jd_id = store.add_jd(conn, jd)
-            jd.id = jd_id
-            # The parse call was logged before this id existed. One line links
-            # them, so `jobagent spend` can attribute the parse to the ad.
-            log_attribution(config.runs_log_path, client.context.run_id, jd_id)
-            seen_before = history.company_history(conn, jd)
+        with console.status("Parsing…"):
+            result = ads.add(
+                Workspace.from_config(config),
+                config,
+                context,
+                ad,
+                source=source,
+                client=client,
+                before_spend=lambda: print_estimate(config, "add_ad"),
+            )
+    except JDError as exc:
+        err_console.print("[bold red]Could not parse the job description.[/]")
+        err_console.print(str(exc))
+        raise typer.Exit(code=1)
     except StoreError as exc:
         err_console.print(f"[bold red]Parsed, but could not save.[/] {exc}")
         raise typer.Exit(code=1)
 
+    jd, jd_id, seen_before = result.jd, result.jd.id, result.history
     _render_jd(jd)
     console.print(f"\n[green]Saved as JD {jd_id}.[/]")
     # Last, so it is the line still on screen when he decides whether to spend
@@ -459,20 +457,10 @@ def delete(
 
 
 def _extract_saved_page(file: Path) -> ExtractedAd | None:
-    """Unwrap a saved job page, or return None if this is plain text.
-
-    Neither adapter fetches anything; both read the file Alan already saved.
-    """
-    if mhtml.looks_like_mhtml(file):
-        reader, error = mhtml.extract_ad, mhtml.MHTMLError
-    elif pdf.looks_like_pdf(file):
-        reader, error = pdf.extract_ad, pdf.PDFError
-    else:
-        return None
-
+    """Unwrap a saved job page, or return None if this is plain text."""
     try:
-        return reader(file)
-    except error as exc:
+        return ads.extract_saved_page(file)
+    except UnreadableAd as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=2)
 

@@ -107,12 +107,20 @@ def test_prep(config, monkeypatch, printed):
 
 
 def test_jd_add(config, monkeypatch, printed, tmp_path):
+    from jobagent.services import ads
+
     monkeypatch.setattr(jd_cli, "get_config", lambda: config)
-    stop_at(monkeypatch, jd_cli, "parse_jd", printed)
+    stop_at(monkeypatch, jd_cli, "parse_jd", printed)  # get_client is still built in the CLI
+    stopped = []
+
+    def parse(*a, **k):
+        stopped.append(True)
+        raise Stop
+    monkeypatch.setattr(ads, "parse_jd", parse)
     ad = tmp_path / "ad.txt"
     ad.write_text("An invented advertisement. " * 60)
     runner.invoke(app, ["jd", "add", "--file", str(ad)])
-    assert printed == [("add_ad", {})]
+    assert printed == [("add_ad", {})] and stopped == [True]
 
 
 def test_the_line_itself(config, capsys):
