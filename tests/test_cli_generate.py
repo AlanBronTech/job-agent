@@ -204,3 +204,97 @@ def test_a_first_run_is_not_blocked(wired) -> None:
 
     assert "Already generated" not in result.output
     assert "No profile directory" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# --supersede: keep the earlier documents under a dated name
+# --------------------------------------------------------------------------- #
+
+
+def test_the_refusal_offers_supersede(wired) -> None:
+    jd_id = seed_worth_generating(wired)
+    already_generated(wired, jd_id)
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+    assert "--supersede" in " ".join(result.output.split())
+
+
+def test_supersede_gets_past_the_guard_without_moving_a_refused_run(wired) -> None:
+    """Past the overwrite guard to the next gate, a missing profile. The run is
+    refused there, so the folder must not have been renamed for nothing."""
+    jd_id = seed_worth_generating(wired)
+    folder, resume = already_generated(wired, jd_id)
+
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume", "--supersede"])
+
+    assert "Already generated" not in result.output
+    assert "No profile directory" in result.output
+    assert folder.exists() and resume.read_text(encoding="utf-8") == "the resume that was sent"
+
+
+def _ready_to_spend(wired, monkeypatch, calls):
+    """A profile and a client, with the first model call recorded and stopped."""
+    from pathlib import Path
+
+    from jobagent.services import documents
+
+    wired.profile_dir = Path(__file__).resolve().parents[1] / "profile.example"
+    monkeypatch.setattr(documents, "get_client", lambda *a, **k: object())
+
+    def first_call(*args, **kwargs):
+        calls.append("model")
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(documents, "build_resume", first_call)
+
+
+def test_supersede_moves_the_folder_just_before_spending(wired, monkeypatch) -> None:
+    jd_id = seed_worth_generating(wired)
+    folder, resume = already_generated(wired, jd_id)
+    calls = []
+    _ready_to_spend(wired, monkeypatch, calls)
+
+    runner.invoke(app, ["generate", str(jd_id), "--resume", "--supersede"])
+
+    assert calls == ["model"]
+    assert not folder.exists()
+    moved = [p for p in folder.parent.iterdir() if ".superseded-" in p.name]
+    assert len(moved) == 1
+    assert (moved[0] / resume.name).read_text(encoding="utf-8") == "the resume that was sent"
+
+
+def test_supersede_with_nothing_to_move_is_a_first_run(wired) -> None:
+    jd_id = seed_worth_generating(wired)
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume", "--supersede"])
+    assert "No profile directory" in result.output
+
+
+def test_supersede_and_overwrite_together_is_refused(wired) -> None:
+    jd_id = seed_worth_generating(wired)
+    folder, _ = already_generated(wired, jd_id)
+    result = runner.invoke(
+        app, ["generate", str(jd_id), "--resume", "--supersede", "--overwrite"]
+    )
+    assert result.exit_code == 2
+    assert "contradict" in result.output
+    assert folder.exists()
+
+
+def test_a_failed_move_spends_nothing_and_leaves_the_folder(wired, monkeypatch) -> None:
+    from jobagent.adapters import docs
+
+    jd_id = seed_worth_generating(wired)
+    folder, resume = already_generated(wired, jd_id)
+    calls = []
+    _ready_to_spend(wired, monkeypatch, calls)
+
+    def refuse(*args, **kwargs):
+        raise docs.DocsError("permission denied")
+
+    monkeypatch.setattr(docs, "supersede_folder", refuse)
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume", "--supersede"])
+
+    output = " ".join(result.output.split())
+    assert result.exit_code == 1
+    assert "Nothing was spent" in output
+    assert calls == []
+    assert resume.read_text(encoding="utf-8") == "the resume that was sent"

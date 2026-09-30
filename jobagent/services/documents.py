@@ -144,16 +144,9 @@ def generate(
         if warning:
             warnings.append(warning)
 
-    superseded: Path | None = None
-    if supersede:
-        try:
-            moved = ws.documents.supersede(jd, today, now)
-        except docs.DocsError as exc:
-            raise SupersedeFailed(ws.documents.folder_name(jd, today), str(exc)) from exc
-        superseded = Path(moved) if moved else None
-
     names = planned_names(jd, today, resume=resume, cover=cover, answers=bool(questions))
-    if not overwrite:
+    # With supersede the clash is expected: the folder is moved aside below.
+    if not overwrite and not supersede:
         clashes = _clashes(ws, jd, today, names)
         if clashes:
             raise AlreadyGenerated(ws.documents.folder_name(jd, today), clashes)
@@ -169,6 +162,17 @@ def generate(
         client = get_client(CallType.generate, config, ctx)
     except LLMError as exc:
         raise NoModel(str(exc)) from exc
+
+    # Last, after every refusal, so a run that was going to be refused anyway
+    # does not leave the folder renamed; first, before any model call, so a
+    # failed move costs nothing.
+    superseded: Path | None = None
+    if supersede:
+        try:
+            moved = ws.documents.supersede(jd, today, now)
+        except docs.DocsError as exc:
+            raise SupersedeFailed(ws.documents.folder_name(jd, today), str(exc)) from exc
+        superseded = Path(moved) if moved else None
 
     # -- spending starts here ------------------------------------------------
     if before_spend is not None:

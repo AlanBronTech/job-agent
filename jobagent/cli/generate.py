@@ -55,8 +55,20 @@ def generate(
         "--overwrite",
         help="Replace documents already generated for this application.",
     ),
+    supersede: bool = typer.Option(
+        False,
+        "--supersede",
+        help="Keep documents already generated: move their folder aside under a "
+        "dated name, then write a fresh one.",
+    ),
 ) -> None:
     """Generate application documents for one job description."""
+    if supersede and overwrite:
+        err_console.print(
+            "[bold red]--supersede and --overwrite contradict each other.[/] "
+            "One keeps the earlier documents, the other replaces them."
+        )
+        raise typer.Exit(code=2)
     if not (resume or cover or answers):
         err_console.print(
             "[bold red]Nothing to generate.[/] Pass --resume, --cover, or --answers."
@@ -100,7 +112,7 @@ def generate(
             cover=cover,
             questions=questions,
             overrule=force,
-            supersede=False,
+            supersede=supersede,
             overwrite=overwrite,
             today=today,
             now=datetime.now(),
