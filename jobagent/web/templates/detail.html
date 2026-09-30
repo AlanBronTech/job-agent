@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% from "_macros.html" import verdict, status %}
+{% set jd = d.jd %}
+{% set a = d.assessment %}
+{% block title %}{{ jd.title }} · {{ jd.company or "Unknown" }} · job-agent{% endblock %}
+{% block main %}
+<p class="muted"><a href="/">← Ads</a> · JD {{ jd.id }}</p>
+<h1>{{ jd.title }}</h1>
+<p class="muted">
+  {{ jd.company or jd.posted_by or "Unknown company" }}
+  {% if jd.location %} · {{ jd.location }}{% endif %}
+  · {{ jd.work_type.value | replace("_", " ") }} · {{ jd.work_arrangement.value | replace("_", " ") }}
+  {% if jd.salary_range and jd.salary_range.raw %} · {{ jd.salary_range.raw }}{% endif %}
+  · captured {{ jd.ingested_at.strftime("%-d %b %Y") }}
+</p>
+{% if jd.source_url or jd.source_metadata %}
+<p class="detail">
+  {# Plain text, never a link: the UI does not open or link through to job boards (FR-007, FR-008). #}
+  {% if jd.source_url %}Source: <code>{{ jd.source_url }}</code>{% endif %}
+  {% if jd.source_metadata %}<br>{{ jd.source_metadata }}{% endif %}
+</p>
+{% endif %}
+
+{% if d.stale %}
+<div class="banner warn"><strong>This assessment predates an amendment to the ad.</strong>
+  It was scored against text that has since been replaced. Re-score with <code>jobagent score {{ jd.id }}</code>.</div>
+{% endif %}
+
+{% if d.history.encounters %}
+<div class="panel">
+  <strong>You have seen {{ d.history.company }} before.</strong>
+  <span class="muted">Information only; it does not change the verdict.</span>
+  <ul class="checks">
+  {% for e in d.history.encounters %}
+    <li><span class="mark muted">·</span>
+      <span><a href="/ads/{{ e.jd_id }}">JD {{ e.jd_id }} — {{ e.title }}</a>
+        <span class="muted">{{ e.ingested_at.strftime("%-d %b %Y") }}</span>
+        {% if e.same_posting %}<span class="pill warn">same posting</span>{% endif %}
+        · {{ status(e.status) }}
+        {% if e.worth_why %}<div class="detail">{{ e.worth_why }}</div>{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>Assessment</h2>
+{% if a is none %}
+  <div class="panel"><p class="muted">Not scored yet. Score it with <code>jobagent score {{ jd.id }}</code>.</p></div>
+{% else %}
+  {% if a.breaches %}
+  <div class="banner bad"><strong>Hard filter breached — skip, whatever the score.</strong>
+    {% for c in a.breaches %}<div>{{ c.name }}: {{ c.detail }}</div>{% endfor %}</div>
+  {% endif %}
+  <div class="panel">
+    <div class="summary">
+      <div><div class="label">Verdict</div><div class="value">{{ verdict(a.verdict) }}</div></div>
+      <div><div class="label">Hiring manager</div><div class="value">{{ a.overall_score }}/100</div></div>
+      <div><div class="label">Recruiter screen</div><div class="value">{{ a.recruiter_screen_score }}/100</div></div>
+      <div><div class="label">Target role</div><div class="value">{{ "yes" if a.target_role_match else "no" }}</div></div>
+    </div>
+    <p>{{ a.rationale }}</p>
+    <p class="detail">{{ a.target_role_note }}</p>
+  </div>
+
+  {% if a.constraints %}
+  <h2>Hard filters</h2>
+  <div class="panel"><ul class="checks">
+  {% for c in a.constraints %}
+    <li>
+      {% if c.status.value == "ok" %}<span class="mark ok" title="met">✓</span>
+      {% elif c.status.value == "breach" %}<span class="mark breach" title="breach">✗</span>
+      {% else %}<span class="mark unknown" title="not stated">?</span>{% endif %}
+      <span><strong>{{ c.name }}</strong>
+        {% if c.status.value == "unknown" %}<span class="pill warn">not stated</span>{% endif %}
+        <div class="detail">{{ c.detail }}</div>
+        {% if c.question %}<div class="detail">Ask: {{ c.question }}</div>{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul></div>
+  {% endif %}
+
+  {% if a.requirements %}
+  <h2>Requirements <span class="muted count">{{ a.requirements | selectattr("status.value", "equalto", "met") | list | length }} of {{ a.requirements | length }} met</span></h2>
+  <div class="panel"><ul class="checks">
+  {% for r in a.requirements %}
+    <li>
+      <span class="mark {{ r.status.value }}" title="{{ r.status.value }}">{{ {"met": "✓", "partial": "~", "gap": "✗"}[r.status.value] }}</span>
+      <span>{{ r.requirement }}
+        <div class="detail">{{ r.note }}{% if r.evidence_ref %} <code>{{ r.evidence_ref }}</code>{% endif %}</div></span>
+    </li>
+  {% endfor %}
+  </ul></div>
+  {% endif %}
+
+  {% if a.emphasise %}
+  <h2>Lead with</h2>
+  <div class="panel"><ol>{% for item in a.emphasise %}<li>{{ item }}</li>{% endfor %}</ol></div>
+  {% endif %}
+
+  {% if a.challenge_points %}
+  <h2>They will push on</h2>
+  <div class="panel"><ul class="checks">
+  {% for c in a.challenge_points %}
+    <li><span class="mark muted">·</span><span><strong>{{ c.point }}</strong><div class="detail">{{ c.response }}</div></span></li>
+  {% endfor %}
+  </ul></div>
+  {% endif %}
+
+  {% if a.questions_to_ask %}
+  <h2>Ask before applying</h2>
+  <div class="panel"><ul>{% for q in a.questions_to_ask %}<li>{{ q }}</li>{% endfor %}</ul></div>
+  {% endif %}
+
+  {% if a.profile_gaps %}
+  <h2>Gaps in the profile itself</h2>
+  <div class="panel"><ul>{% for g in a.profile_gaps %}<li class="muted">{{ g }}</li>{% endfor %}</ul></div>
+  {% endif %}
+
+  <p class="detail">{{ a.model_used or "an unrecorded model" }} · scored {{ a.scored_at.strftime("%-d %b %Y %H:%M") }}</p>
+{% endif %}
+
+<h2>Documents</h2>
+<div class="panel folders">
+{% if not d.folders.all %}
+  <p class="muted">Nothing generated for this ad yet.</p>
+{% else %}
+  {% for folder in d.folders.all %}
+  <div class="folder">
+    <strong>{{ folder.name }}</strong>
+    {% if folder is sameas d.folders.current %}<span class="pill verdict-apply">current</span>
+    {% elif folder.superseded %}<span class="pill muted">superseded</span>
+    {% else %}<span class="pill muted">{{ folder.month }}</span>{% endif %}
+    <form class="inline" method="post" action="/ads/{{ jd.id }}/documents/reveal">
+      <input type="hidden" name="csrf" value="{{ token }}">
+      <input type="hidden" name="folder" value="{{ folder.name }}">
+      <button type="submit">Reveal in Finder</button>
+    </form>
+    <ul class="files">
+    {% for f in folder.files %}
+      <li>
+        <form class="inline" method="post" action="/ads/{{ jd.id }}/documents/open">
+          <input type="hidden" name="csrf" value="{{ token }}">
+          <input type="hidden" name="folder" value="{{ folder.name }}">
+          <input type="hidden" name="name" value="{{ f.name }}">
+          <button type="submit">Open</button>
+        </form>
+        <span>{{ f.name }}</span>
+        <span class="muted">{{ f.modified.strftime("%-d %b %Y %H:%M") }}</span>
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+{% endif %}
+</div>
+
+<h2>Pipeline</h2>
+<div class="panel">
+{% if d.application %}
+  {{ status(d.application.status) }}
+  {% if d.application.applied_on %} · applied {{ d.application.applied_on.strftime("%-d %b %Y") }}{% endif %}
+  {% if d.application.channel %} · via {{ d.application.channel }}{% endif %}
+  {% if d.application.overrode_scorer %} · <span class="pill warn">overrode the scorer</span>{% endif %}
+  {% if d.application.notes %}<div class="detail">{{ d.application.notes }}</div>{% endif %}
+{% else %}
+  <span class="muted">No application recorded.</span>
+  {% if d.folders.any %}<span class="pill warn">documents generated, not recorded as applied</span>{% endif %}
+{% endif %}
+</div>
+
+<details>
+  <summary>Ad text as parsed ({{ jd.raw_text | length }} characters)</summary>
+  <pre class="adtext">{{ jd.raw_text }}</pre>
+</details>
+{% endblock %}
