@@ -24,9 +24,10 @@ against the page a human saw.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from jobagent.core.models import ConstraintStatus, FitAssessment, JobDescription
@@ -88,6 +89,45 @@ def folders_for(output_dir: Path, jd: JobDescription) -> list[Path]:
     if not parent.is_dir():
         return []
     return sorted(path for path in parent.glob(f"*_{suffix}") if path.is_dir())
+
+
+SUPERSEDED_MARK = ".superseded-"
+
+
+def supersede_folder(folder: Path, now: datetime) -> Path:
+    """Move an application folder aside under a dated name, and return the new path.
+
+    The alternative to overwriting. The documents in an application folder are
+    the ones that get edited by hand and sent, so regenerating over them loses
+    the edits; refusing leaves the only way forward outside the tool. This keeps
+    both: the old set stays where Finder shows it, next to the new one.
+
+        2026-09_Acme_EngineeringManager
+        2026-09.superseded-20260929T140512_Acme_EngineeringManager
+
+    The part before the first `_` gains no underscore, so `folders_for` — which
+    matches on what follows it — still finds the folder, and every "has this
+    been done" check keeps counting it. One `os.rename` within one directory:
+    the folder is either fully moved or untouched, never half of each, which is
+    what lets the caller promise that a failure here spends nothing.
+    """
+    prefix, sep, suffix = folder.name.partition("_")
+    if not sep or not suffix:
+        raise DocsError(f"{folder.name} is not an application folder name.")
+    target = folder.with_name(f"{prefix}{SUPERSEDED_MARK}{now:%Y%m%dT%H%M%S}_{suffix}")
+    if target.exists():
+        raise DocsError(f"Could not move {folder} aside: {target.name} already exists.")
+    try:
+        os.rename(folder, target)
+    except OSError as exc:
+        raise DocsError(f"Could not move {folder} aside: {exc}") from exc
+    return target
+
+
+def is_superseded(folder: Path) -> bool:
+    """True for a folder `supersede_folder` moved aside."""
+    prefix, _, _ = folder.name.partition("_")
+    return SUPERSEDED_MARK in prefix
 
 
 def existing_documents(folder: Path, names: Iterable[str]) -> list[Path]:
