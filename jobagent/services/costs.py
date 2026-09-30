@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from jobagent.adapters.llm import CallType, LLMError, resolve_route
+from jobagent.adapters.prices import PriceError, load_prices
 from jobagent.core.spend import UNKNOWN, SpendError, expected_cost, load_runs
 from jobagent.services.workspace import Workspace
 
@@ -73,8 +74,20 @@ def labels_for(action: str, *, resume=False, cover=False, answers=False) -> list
 
 
 def estimate(
-    ws: Workspace, config, action: str, *, resume=False, cover=False, answers=False
+    ws: Workspace,
+    config,
+    action: str,
+    *,
+    resume=False,
+    cover=False,
+    answers=False,
+    price_lookup=None,
 ) -> CostEstimate:
+    """Past calls' tokens at today's prices (`prices.yaml`), averaged per action.
+
+    If the price table cannot be read, every label is "unknown" rather than
+    falling back to logged costs that are known to be stale.
+    """
     budget = bool(config.budget_mode)
     try:
         model = resolve_route(config, _CALL_TYPE[action]).model
@@ -85,8 +98,15 @@ def estimate(
     except SpendError:
         records = []
     labels = labels_for(action, resume=resume, cover=cover, answers=answers)
+    if price_lookup is None:
+        try:
+            price_lookup = load_prices().lookup
+        except PriceError:
+            price_lookup = lambda _model: None  # noqa: E731 - every label "unknown"
     return CostEstimate(
-        model=model, budget=budget, per_label=expected_cost(records, labels, model)
+        model=model,
+        budget=budget,
+        per_label=expected_cost(records, labels, model, price_lookup),
     )
 
 
@@ -97,7 +117,7 @@ def describe(est: CostEstimate) -> str:
     if est.budget:
         return f"Free tier (budget mode, {est.model})."
     if est.unknown:
-        return f"Price unknown for {est.model}: it is missing from prices.yaml."
+        return f"Price unknown for {est.model}: check prices.yaml."
     if est.unmeasured:
         return f"No measurement for {est.model} yet ({', '.join(est.unmeasured)})."
     total = est.total_usd

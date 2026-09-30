@@ -265,7 +265,10 @@ UNKNOWN = "unknown"
 
 
 def expected_cost(
-    records: list[dict], labels: list[str], model: str
+    records: list[dict],
+    labels: list[str],
+    model: str,
+    price_lookup: "Callable[[str], tuple[float, float] | None] | None" = None,
 ) -> dict[str, "tuple[float, int] | str | None"]:
     """What one more call of each prompt is likely to cost, from what they have cost.
 
@@ -280,6 +283,11 @@ def expected_cost(
     - Summed per `run_id` before averaging, so a parse that was retried counts
       as one action that cost two calls, which is what the next one may do too.
     - Failed calls are left out. They were billed, but carry no cost to add.
+    - With `price_lookup`, each call is priced from its tokens at today's
+      rates rather than the `cost_usd` logged at the time. The question is what
+      the next call will cost, and every record before 2026-09-08 was logged
+      at Sonnet 4.6's rate: averaging those put `score` at $0.15 against a
+      true $0.11.
     - One unpriced sample makes the label `"unknown"`. Summing a null as zero
       is how two Gemini calls cost nothing for a week; an estimate built on
       that would say $0.00 and be believed.
@@ -297,12 +305,27 @@ def expected_cost(
         if not mine:
             estimates[label] = None
             continue
-        if any(_is_unpriced(r) for r in mine):
+        costs = [_cost_now(r, price_lookup) for r in mine]
+        if any(cost is None for cost in costs):
             estimates[label] = UNKNOWN
             continue
         per_action: dict[str, float] = {}
-        for index, record in enumerate(mine):
+        for index, (record, cost) in enumerate(zip(mine, costs)):
             key = str(record.get("run_id") or f"unkeyed-{index}")
-            per_action[key] = per_action.get(key, 0.0) + float(record["cost_usd"])
+            per_action[key] = per_action.get(key, 0.0) + cost
         estimates[label] = (sum(per_action.values()) / len(per_action), len(per_action))
     return estimates
+
+
+def _cost_now(record: dict, price_lookup) -> float | None:
+    """One call's cost at today's prices, or as logged. None if it cannot be priced."""
+    if price_lookup is None:
+        return None if _is_unpriced(record) else float(record["cost_usd"])
+    prices = price_lookup(str(record.get("model") or ""))
+    if prices is None:
+        return None
+    in_price, out_price = prices
+    return (
+        (record.get("input_tokens") or 0) * in_price
+        + (record.get("output_tokens") or 0) * out_price
+    ) / 1_000_000

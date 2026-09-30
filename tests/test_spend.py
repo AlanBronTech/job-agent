@@ -472,3 +472,19 @@ def test_failures_and_attributions_are_left_out():
         pytest.approx(0.10),
         1,
     )
+
+
+def test_expected_cost_reprices_tokens_at_todays_rates():
+    records = [
+        dict(_call("score_fit", 0.15, "a"), input_tokens=10_000, output_tokens=9_000),
+    ]
+    lookup = lambda model: (2.0, 10.0)  # noqa: E731
+    mean, samples = expected_cost(records, ["score_fit"], "claude-sonnet-5", lookup)["score_fit"]
+    assert mean == pytest.approx((10_000 * 2.0 + 9_000 * 10.0) / 1_000_000)
+
+
+def test_expected_cost_unknown_when_today_has_no_price():
+    records = [_call("score_fit", 0.15, "a")]
+    assert expected_cost(records, ["score_fit"], "claude-sonnet-5", lambda m: None) == {
+        "score_fit": UNKNOWN
+    }
