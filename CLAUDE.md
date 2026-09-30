@@ -48,11 +48,23 @@ jobagent/
     llm.py       # Anthropic API client, JSON-mode helpers, retries
     docs.py      # writing generated documents to the local output folder
     docx_writer.py  # python-docx rendering to Alan's format
-  cli/           # typer commands — thin, no logic
+    document_store.py  # where documents live; LocalFolderStore is the only one
+  services/      # workflows shared by cli/ and web/ (added 2026-09-29)
+    workspace.py # whose profile, store, run log, saved ads, document store
+  cli/           # typer commands — parse args, call services, render
+  web/           # local UI: routes + templates over services/, no logic
 ```
 
 Rule: `core/` must be callable from a web handler with no changes. No `print`,
 no `typer` imports, no `sys.exit` inside `core/`.
+
+Rule: `services/` holds the orchestration the CLI commands used to do inline —
+preconditions, refusals, write order — so the CLI and the UI enforce the same
+guards. It may do I/O through `adapters/`, but has no `print`, no `typer`, no
+`sys.exit`, and never calls `get_config()`: every function takes a `Workspace`,
+so a later hosted version can supply one per person. Refusals are typed
+exceptions carrying facts; `cli/` and `web/` word them. Decided 2026-09-29
+(specs/001-local-ui) rather than relaxing `core/`'s no-I/O rule.
 
 ## Stack
 
