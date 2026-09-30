@@ -8,6 +8,7 @@ from rich.panel import Panel
 
 from jobagent.adapters import docs
 from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
+from jobagent.cli.estimate import print_estimate
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.models import InterviewPrep
@@ -70,6 +71,7 @@ def prep(
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=2)
 
+    print_estimate(config, "prep")
     with console.status("Preparing…"):
         try:
             prepared, issues = prepare(

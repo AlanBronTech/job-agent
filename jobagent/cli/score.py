@@ -11,6 +11,7 @@ from rich.table import Table
 
 from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.config import get_config
+from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.core import history, store
 from jobagent.core.models import (
@@ -145,6 +146,7 @@ def score(
         err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
         raise typer.Exit(code=2)
 
+    print_estimate(config, "score")
     with console.status("Scoring…"):
         try:
             assessment = score_fit(jd, profile, client=client)

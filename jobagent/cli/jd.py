@@ -21,6 +21,7 @@ from jobagent.adapters.llm import (
     log_attribution,
 )
 from jobagent.cli import paths
+from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
 from jobagent.core import history, store
@@ -127,6 +128,7 @@ def add(
         err_console.print("[dim]Run `jobagent config check` to see routing.[/]")
         raise typer.Exit(code=2)
 
+    print_estimate(config, "add_ad")
     with console.status("Parsing…"):
         try:
             jd = parse_jd(raw_text, client=client, source=source)

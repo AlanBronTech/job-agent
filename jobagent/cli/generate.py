@@ -19,6 +19,7 @@ from jobagent.adapters.docx_writer import (
 from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.cli import paths
 from jobagent.config import get_config
+from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.core import history, store
 from jobagent.core.generate import (
@@ -132,6 +133,7 @@ def generate(
         raise typer.Exit(code=2)
 
     questions = _read_questions(answers) if answers else []
+    print_estimate(config, "generate", resume=resume, cover=cover, answers=bool(questions))
     folder = docs.application_folder(config.output_dir, jd, when=today)
     issues: list[ValidationIssue] = []
     written: list[Path] = []
