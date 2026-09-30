@@ -10,7 +10,6 @@ the two front ends quote the other.
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 
 class Refusal(Exception):
@@ -70,7 +69,7 @@ class AdNotFound(Refusal):
 class AlreadyGenerated(Refusal):
     """This run would replace documents already on disk."""
 
-    def __init__(self, folder: Path, files: list[tuple[str, datetime]]) -> None:
+    def __init__(self, folder: str, files: list[tuple[str, datetime]]) -> None:
         super().__init__(f"{folder} already holds documents for this application")
         self.folder = folder
         self.files = files
@@ -79,7 +78,7 @@ class AlreadyGenerated(Refusal):
 class SupersedeFailed(Refusal):
     """The existing folder could not be moved aside; it is untouched."""
 
-    def __init__(self, folder: Path, reason: str) -> None:
+    def __init__(self, folder: str, reason: str) -> None:
         super().__init__(f"could not move {folder} aside: {reason}")
         self.folder = folder
         self.reason = reason

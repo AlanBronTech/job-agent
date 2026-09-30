@@ -52,6 +52,7 @@ class GeneratePlan:
     folder: Path
     names: list[str]
     clashes: list[tuple[str, datetime]]
+    history: CompanyHistory | None = None
 
 
 @dataclass

@@ -1,38 +1,35 @@
-"""`jobagent generate ...`. Thin: resolve config, call core, render, report."""
+"""`jobagent generate ...`. Thin: parse arguments, call services.documents, report."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from jobagent.adapters import docs
-from jobagent.adapters.docx_writer import (
-    CoverLetterContent,
-    DocxError,
-    write_cover_letter,
-    write_resume,
-)
-from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
+from jobagent.adapters.llm import RunContext
 from jobagent.cli import paths
-from jobagent.config import get_config
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
-from jobagent.core import history, store
-from jobagent.core.generate import (
-    GenerateError,
-    UnusedEntry,
-    build_answers,
-    build_cover_letter,
-    build_resume,
-)
-from jobagent.core.models import Application, JobDescription, Verdict
-from jobagent.core.profile import ProfileError, load_profile
+from jobagent.config import get_config
+from jobagent.core.generate import UnusedEntry
 from jobagent.core.store import StoreError
 from jobagent.core.validation import Severity, ValidationIssue
+from jobagent.services import documents
+from jobagent.services.documents import GenerationFailed
+from jobagent.services.refusals import (
+    AlreadyGenerated,
+    NoModel,
+    NoSuchAd,
+    NotScored,
+    ProfileInvalid,
+    ProfileMissing,
+    SupersedeFailed,
+    VerdictIsSkip,
+)
+from jobagent.services.workspace import Workspace
 
 console = Console()
 err_console = Console(stderr=True)
@@ -67,20 +64,20 @@ def generate(
         raise typer.Exit(code=2)
 
     config = get_config()
+    ws = Workspace.from_config(config)
+    today = date.today()
 
     try:
-        with store.open_store(config.db_path) as conn:
-            jd = store.get_jd(conn, jd_id)
-            assessment = store.latest_assessment(conn, jd_id) if jd else None
-            seen_before = history.company_history(conn, jd) if jd else None
+        planned = documents.plan(
+            ws, jd_id, resume=resume, cover=cover, answers=answers is not None, when=today
+        )
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
-
-    if jd is None:
+    except NoSuchAd:
         err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
         raise typer.Exit(code=1)
-    if assessment is None:
+    except NotScored:
         err_console.print(
             f"[bold red]JD {jd_id} has not been scored.[/] "
             f"Run `jobagent score {jd_id}` first — generation is shaped by the "
@@ -88,176 +85,103 @@ def generate(
         )
         raise typer.Exit(code=2)
 
-    if seen_before is not None:
-        render_company_history(err_console, seen_before)
+    if planned.history is not None:
+        render_company_history(err_console, planned.history)
 
-    if assessment.verdict is Verdict.skip and force:
-        _record_override(config, jd_id)
+    questions = _read_questions(answers) if answers else []
 
-    if assessment.verdict is Verdict.skip and not force:
-        err_console.print(
-            f"[bold yellow]The assessment says skip.[/] {assessment.rationale}"
+    try:
+        result = documents.generate(
+            ws,
+            config,
+            RunContext(command="generate", jd_id=jd_id),
+            jd_id,
+            resume=resume,
+            cover=cover,
+            questions=questions,
+            overrule=force,
+            supersede=False,
+            overwrite=overwrite,
+            today=today,
+            now=datetime.now(),
+            before_spend=lambda: print_estimate(
+                config, "generate", resume=resume, cover=cover, answers=bool(questions)
+            ),
         )
+    except VerdictIsSkip as refusal:
+        err_console.print(f"[bold yellow]The assessment says skip.[/] {refusal.rationale}")
         err_console.print(
             "\n[dim]Generating anyway is a day of work against a role the "
             "scorer has already argued against. Pass --force if you disagree "
             "with it.[/]"
         )
         raise typer.Exit(code=2)
-
-    today = date.today()
-    if not overwrite:
-        _refuse_to_clobber(
-            config, jd, today, resume=resume, cover=cover, answers=answers is not None
+    except SupersedeFailed as refusal:
+        err_console.print(
+            f"[bold red]Could not move {config.output_dir / refusal.folder} aside.[/] "
+            f"{refusal.reason} Nothing was spent and the folder is untouched."
         )
-
-    if config.profile_dir is None:
+        raise typer.Exit(code=1)
+    except AlreadyGenerated as refusal:
+        _refuse_to_clobber(config.output_dir / refusal.folder, refusal.files)
+    except ProfileMissing:
         err_console.print("[bold red]No profile directory.[/] Set PROFILE_DIR in .env.")
         raise typer.Exit(code=2)
-
-    try:
-        profile = load_profile(config.profile_dir)
-    except ProfileError as exc:
+    except ProfileInvalid as refusal:
         err_console.print(f"[bold red]Profile invalid[/] ({config.profile_dir})")
-        err_console.print(str(exc))
+        err_console.print(refusal.detail)
+        raise typer.Exit(code=1)
+    except NoModel as refusal:
+        err_console.print(f"[bold red]No model available for generation.[/] {refusal.detail}")
+        raise typer.Exit(code=2)
+    except GenerationFailed as failure:
+        err_console.print(f"[bold red]{_FAILED[failure.stage]}[/] {failure.cause}")
+        if failure.written:
+            err_console.print(
+                "[yellow]Written before it failed, so incomplete:[/] "
+                + ", ".join(path.name for path in failure.written)
+            )
         raise typer.Exit(code=1)
 
-    try:
-        client = get_client(
-            CallType.generate,
-            config,
-            RunContext(command="generate", jd_id=jd.id),
-        )
-    except LLMError as exc:
-        err_console.print(f"[bold red]No model available for generation.[/] {exc}")
-        raise typer.Exit(code=2)
-
-    questions = _read_questions(answers) if answers else []
-    print_estimate(config, "generate", resume=resume, cover=cover, answers=bool(questions))
-    folder = docs.application_folder(config.output_dir, jd, when=today)
-    issues: list[ValidationIssue] = []
-    written: list[Path] = []
-    unused: list[UnusedEntry] = []
-
-    if resume:
-        with console.status("Selecting content for the resume…"):
-            try:
-                built = build_resume(jd, profile, assessment, client=client, today=today)
-            except GenerateError as exc:
-                err_console.print(f"[bold red]Could not build the resume.[/] {exc}")
-                raise typer.Exit(code=1)
-        issues += built.issues
-        unused = built.unused
-        try:
-            written.append(
-                write_resume(
-                    built.content, folder / docs.document_name("Resume", jd, when=today)
-                )
-            )
-        except DocxError as exc:
-            err_console.print(f"[bold red]{exc}[/]")
-            raise typer.Exit(code=1)
-
-    if cover:
-        with console.status("Writing the cover letter…"):
-            try:
-                letter = build_cover_letter(jd, profile, assessment, client=client)
-            except GenerateError as exc:
-                err_console.print(f"[bold red]Could not write the cover letter.[/] {exc}")
-                raise typer.Exit(code=1)
-        issues += letter.issues
-        content = CoverLetterContent(
-            name=profile.roles.person.name,
-            contact=_contact(profile),
-            date=f"{today:%-d %B %Y}",
-            recipient=[jd.company] if jd.company else [],
-            paragraphs=[p.strip() for p in letter.text.split("\n\n") if p.strip()],
-        )
-        try:
-            written.append(
-                write_cover_letter(
-                    content, folder / docs.document_name("CoverLetter", jd, when=today)
-                )
-            )
-        except DocxError as exc:
-            err_console.print(f"[bold red]{exc}[/]")
-            raise typer.Exit(code=1)
-
-    if questions:
-        with console.status("Answering the application questions…"):
-            try:
-                built_answers = build_answers(
-                    questions, jd, profile, assessment, client=client
-                )
-            except GenerateError as exc:
-                err_console.print(f"[bold red]Could not answer the questions.[/] {exc}")
-                raise typer.Exit(code=1)
-        issues += built_answers.issues
-        written.append(docs.write_text(folder, "answers.md", built_answers.text))
-
-    written.append(
-        docs.write_text(
-            folder, "assessment.md", docs.assessment_markdown(assessment, jd, issues)
-        )
-    )
-    written.append(docs.write_text(folder, "job-ad.md", docs.job_ad_markdown(jd)))
-
-    _report(folder, written, issues, unused)
+    for warning in result.warnings:
+        err_console.print(f"[yellow]{warning}[/]")
+    if result.superseded is not None:
+        console.print(f"[dim]Earlier documents kept in {config.output_dir / result.superseded}[/]")
+    _report(result.folder, result.written, result.issues, result.unused)
 
 
-def _planned_documents(
-    jd: JobDescription, when: date, *, resume: bool, cover: bool, answers: bool
-) -> list[str]:
-    """Exactly the filenames this run would write.
+_FAILED = {
+    "resume": "Could not build the resume.",
+    "cover": "Could not write the cover letter.",
+    "answers": "Could not answer the questions.",
+    "write": "Could not write the documents.",
+}
 
-    Kept in step with the writes below by listing the same names in the same
-    order. `assessment.md` and `job-ad.md` are unconditional: every run
-    rewrites the record of why the documents were cut the way they were.
+
+def _refuse_to_clobber(folder: Path, files: list[tuple[str, datetime]]) -> None:
+    """Stop before spending anything: this run would overwrite earlier work.
+
+    Checked before the model is called, because by then the calls have been
+    paid for and the only choice left is to bin the result or bin the earlier
+    documents. The generated .docx files are the ones that get edited by hand
+    and sent to an employer; regenerating them from the same profile
+    reproduces the substance but not the edits.
     """
-    names: list[str] = []
-    if resume:
-        names.append(docs.document_name("Resume", jd, when=when))
-    if cover:
-        names.append(docs.document_name("CoverLetter", jd, when=when))
-    if answers:
-        names.append("answers.md")
-    names += ["assessment.md", "job-ad.md"]
-    return names
-
-
-def _refuse_to_clobber(
-    config, jd: JobDescription, when: date, *, resume: bool, cover: bool, answers: bool
-) -> None:
-    """Stop before spending anything if this run would overwrite earlier work.
-
-    Checked here rather than at the point of writing, because by then the model
-    calls have been paid for and the only choice left is to bin the result or
-    bin the earlier documents. The generated .docx files are the ones that get
-    edited by hand and sent to an employer; regenerating them from the same
-    profile reproduces the substance but not the edits.
-    """
-    folder = docs.application_folder_path(config.output_dir, jd, when=when)
-    names = _planned_documents(jd, when, resume=resume, cover=cover, answers=answers)
-    clashes = docs.existing_documents(folder, names)
-    if not clashes:
-        return
-
-    newest = max(path.stat().st_mtime for path in clashes)
+    newest = max(modified for _, modified in files)
     err_console.print(
         f"[bold yellow]Already generated.[/] {folder} holds documents for this "
         f"application, most recently "
-        f"{datetime.fromtimestamp(newest):%-d %B %Y at %H:%M}."
+        f"{newest:%-d %B %Y at %H:%M}."
     )
-    for path in clashes:
-        stamp = datetime.fromtimestamp(path.stat().st_mtime)
-        err_console.print(f"  [dim]{stamp:%Y-%m-%d %H:%M}[/]  {path.name}")
+    for name, modified in files:
+        err_console.print(f"  [dim]{modified:%Y-%m-%d %H:%M}[/]  {name}")
     err_console.print(
         "\n[dim]Re-running would replace these in place, including any edits "
-        "made by hand since. Move or rename the folder to keep them, or pass "
-        "--overwrite to replace them.[/]"
+        "made by hand since. Move or rename the folder to keep them, pass "
+        "--supersede to keep them under a dated name, or pass --overwrite to "
+        "replace them.[/]"
     )
     raise typer.Exit(code=2)
-
 
 
 # --------------------------------------------------------------------------- #
@@ -337,27 +261,6 @@ def _report_issues(issues: list[ValidationIssue]) -> None:
         )
 
 
-def _record_override(config, jd_id: int) -> None:
-    """Note that Alan generated documents against a `skip`.
-
-    Recorded rather than merely permitted, because the interesting question is
-    not whether he can overrule the scorer — he obviously can — but who turns
-    out to be right, and that is only answerable if the disagreements are
-    counted.
-    """
-    try:
-        with store.open_store(config.db_path) as conn:
-            application = store.get_application(conn, jd_id) or Application(
-                jd_id=jd_id, updated_at=datetime.now(timezone.utc)
-            )
-            application.overrode_scorer = True
-            application.updated_at = datetime.now(timezone.utc)
-            store.save_application(conn, application)
-    except StoreError as exc:
-        # Never let bookkeeping stop the documents being written.
-        err_console.print(f"[yellow]Could not record the override: {exc}[/]")
-
-
 def _read_questions(path: Path) -> list[str]:
     try:
         raw = path.read_text(encoding="utf-8")
@@ -366,8 +269,3 @@ def _read_questions(path: Path) -> list[str]:
         raise typer.Exit(code=2)
     return [line.strip() for line in raw.splitlines() if line.strip()]
 
-
-def _contact(profile) -> str:
-    person = profile.roles.person
-    parts = [person.location, person.phone, person.email]
-    return "   ·   ".join(part for part in parts if part)

@@ -91,8 +91,10 @@ def test_score(config, monkeypatch, printed):
 
 
 def test_generate(config, monkeypatch, printed):
+    from jobagent.services import documents
+
     monkeypatch.setattr(generate_cli, "get_config", lambda: config)
-    stop_at(monkeypatch, generate_cli, "build_resume", printed)
+    stop_at(monkeypatch, documents, "build_resume", printed)
     runner.invoke(app, ["generate", str(seed(config)), "--resume", "--cover"])
     assert printed == [("generate", {"resume": True, "cover": True, "answers": False})]
 
