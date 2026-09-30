@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set jd = plan.jd %}
+{% block title %}Generate · {{ jd.title }} · job-agent{% endblock %}
+{% block main %}
+<p class="muted"><a href="/ads/{{ jd.id }}">← {{ jd.title }}</a></p>
+<h1>Generate for {{ jd.title }}{% if jd.company %} · {{ jd.company }}{% endif %}</h1>
+
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+
+<form method="post" action="/ads/{{ jd.id }}/generate">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <input type="hidden" name="confirmed" value="1">
+  {% if choice.resume %}<input type="hidden" name="resume" value="1">{% endif %}
+  {% if choice.cover %}<input type="hidden" name="cover" value="1">{% endif %}
+  <textarea name="questions" hidden>{{ choice.questions | join('\n') }}</textarea>
+
+  <div class="panel">
+    <strong>Will write</strong> into <code>{{ plan.folder }}</code>
+    <ul>{% for name in plan.names %}<li>{{ name }}</li>{% endfor %}</ul>
+    {% if choice.questions %}<p class="detail">{{ choice.questions | length }} application question(s) to answer.</p>{% endif %}
+  </div>
+
+  {% if plan.history and plan.history.encounters %}
+  <div class="panel">
+    <strong>You have seen {{ plan.history.company }} before</strong> — {{ plan.history.encounters | length }} earlier ad(s).
+    <a href="/ads/{{ jd.id }}">See the history on the ad page.</a>
+  </div>
+  {% endif %}
+
+  {% if plan.needs_overrule %}
+  <div class="banner bad">
+    <strong>The assessment says skip.</strong> {{ plan.rationale }}
+    <p>Generating anyway is a day of work against a role the scorer has already argued against.
+      The overrule is recorded, so the eval can later say who was right.</p>
+    <label><input type="checkbox" name="overrule" value="1" {% if choice.overrule %}checked{% endif %}>
+      I disagree with the scorer: generate anyway.</label>
+  </div>
+  {% endif %}
+
+  {% if plan.clashes %}
+  <div class="banner warn">
+    <strong>Already generated.</strong> <code>{{ plan.folder }}</code> holds documents this run would write:
+    <ul>{% for name, modified in plan.clashes %}<li>{{ name }} <span class="muted">{{ modified.strftime("%-d %b %Y %H:%M") }}</span></li>{% endfor %}</ul>
+    Nothing is overwritten. The existing folder will be moved aside under a dated name, next to the new one, including any edits made by hand.
+    <label><input type="checkbox" name="supersede" value="1" {% if choice.supersede %}checked{% endif %}>
+      Keep them under a dated name and write a fresh set.</label>
+  </div>
+  {% endif %}
+
+  <div class="panel">
+    <strong>Cost:</strong> {{ estimate }}
+  </div>
+
+  {% if missing %}
+  <div class="banner bad"><strong>Cannot run yet.</strong>
+    <ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <p><button type="submit" class="primary">Confirm and generate</button>
+    <a href="/ads/{{ jd.id }}">Cancel</a></p>
+  {% endif %}
+</form>
+{% endblock %}

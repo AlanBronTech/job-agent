@@ -21,6 +21,7 @@
 </p>
 {% endif %}
 
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
 {% if run %}{% include "_run.html" %}{% endif %}
 
 {% if d.stale %}
@@ -120,6 +121,22 @@
   {% endif %}
 
   <p class="detail">{{ a.model_used or "an unrecorded model" }} · scored {{ a.scored_at.strftime("%-d %b %Y %H:%M") }}</p>
+{% endif %}
+
+{% if a is not none %}
+<h2>Generate</h2>
+<form class="panel" method="post" action="/ads/{{ jd.id }}/generate/confirm">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <label><input type="checkbox" name="resume" value="1" checked> Resume</label>
+  <label><input type="checkbox" name="cover" value="1" checked> Cover letter</label>
+  <details>
+    <summary>Application questions (optional)</summary>
+    <p class="detail">One per line, pasted from the application form. Answers are written to <code>answers.md</code> to paste back.</p>
+    <textarea name="questions" rows="5"></textarea>
+  </details>
+  <p><button type="submit" class="primary">Review cost and generate…</button>
+    <span class="detail">Nothing is spent until you confirm on the next page.</span></p>
+</form>
 {% endif %}
 
 <h2>Documents</h2>

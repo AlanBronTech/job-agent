@@ -126,3 +126,8 @@ form.inline { display: inline; margin: 0; }
 
 details summary { cursor: pointer; color: var(--muted); }
 pre.adtext { white-space: pre-wrap; font: 13px/1.5 ui-monospace, Menlo, monospace; max-height: 480px; overflow: auto; }
+
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); font-size: 14px; padding: 6px 14px; }
+label { margin-right: 16px; }
+textarea { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.outcome { color: var(--ink); margin-top: 8px; }

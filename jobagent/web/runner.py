@@ -23,6 +23,15 @@ from jobagent.services.workspace import Workspace
 Work = Callable[[], dict]
 
 
+class RunFailed(Exception):
+    """Raised by work that has already put its failure into words.
+
+    Recorded as the error verbatim, without an exception type in front: a
+    generate that failed on the letter says which files it wrote before it
+    stopped, and that sentence is the whole message.
+    """
+
+
 class Runner:
     def __init__(self, max_workers: int = 2) -> None:
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="jobagent-run")
@@ -74,7 +83,7 @@ def execute(ws: Workspace, run: int, work: Work) -> None:
     """Run the work and record how it ended. Never raises: a worker thread has no caller."""
     try:
         result = work()
-    except Refusal as exc:
+    except (Refusal, RunFailed) as exc:
         runs.finish_run(ws, run, status="failed", error=_sentence(exc))
     except Exception as exc:  # the run must end recorded, whatever went wrong
         traceback.print_exc()
