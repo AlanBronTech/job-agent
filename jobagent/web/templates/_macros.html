@@ -1,0 +1,11 @@
+{% macro verdict(v) -%}
+  {%- if v is none -%}<span class="pill muted">not scored</span>
+  {%- else -%}<span class="pill verdict-{{ v.value }}">{{ v.value | replace("_", " ") }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro status(s) -%}
+  {%- if s is none -%}<span class="muted">—</span>
+  {%- else -%}<span class="status status-{{ s.value }}">{{ s.value | replace("_", " ") }}</span>
+  {%- endif -%}
+{%- endmacro %}

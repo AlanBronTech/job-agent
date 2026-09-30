@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import verdict, status %}
+{% block title %}Ads · job-agent{% endblock %}
+{% block main %}
+<div class="heading-row">
+  <h1>Ads <span class="muted count">{{ rows | length }}</span></h1>
+  <div class="sort">
+    Sort:
+    <a href="/?sort=date" {% if sort == "date" %}aria-current="true"{% endif %}>newest</a>
+    <a href="/?sort=score" {% if sort == "score" %}aria-current="true"{% endif %}>score</a>
+  </div>
+</div>
+{% if not rows %}
+  <p class="empty">No ads yet. Add one with <code>jobagent jd add --latest</code>.</p>
+{% else %}
+<div class="table-wrap">
+<table class="ads">
+  <thead>
+    <tr>
+      <th class="num">id</th><th>Role</th><th>Captured</th><th>Verdict</th>
+      <th class="num" title="Hiring manager / recruiter screen">Score</th><th>Status</th><th>Docs</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td class="num muted">{{ r.jd_id }}</td>
+      <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
+        <div class="muted">{{ r.company or "Unknown company" }}</div></td>
+      <td class="muted nowrap">{{ r.captured.strftime("%-d %b %Y") }}</td>
+      <td>{{ verdict(r.verdict) }}{% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
+      <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ status(r.status) }}</td>
+      <td>{% if r.has_documents %}<span title="Documents on disk">●</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
