@@ -13,6 +13,7 @@ So a fragment of a name — `acme` — is matched against the drop folder, and
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,7 +24,13 @@ from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client, lo
 from jobagent.core import history, store
 from jobagent.core.jd import parse_jd
 from jobagent.core.models import THIN_AD_CHARS
-from jobagent.services.refusals import AdNotFound, CaptureTruncated, NoModel, UnreadableAd
+from jobagent.services.refusals import (
+    AdNotFound,
+    BadUpload,
+    CaptureTruncated,
+    NoModel,
+    UnreadableAd,
+)
 from jobagent.services.results import AddResult
 from jobagent.services.workspace import Workspace
 
@@ -194,3 +201,59 @@ def add(
         log_attribution(ws.runs_log_path, client.context.run_id, jd.id)
         seen_before = history.company_history(conn, jd)
     return AddResult(jd=jd, history=seen_before, thin_chars=ad.thin_chars)
+
+
+# --------------------------------------------------------------------------- #
+# Files arriving from the browser
+# --------------------------------------------------------------------------- #
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+def save_upload(ws: Workspace, filename: str, data: bytes) -> Path:
+    """Put a dropped file in the saved-ads folder, where `jd add` would look for it.
+
+    Kept in JD_DIR rather than parsed from memory, so a later `jd add --file
+    <fragment>` or an amend can find it. Everything is checked before anything
+    is written: the name must be a bare file name with an accepted suffix, the
+    size is capped, and a different file already holding that name is never
+    replaced. The same file dropped twice is simply reused.
+    """
+    name = _bare_name(filename)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise BadUpload(f"{name} is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB; that is not a saved job ad.")
+    target = ws.jd_dir / name
+    if target.exists():
+        if target.read_bytes() == data:
+            return target
+        raise BadUpload(
+            f"{ws.jd_dir} already holds a different {name}. Rename one of them and drop it again."
+        )
+    ws.jd_dir.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    return target
+
+
+def saved_ad(ws: Workspace, name: str) -> Path:
+    """A file in the saved-ads folder, by bare name. The page never sends a path."""
+    path = ws.jd_dir / _bare_name(name)
+    if not path.is_file():
+        raise AdNotFound(f"No saved ad called {path.name} in {ws.jd_dir}.")
+    return path
+
+
+def input_key(ad: AdInput) -> str:
+    """What makes two parses 'the same one', for refusing a double submit."""
+    if ad.name:
+        return ad.name
+    return "sha256:" + hashlib.sha256(ad.raw_text.encode("utf-8")).hexdigest()
+
+
+def _bare_name(filename: str) -> str:
+    name = (filename or "").strip()
+    if not name or "/" in name or "\\" in name or ".." in name or name.startswith("."):
+        raise BadUpload(f"{filename!r} is not a plain file name.")
+    if Path(name).suffix.lower() not in AD_SUFFIXES:
+        accepted = ", ".join(sorted(AD_SUFFIXES))
+        raise BadUpload(f"{name} is not a saved job ad. Accepted: {accepted}.")
+    return name

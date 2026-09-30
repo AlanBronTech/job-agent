@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Score · {{ jd.title }} · job-agent{% endblock %}
+{% block main %}
+<p class="muted"><a href="/ads/{{ jd.id }}">← {{ jd.title }}</a></p>
+<h1>Score {{ jd.title }}{% if jd.company %} · {{ jd.company }}{% endif %}?</h1>
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+
+{% if history and history.encounters %}
+<div class="panel"><strong>You have seen {{ history.company }} before</strong> — {{ history.encounters | length }} earlier ad(s).
+  <span class="muted">Information only; it does not change the verdict.</span> <a href="/ads/{{ jd.id }}">See the history.</a></div>
+{% endif %}
+
+<form method="post" action="/ads/{{ jd.id }}/score">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <input type="hidden" name="confirmed" value="1">
+  {% if jd.thin %}
+  <div class="banner warn"><strong>Only {{ "{:,}".format(jd.raw_text | length) }} characters of ad text — too little to score.</strong>
+    This is usually a description collapsed when the page was saved. The scorer reads two sentences with the confidence it reads a whole ad.
+    <label><input type="checkbox" name="force" value="1" {% if force %}checked{% endif %}> Score it anyway.</label></div>
+  {% endif %}
+  <div class="panel"><strong>Cost:</strong> {{ estimate }}</div>
+  {% if missing %}
+  <div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <p><button type="submit" class="primary">Confirm and score</button> <a href="/ads/{{ jd.id }}">Cancel</a></p>
+  {% endif %}
+</form>
+{% endblock %}

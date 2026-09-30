@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Add an ad · job-agent{% endblock %}
+{% block main %}
+<p class="muted"><a href="/ads/new">← Add an ad</a></p>
+<h1>Parse {{ name or "the pasted ad" }}?</h1>
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+
+<div class="panel">
+  {% if ad.page_chars is not none %}
+  <p>Saved page: {{ "{:,}".format(ad.page_chars) }} characters → {{ "{:,}".format(ad.raw_text | length) }} after removing platform furniture.</p>
+  {% if ad.posting_metadata %}<p class="detail">Posting: {{ ad.posting_metadata }}</p>{% endif %}
+  {% else %}
+  <p>{{ "{:,}".format(ad.raw_text | length) }} characters of text.</p>
+  {% endif %}
+  <details><summary>The text that will be parsed</summary><pre class="adtext">{{ ad.raw_text }}</pre></details>
+</div>
+
+{% if ad.truncated %}
+<div class="banner bad"><strong>The description ends at a '…more' toggle — this capture is incomplete.</strong>
+  Expand the description on the page, save it again, and add it again. Parsing half an ad gives a confident, wrong answer.</div>
+{% elif ad.thin_chars is not none %}
+<div class="banner warn"><strong>Only {{ "{:,}".format(ad.thin_chars) }} characters of ad text</strong> — more likely a collapsed description than a short advertisement.
+  If the page has a '…more' toggle, expand it and save again. You can still add it; scoring will refuse a stub unless you insist.</div>
+{% endif %}
+
+<div class="panel"><strong>Cost:</strong> {{ estimate }}</div>
+
+{% if missing %}
+<div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+{% elif not ad.truncated %}
+<form method="post" action="/ads/new">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <input type="hidden" name="confirmed" value="1">
+  <input type="hidden" name="source" value="{{ source }}">
+  {% if name %}
+  <input type="hidden" name="mode" value="saved">
+  <input type="hidden" name="name" value="{{ name }}">
+  {% else %}
+  <input type="hidden" name="mode" value="paste">
+  <textarea name="text" hidden>{{ ad.raw_text }}</textarea>
+  {% endif %}
+  <p><button type="submit" class="primary">Confirm and parse</button> <a href="/ads/new">Cancel</a></p>
+</form>
+{% endif %}
+{% endblock %}

@@ -114,3 +114,11 @@ class RunInProgress(Refusal):
     def __init__(self, run_id: int) -> None:
         super().__init__(f"run {run_id} is already in progress")
         self.run_id = run_id
+
+
+class BadUpload(Refusal):
+    """A dropped file was refused before anything was written or spent."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail

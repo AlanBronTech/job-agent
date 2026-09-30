@@ -131,3 +131,5 @@ button.primary { background: var(--accent); color: var(--panel); border-color: v
 label { margin-right: 16px; }
 textarea { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .outcome { color: var(--ink); margin-top: 8px; }
+h2.inline-h { margin: 0 0 8px; }
+input[type="text"] { font: inherit; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }

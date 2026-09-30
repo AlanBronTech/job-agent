@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import verdict, status %}
 {% set jd = d.jd %}
+{% macro score_button(jd, label) -%}
+<form class="inline" method="post" action="/ads/{{ jd.id }}/score/confirm">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <button type="submit">{{ label }}</button>
+</form>
+{%- endmacro %}
 {% set a = d.assessment %}
 {% block title %}{{ jd.title }} · {{ jd.company or "Unknown" }} · job-agent{% endblock %}
 {% block main %}
@@ -26,7 +32,7 @@
 
 {% if d.stale %}
 <div class="banner warn"><strong>This assessment predates an amendment to the ad.</strong>
-  It was scored against text that has since been replaced. Re-score with <code>jobagent score {{ jd.id }}</code>.</div>
+  It was scored against text that has since been replaced. Re-score it below.</div>
 {% endif %}
 
 {% if d.history.encounters %}
@@ -49,7 +55,7 @@
 
 <h2>Assessment</h2>
 {% if a is none %}
-  <div class="panel"><p class="muted">Not scored yet. Score it with <code>jobagent score {{ jd.id }}</code>.</p></div>
+  <div class="panel"><p class="muted">Not scored yet.</p>{{ score_button(jd, "Review cost and score…") }}</div>
 {% else %}
   {% if a.breaches %}
   <div class="banner bad"><strong>Hard filter breached — skip, whatever the score.</strong>
@@ -121,6 +127,7 @@
   {% endif %}
 
   <p class="detail">{{ a.model_used or "an unrecorded model" }} · scored {{ a.scored_at.strftime("%-d %b %Y %H:%M") }}</p>
+  {{ score_button(jd, "Re-score…" ) }}
 {% endif %}
 
 {% if a is not none %}

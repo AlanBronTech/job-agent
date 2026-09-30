@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from jobagent.adapters.llm import RunContext
-from jobagent.services import documents
+from jobagent.core.jd import JDError
+from jobagent.core.scoring import ScoringError
+from jobagent.core.store import StoreError
+from jobagent.services import ads, documents, scoring
 from jobagent.services.documents import GenerationFailed
 from jobagent.services.workspace import Workspace
 from jobagent.web.runner import RunFailed
@@ -66,6 +69,42 @@ def generate(
                 for u in result.unused
             ],
             "superseded": result.superseded.name if result.superseded else None,
+            "warnings": result.warnings,
+        }
+
+    return work
+
+
+def add_ad(ws: Workspace, config, ctx: RunContext, ad, *, source: str | None):
+    def work() -> dict:
+        try:
+            result = ads.add(ws, config, ctx, ad, source=source)
+        except JDError as exc:
+            raise RunFailed(f"Could not parse the job description: {exc}") from exc
+        except StoreError as exc:
+            raise RunFailed(f"Parsed, but could not save: {exc}") from exc
+        return {
+            "jd_id": result.jd.id,
+            "title": result.jd.title,
+            "company": result.jd.company,
+            "thin_chars": result.thin_chars,
+        }
+
+    return work
+
+
+def score(ws: Workspace, config, ctx: RunContext, jd_id: int, *, force: bool):
+    def work() -> dict:
+        try:
+            result = scoring.score(ws, config, ctx, jd_id, force=force)
+        except ScoringError as exc:
+            raise RunFailed(f"Could not score this job description: {exc}") from exc
+        a = result.assessment
+        return {
+            "jd_id": jd_id,
+            "verdict": a.verdict.value,
+            "overall_score": a.overall_score,
+            "recruiter_screen_score": a.recruiter_screen_score,
             "warnings": result.warnings,
         }
 

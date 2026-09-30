@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Running · job-agent{% endblock %}
+{% block main %}
+<h1>{{ run.request.title or "Run" }}</h1>
+{% include "_run.html" %}
+<p><a href="/">Back to the ads</a></p>
+{% endblock %}
