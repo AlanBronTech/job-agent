@@ -223,6 +223,9 @@ def _render_constraints(fit: FitAssessment) -> None:
         return
     console.print("[bold]Hard filters[/]")
     for check in fit.constraints:
+        if check.advisory:
+            console.print(f"  [dim]· {check.name} (note, does not decide): {check.detail}[/]")
+            continue
         console.print(f"  {_CONSTRAINT_MARK[check.status]} {check.name}: {check.detail}")
     console.print()
 

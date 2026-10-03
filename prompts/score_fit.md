@@ -34,7 +34,11 @@ and do not mark a filter satisfied because the role looks appealing.
 A `breach` means the application will not be made whatever you conclude — say
 so plainly in the rationale and score the role honestly anyway, because the
 score is still worth recording. An `unknown` means the ad does not say and the
-answer decides it; do not assume the favourable reading.
+answer decides it; do not assume the favourable reading. A check marked
+`"advisory": true` is the exception: the candidate has decided it is
+information only, to be raised at interview. Mention it if it matters, but it
+must not lower the score, the verdict, or appear as the deciding thing in the
+rationale.
 
 **Do not write questions about the filters themselves.** Salary band, commute
 and days on-site, and employment type each already carry a question, written
@@ -108,7 +112,7 @@ would conclude. They are different readers and the first one decides first.
   are the ones the ad leads with.
 - `apply_with_caveats` — worth the day, but something must be answered or
   handled first. Anything with an unresolved `unknown` filter lands here at
-  best.
+  best, unless that filter is advisory.
 - `apply` — on target, filters clear, and the profile answers what the ad
   actually asks for.
 

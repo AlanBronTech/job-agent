@@ -192,7 +192,8 @@ def assessment_markdown(
         ConstraintStatus.unknown: "**unknown**",
     }
     for check in assessment.constraints:
-        lines.append(f"- {check.name}: {mark[check.status]} — {check.detail}")
+        status = "note (does not decide)" if check.advisory else mark[check.status]
+        lines.append(f"- {check.name}: {status} — {check.detail}")
 
     if assessment.questions_to_ask:
         lines += ["", "## Ask before applying", ""]

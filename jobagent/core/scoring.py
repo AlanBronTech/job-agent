@@ -139,9 +139,20 @@ def check_constraints(jd: JobDescription, profile: Profile) -> list[ConstraintCh
     return [
         _check_hiring_status(jd),
         _check_work_type(jd, filters.work_types),
-        _check_location(jd, filters),
+        _advisory(_check_location(jd, filters), filters.location_advisory),
         _check_salary(jd, filters.min_salary_aud),
     ]
+
+
+def _advisory(check: ConstraintCheck, advisory: bool) -> ConstraintCheck:
+    """Demote a check to a note when Alan has said it should not decide anything.
+
+    A breach cannot be advisory: if a filter is advisory it has no ceiling to
+    breach, so the status is reported as `unknown` and the detail kept.
+    """
+    if not advisory or check.status is ConstraintStatus.ok:
+        return check
+    return check.model_copy(update={"status": ConstraintStatus.unknown, "advisory": True})
 
 
 def _check_hiring_status(jd: JobDescription) -> ConstraintCheck:
@@ -334,7 +345,10 @@ def apply_hard_filters(assessment: FitAssessment) -> FitAssessment:
         if question not in assessment.questions_to_ask:
             assessment.questions_to_ask.append(question)
 
-    if questions and assessment.verdict is Verdict.apply:
+    # An advisory check still gets its question asked, but only a real filter
+    # left unanswered holds the verdict back.
+    deciding = [check for check in assessment.unknowns if not check.advisory]
+    if deciding and assessment.verdict is Verdict.apply:
         assessment.verdict = Verdict.apply_with_caveats
 
     return assessment

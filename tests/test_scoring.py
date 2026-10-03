@@ -446,3 +446,51 @@ def test_a_stub_ad_is_thin() -> None:
 def test_a_whole_ad_is_not_thin() -> None:
     assert make_jd(raw_text="w" * 800).thin is False
     assert make_jd(raw_text="w" * 5000).thin is False
+
+
+# --------------------------------------------------------------------------- #
+# location_advisory — location as a note, not a filter (Alan, 2026-10-03)
+# --------------------------------------------------------------------------- #
+
+from jobagent.core.models import ConstraintCheck, ConstraintStatus  # noqa: E402
+from jobagent.core.scoring import _advisory, apply_hard_filters  # noqa: E402
+
+
+def _location(status=ConstraintStatus.unknown):
+    return ConstraintCheck(name="location", status=status, detail="On-site, suburb not named.",
+                           question="Where is the office?")
+
+
+def test_advisory_location_is_marked_and_never_a_breach():
+    assert _advisory(_location(), True).advisory
+    demoted = _advisory(_location(ConstraintStatus.breach), True)
+    assert demoted.status is ConstraintStatus.unknown and demoted.advisory
+    assert not _advisory(_location(), False).advisory
+    assert not _advisory(_location(ConstraintStatus.ok), True).advisory
+
+
+def _assessment(constraints):
+    from datetime import datetime, timezone
+
+    from jobagent.core.models import FitAssessment, Verdict
+
+    return FitAssessment(jd_id=1, overall_score=80, recruiter_screen_score=75, verdict=Verdict.apply,
+                         rationale="Invented.", target_role_match=True, target_role_note="Invented.",
+                         constraints=constraints, scored_at=datetime(2026, 10, 3, tzinfo=timezone.utc))
+
+
+def test_an_advisory_unknown_does_not_cap_apply_but_is_still_asked():
+    from jobagent.core.models import Verdict
+
+    result = apply_hard_filters(_assessment([_advisory(_location(), True)]))
+    assert result.verdict is Verdict.apply
+    assert "Where is the office?" in result.questions_to_ask
+
+
+def test_a_real_unknown_still_caps_apply():
+    from jobagent.core.models import Verdict
+
+    salary = ConstraintCheck(name="salary", status=ConstraintStatus.unknown, detail="No band.",
+                             question="What is the band?")
+    result = apply_hard_filters(_assessment([_advisory(_location(), True), salary]))
+    assert result.verdict is Verdict.apply_with_caveats

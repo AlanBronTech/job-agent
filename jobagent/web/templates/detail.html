@@ -77,11 +77,13 @@
   <div class="panel"><ul class="checks">
   {% for c in a.constraints %}
     <li>
-      {% if c.status.value == "ok" %}<span class="mark ok" title="met">✓</span>
+      {% if c.advisory %}<span class="mark muted" title="a note, not a filter">·</span>
+      {% elif c.status.value == "ok" %}<span class="mark ok" title="met">✓</span>
       {% elif c.status.value == "breach" %}<span class="mark breach" title="breach">✗</span>
       {% else %}<span class="mark unknown" title="not stated">?</span>{% endif %}
       <span><strong>{{ c.name }}</strong>
-        {% if c.status.value == "unknown" %}<span class="pill warn">not stated</span>{% endif %}
+        {% if c.advisory %}<span class="pill muted">note — ask at interview, does not decide</span>
+        {% elif c.status.value == "unknown" %}<span class="pill warn">not stated</span>{% endif %}
         <div class="detail">{{ c.detail }}</div>
         {% if c.question %}<div class="detail">Ask: {{ c.question }}</div>{% endif %}</span>
     </li>

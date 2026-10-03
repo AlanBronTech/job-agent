@@ -297,6 +297,12 @@ class TargetFilters(_Base):
     # is judged by ``commute.onsite``.
     onsite_locations: list[str] = Field(default_factory=list)
     onsite_rationale: str | None = None
+    # When true, location is a note, not a filter: an on-site role or an
+    # unchecked commute is reported, and its question asked, but it never caps
+    # the verdict or weighs on the score. Set by Alan 2026-10-03: "I can chase
+    # up that stuff in the initial interview, but just having the interview is
+    # good practice for me."
+    location_advisory: bool = False
     min_salary_aud: int
     work_types: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
@@ -547,6 +553,9 @@ class ConstraintCheck(_Base):
     detail: str
     # What to ask before applying, when the ad simply does not say.
     question: str | None = None
+    # Information, not a filter: reported and asked about, but it neither caps
+    # the verdict nor counts against the role. See `location_advisory`.
+    advisory: bool = False
 
 
 class RequirementMatch(_Base):
