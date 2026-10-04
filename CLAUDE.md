@@ -135,6 +135,8 @@ on a tab stop at **16.93cm**.
   timeline, and a dated line among closed ventures does neither job. The
   renderer blocks an ongoing venture from that section and points at the
   highlights.
+- Dates up to about 20 years back may be shown (Alan, 2026-10-04). That
+  permits dates without requiring them; computed career length stays banned.
 - `earlier_career` entries stay undated.
 
 ### Length
