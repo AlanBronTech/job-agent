@@ -12,7 +12,7 @@ from rich.table import Table
 
 from jobagent.adapters.llm import CallType, RunContext, get_client
 from jobagent.config import get_config
-from jobagent.services import scoring
+from jobagent.services import costs, scoring
 from jobagent.cli.reapply import overrule_if_asked, refuse
 from jobagent.services.refusals import (
     NoModel,
@@ -58,7 +58,7 @@ _CONSTRAINT_MARK = {
 
 
 def score(
-    jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd list`."),
+    jd_ids: list[int] = typer.Argument(..., help="One or more JD ids, from `jobagent jd list`."),
     show_last: bool = typer.Option(
         False,
         "--last",
@@ -80,7 +80,50 @@ def score(
         help="Go ahead even though this is a job you applied for recently. Recorded with the ad.",
     ),
 ) -> None:
-    """Assess one job description against the profile and say whether to apply."""
+    """Assess job descriptions against the profile and say whether to apply.
+
+    Several ids score each in turn after one combined estimate; an ad that is
+    refused (too thin, the same job as a recent application) is reported and
+    the rest go ahead.
+    """
+    if len(jd_ids) == 1:
+        _score_one(jd_ids[0], show_last=show_last, force=force, as_json=as_json,
+                   overrule_reapply=overrule_reapply)
+        return
+    if show_last or as_json:
+        err_console.print("[bold red]--last and --json take one id at a time.[/]")
+        raise typer.Exit(code=2)
+    config = get_config()
+    estimate = costs.estimate(Workspace.from_config(config), config, "score")
+    if estimate.total_usd is not None:
+        err_console.print(
+            f"[dim]Scoring {len(jd_ids)} ads: about ${estimate.total_usd * len(jd_ids):.2f} "
+            f"({costs.describe(estimate)})[/]"
+        )
+    scored, refused = [], []
+    for jd_id in jd_ids:
+        console.rule(f"JD {jd_id}")
+        try:
+            _score_one(jd_id, force=force, overrule_reapply=overrule_reapply)
+            scored.append(jd_id)
+        except typer.Exit:
+            refused.append(jd_id)
+    console.print(
+        f"\nScored {len(scored)}: {', '.join(map(str, scored)) or 'none'}."
+        + (f" Refused {len(refused)}: {', '.join(map(str, refused))}." if refused else "")
+    )
+    if not scored:
+        raise typer.Exit(code=2)
+
+
+def _score_one(
+    jd_id: int,
+    show_last: bool = False,
+    force: bool = False,
+    as_json: bool = False,
+    overrule_reapply: bool = False,
+) -> None:
+    """Score one ad, exactly as `score <id>` always has. Raises typer.Exit on refusal."""
     config = get_config()
 
     try:
