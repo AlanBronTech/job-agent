@@ -24,6 +24,7 @@ from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client, lo
 from jobagent.core import history, store
 from jobagent.core.jd import parse_jd
 from jobagent.core.models import THIN_AD_CHARS
+from jobagent.core.requisition import extract_requisition
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
@@ -195,6 +196,9 @@ def add(
     jd = parse_jd(ad.raw_text, client=client, source=source)
     jd.source_url = ad.source_url
     jd.source_metadata = ad.posting_metadata
+    # Read in code from the text, never asked of the model (spec 002, R1).
+    jd.requisition_id = extract_requisition(ad.raw_text)
+    jd.source_file = ad.name
 
     with store.open_store(ws.db_path) as conn:
         jd.id = store.add_jd(conn, jd)

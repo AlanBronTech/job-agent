@@ -185,3 +185,16 @@ def test_a_failed_save_is_a_warning(ws, monkeypatch):
     result = scoring.score(ws, CONFIG, RunContext(command="score"), ids["contoso"],
                            client_factory=lambda: object())
     assert result.warnings == ["Scored, but could not save. disk full"]
+
+
+def test_add_records_the_source_file_and_requisition_number(ws, monkeypatch):
+    ctx = RunContext(command="jd add", source="cli")
+    monkeypatch.setattr(ads, "get_client", lambda call_type, config, context: fake_client(context))
+    monkeypatch.setattr(ads, "parse_jd", lambda text, *, client, source: make_jd("Engineering Manager", "Fabrikam Medical", 1))
+    text = AD + " Requisition: JR_000123."
+    filed = ads.add(ws, CONFIG, ctx, ads.AdInput(raw_text=text, name="fabrikam-em.pdf"))
+    pasted = ads.add(ws, CONFIG, RunContext(command="jd add"), ads.AdInput(raw_text=AD))
+    with store.open_store(ws.db_path) as conn:
+        a, b = store.get_jd(conn, filed.jd.id), store.get_jd(conn, pasted.jd.id)
+    assert (a.source_file, a.requisition_id) == ("fabrikam-em.pdf", "JR_000123")
+    assert (b.source_file, b.requisition_id) == (None, None)
