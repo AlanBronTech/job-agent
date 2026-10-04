@@ -122,3 +122,24 @@ class BadUpload(Refusal):
     def __init__(self, detail: str) -> None:
         super().__init__(detail)
         self.detail = detail
+
+
+class SameJobRecently(Refusal):
+    """This ad is a job applied for inside the reapplication window.
+
+    `match` is a `core.reapply.Match`: what it matched, when that application
+    was made and how many days ago. Lifted by an overrule recorded for the ad.
+    """
+
+    def __init__(self, match) -> None:
+        super().__init__(f"same job as an application {match.age_days} days ago")
+        self.match = match
+
+
+class PossiblySameJob(Refusal):
+    """Same company and title as a recent application, with no requisition
+    number to settle it. Alan answers yes or no before anything is spent."""
+
+    def __init__(self, match) -> None:
+        super().__init__(f"possibly the same job as an application {match.age_days} days ago")
+        self.match = match
