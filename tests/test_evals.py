@@ -494,3 +494,22 @@ def test_terminal_statuses_are_not_live() -> None:
 
     assert ApplicationStatus.rejected_after_interview not in _LIVE_STATUSES
     assert ApplicationStatus.ghosted_after_contact not in _LIVE_STATUSES
+
+
+def test_an_application_made_before_its_ad_was_captured_is_left_out():
+    """Spec 002, FR-015: May application, October repost. Graded against text
+    that was not there when the decision was made, so it is not graded."""
+    from datetime import date, datetime, timezone
+
+    from jobagent.core.evals import captured_after_decision, cases_from_applications
+
+    may = application(62, applied_on=date(2026, 5, 5))
+    same_day = application(70, applied_on=date(2026, 10, 4))
+    captured = {
+        62: datetime(2026, 10, 3, tzinfo=timezone.utc),
+        70: datetime(2026, 10, 4, 9, tzinfo=timezone.utc),
+    }
+    assert captured_after_decision([may, same_day], captured) == [62]
+    cases = cases_from_applications([may, same_day], {}, captured)
+    assert [c.jd_id for c in cases] == [70]
+    assert [c.jd_id for c in cases_from_applications([may, same_day], {})] == [62, 70]

@@ -24,6 +24,7 @@ from jobagent.core.evals import (
     EvalError,
     EvalReport,
     build_report,
+    captured_after_decision,
     cases_from_applications,
     diff_runs,
     load_cases,
@@ -462,8 +463,17 @@ def _load(
             if cases_path is not None:
                 cases = load_cases(cases_path)
             else:
-                titles = {jd.id: jd.title for jd in store.list_jds(conn) if jd.id}
-                cases = cases_from_applications(store.list_applications(conn), titles)
+                jds = [jd for jd in store.list_jds(conn) if jd.id]
+                titles = {jd.id: jd.title for jd in jds}
+                captured = {jd.id: jd.ingested_at for jd in jds}
+                applications = store.list_applications(conn)
+                cases = cases_from_applications(applications, titles, captured)
+                left_out = captured_after_decision(applications, captured)
+                if left_out:
+                    err_console.print(
+                        f"[dim]{len(left_out)} case(s) left out: the ad was captured after "
+                        f"the application (JD {', '.join(map(str, left_out))}).[/]"
+                    )
             results = [
                 CaseResult(
                     case=case,

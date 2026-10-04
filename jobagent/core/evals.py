@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -210,8 +211,29 @@ def load_cases(path: Path | None = None) -> list[EvalCase]:
     return cases
 
 
+def captured_after_decision(
+    applications: list[Application], captured: dict[int, datetime]
+) -> list[int]:
+    """Applications whose ad was stored after the date they were made.
+
+    The ad text such a case would be graded against was not what the decision
+    was made on: an application in May, an ad captured from a repost in
+    October. Grading it is target leakage (CLAUDE.md: check a variable was
+    observable at decision time). Spec 002, FR-015.
+    """
+    return [
+        a.jd_id
+        for a in applications
+        if a.applied_on is not None
+        and a.jd_id in captured
+        and a.applied_on < captured[a.jd_id].date()
+    ]
+
+
 def cases_from_applications(
-    applications: list[Application], titles: dict[int, str]
+    applications: list[Application],
+    titles: dict[int, str],
+    captured: dict[int, datetime] | None = None,
 ) -> list[EvalCase]:
     """Build the case set out of the pipeline.
 
@@ -224,9 +246,10 @@ def cases_from_applications(
     live states, and grading a scorer on a case that has not finished
     happening rewards it for nothing.
     """
+    excluded = set(captured_after_decision(applications, captured or {}))
     cases = []
     for application in applications:
-        if application.status in _LIVE_STATUSES:
+        if application.status in _LIVE_STATUSES or application.jd_id in excluded:
             continue
         cases.append(
             EvalCase(
