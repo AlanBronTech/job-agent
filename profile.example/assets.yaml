@@ -63,6 +63,9 @@ target_filters:
   commute_rationale: >-
     Hard constraint, one way. A previous role ended over commute load; treat a
     breach as a skip regardless of how well the role scores otherwise.
+  # Don't apply again to the same job within this many days of applying; a
+  # different job at the same company is unaffected. null turns it off.
+  reapply_window_days: 183
   # true: location and commute are reported and asked about, never a filter.
   location_advisory: false
   min_salary_aud: 000000
