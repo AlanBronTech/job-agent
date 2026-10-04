@@ -36,7 +36,11 @@ today)` returns the strongest match with the date applied:
    and no requisition ID on **either** side. If both have IDs and they differ,
    it is a different job.
 
-Only applications with an `applied_on` count (tracked or outside). Window:
+Only applications with an `applied_on` count (tracked or outside), plus
+another stored ad with the same normalised requisition id that has been
+scored or applied for, so two copies in one batch cannot both be scored
+without an overrule. If the profile cannot be loaded, the check returns
+`Clear` and the existing profile refusals fire. Window:
 `today - applied_on < window_days`. Outcome is irrelevant (spec edge case).
 
 **Rationale**: matches clarification Q1 (option B). Different IDs mean
@@ -88,8 +92,9 @@ October).
 
 **Decision**: `job_descriptions.source_file` holds the file name `jd add`
 parsed (NULL for paste). A file is new when no ad records it **and** its
-modification time is after `meta.batch_baseline`. The baseline is set to now
-the first time a batch runs, so the existing folder (~65 files) is never
+modification time is after the baseline: the `started_at` of the earliest
+batch in the service's own table (Constitution II: batch state stays out of
+core's `meta`). With no batch yet, the baseline is now, so the existing folder (~65 files) is never
 offered wholesale (spec edge case). `jobagent jd backfill` sets `source_file`
 for stored ads where a file's extracted text equals the ad's `raw_text`
 exactly (free: PDF and mhtml extraction only), and sets `requisition_id`.

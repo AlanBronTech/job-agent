@@ -67,10 +67,10 @@ flagged as already stored. Choose two to score, then one to generate.
 3. **Given** the parsed batch, **When** Alan selects three rows to score,
    **Then** he sees the combined score cost, and after confirming, the table
    shows each verdict and both scores.
-4. **Given** scored rows, **When** Alan marks some for documents and the rest
-   as not applied, **Then** documents are generated only for the marked rows,
-   each with the same confirmation and guards as a single generate, and the
-   rest are recorded as `not_applied`.
+4. **Given** scored rows, **When** Alan opens generate from a row, **Then** it
+   is the single-ad generate, with its own document choice, cost and
+   confirmation and every guard; **and when** he marks the remaining rows not
+   applied, **Then** they are recorded as `not_applied` in one action.
 5. **Given** the same batch in the CLI and in the UI, **Then** both show the
    same rows, columns and refusals.
 
@@ -206,14 +206,16 @@ none stores nothing, never a guess.
 - **FR-003**: Each parsed row MUST show company, role, work arrangement, salary
   as stated, posting age and applicant count as captured, requisition number,
   the free hard-filter results, company history, and the reapplication flag.
-- **FR-004**: Alan MUST be able to choose any subset of rows to score, then any
-  subset to generate for, then mark the rest not applied, each step showing its
-  combined cost and needing confirmation, as single actions do today.
+- **FR-004**: Alan MUST be able to choose any subset of rows to score, with
+  their combined cost shown and one confirmation, and to mark any subset not
+  applied in one action. Generating documents MUST be started per ad from its
+  row: each ad needs its own choice of documents and its own decision about
+  documents already on disk, which a combined confirmation would hide.
 - **FR-005**: Each per-ad action started from a batch MUST be exactly the
   single-ad action: same guards, refusals, records, run-log entries and files.
 - **FR-006**: The batch table MUST be available in both the CLI and the UI with
-  the same rows and columns. In the UI, the ad list MUST present a multi-ad
-  view as this table.
+  the same rows and columns. In the UI it is its own page, reached from the
+  navigation and from the ad list; the ad list stays the table of every ad.
 - **FR-007**: A batch MUST be resumable after an interruption without repeating
   any paid step that already succeeded.
 

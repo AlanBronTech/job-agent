@@ -32,15 +32,11 @@ Invented examples throughout.
 |---|---|---|
 | `jd_id` | INTEGER PK → `job_descriptions(id)` ON DELETE CASCADE | One decision per ad |
 | `decision` | TEXT | `same` \| `different` \| `overrule` |
-| `matched` | TEXT | What it was matched against: `application:<jd_id>` or `outside:<id>` |
+| `matched` | TEXT | What it was matched against: `application:<jd_id>`, `outside:<id>` or `ad:<jd_id>` (another stored ad with the same requisition id) |
 | `decided_at` | TEXT | |
 
 `same` and `different` answer "possibly the same job". `overrule` waives the
 rule for this ad only (spec assumption: one overrule never extends to others).
-
-### `meta`
-
-`batch_baseline`: ISO timestamp, set the first time a batch runs.
 
 ## Profile (`TargetFilters`)
 
@@ -51,12 +47,13 @@ rule for this ad only (spec assumption: one overrule never extends to others).
 `batches(id, owner, started_at)`;
 `batch_rows(batch_id, file_name, jd_id NULL, refusal NULL, refusal_detail NULL)`.
 Row state is derived: `refused` → `parsed` → `scored` → `documents` →
-application status.
+application status. The baseline for "new files" is the `started_at` of the
+earliest batch: batch state stays in the service, not in core's `meta`.
 
 ## Derived
 
 **Match** (`core/reapply.py`): `kind` (`same` | `possibly_same`), `against`
-(application or outside record), `applied_on`, `age_days`, `within_window`.
+(application, outside record, or another stored ad with the same requisition id), `applied_on`, `age_days`, `within_window`.
 
 **Batch row** (displayed): file, jd id, company, role, arrangement, salary as
 stated, posting metadata, requisition id, hard filters (free), history
