@@ -48,13 +48,15 @@ recorded in `reapply_decisions`.
 ## Outside applications
 
 ```text
-jobagent apply --outside --company "Fabrikam Medical" --title "Engineering Manager" \
-    --req JR_000123 --on 2026-05-05 --channel "careers site" [--status applied_no_reply] [--note "..."]
-jobagent apply --outside-list
-jobagent link <outside_id> <jd_id>
+jobagent outside add --company "Fabrikam Medical" --title "Engineering Manager" \
+    --on 2026-05-05 [--req JR_000123] [--channel "careers site"] [--status applied_no_reply] [--note "..."]
+jobagent outside list
+jobagent outside link <outside_id> <jd_id>
 ```
 
-Future dates are refused, as `apply` refuses them today.
+Future dates are refused, as `apply` refuses them today. A command group of its
+own rather than `apply --outside` (changed during implementation, 2026-10-04):
+`apply` keeps its required ad id and its behaviour unchanged.
 
 ## Backfill
 

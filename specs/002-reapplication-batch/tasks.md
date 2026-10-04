@@ -84,7 +84,7 @@ US3 or US4.
 
 - [X] T022 [US3] Create `jobagent/services/applications.py`: `record_outside(ws, *, company, title, requisition_id, applied_on, channel, status, notes)` (a future date → `BadDate`); `list_outside(ws)`; `link_outside(ws, outside_id, jd_id)` (sets `linked_jd_id`; creates or updates the ad's `applications` row with the outside `applied_on`, status and appended notes).
 - [X] T023 [US3] Make `jobagent/core/history.py` `company_history` include unlinked outside applications as encounters (marked "outside"). The reapply match (T008) already reads them.
-- [ ] T024 [US3] CLI in `jobagent/cli/apply.py`: `apply --outside --company --title [--req] --on --channel [--status] [--note]`, `apply --outside-list`, and a new `jobagent link <outside_id> <jd_id>` command registered in `jobagent/cli/main.py`.
+- [X] T024 [US3] CLI: a new command group `jobagent/cli/outside.py`, registered in `jobagent/cli/main.py`: `outside add --company --title --on [--req] [--channel] [--status] [--note]`, `outside list`, `outside link <outside_id> <jd_id>`. (Changed from `apply --outside` during implementation, 2026-10-04: `apply` keeps its required ad id. See contracts/cli.md.)
 - [ ] T025 [US3] Tests in `tests/test_services_applications.py` and `tests/test_cli_apply.py`: US3 scenarios 1–4; a linked record is not counted twice in history or by the rule.
 
 ---

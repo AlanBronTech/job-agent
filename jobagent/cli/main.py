@@ -12,6 +12,7 @@ from jobagent.cli import config as config_cli
 from jobagent.cli import evals as evals_cli
 from jobagent.cli import generate as generate_cli
 from jobagent.cli import jd as jd_cli
+from jobagent.cli import outside as outside_cli
 from jobagent.cli import prep as prep_cli
 from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
@@ -72,6 +73,7 @@ def main(
 app.add_typer(profile_cli.app, name="profile")
 app.add_typer(config_cli.app, name="config")
 app.add_typer(jd_cli.app, name="jd")
+app.add_typer(outside_cli.app, name="outside")
 app.add_typer(evals_cli.app, name="eval")
 # `score` is one command, not a group — mounted directly.
 app.command(name="score")(score_cli.score)

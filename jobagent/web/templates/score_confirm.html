@@ -7,7 +7,7 @@
 {% set ad_id = jd.id %}{% include "_reapply.html" %}
 
 {% if history and history.encounters %}
-<div class="panel"><strong>You have seen {{ history.company }} before</strong> — {{ history.encounters | length }} earlier ad(s).
+<div class="panel"><strong>You have seen {{ history.company }} before</strong> — {{ history.encounters | length }} earlier record(s).
   <span class="muted">Information only; it does not change the verdict.</span> <a href="/ads/{{ jd.id }}">See the history.</a></div>
 {% endif %}
 

@@ -23,7 +23,7 @@
 
   {% if plan.history and plan.history.encounters %}
   <div class="panel">
-    <strong>You have seen {{ plan.history.company }} before</strong> — {{ plan.history.encounters | length }} earlier ad(s).
+    <strong>You have seen {{ plan.history.company }} before</strong> — {{ plan.history.encounters | length }} earlier record(s).
     <a href="/ads/{{ jd.id }}">See the history on the ad page.</a>
   </div>
   {% endif %}
