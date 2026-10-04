@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_macros.html" import verdict %}
+{% block title %}Batch · job-agent{% endblock %}
+{% block main %}
+<h1>Batch review</h1>
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+{% if run %}{% include "_run.html" %}{% endif %}
+
+{% if new %}
+<div class="panel">
+  <strong>{{ new | length }} new saved ad(s)</strong>
+  <ul>{% for name in new %}<li><code>{{ name }}</code></li>{% endfor %}</ul>
+  <p><strong>Cost:</strong> {{ parse_cost }}</p>
+  {% if missing_parse %}
+  <div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in missing_parse %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <form method="post" action="/batch/parse">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <input type="hidden" name="confirmed" value="1">
+    <button type="submit" class="primary">Confirm and parse all</button>
+    <span class="detail">Each is parsed as a single "Add an ad" would be. You can close this page.</span>
+  </form>
+  {% endif %}
+</div>
+{% elif waiting %}
+<div class="panel"><strong>{{ waiting | length }} file(s) in the last batch not parsed yet.</strong>
+  <form class="inline" method="post" action="/batch/parse">
+    <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="confirmed" value="1">
+    <button type="submit">Finish parsing</button></form></div>
+{% elif not rows %}
+<p class="empty">Nothing new saved since you last added an ad. Save ads into your saved-ads folder, then come back.</p>
+{% endif %}
+
+{% if confirm %}
+<div class="panel">
+  <strong>Score {{ confirm.go | length }} ad(s)?</strong>
+  <ul>{% for id, title in confirm.go %}<li>JD {{ id }} — {{ title }}</li>{% endfor %}</ul>
+  {% if confirm.refused %}
+  <p class="detail">Not included:</p>
+  <ul>{% for id, title, why in confirm.refused %}<li>JD {{ id }} — {{ title }}: {{ why }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if confirm.go %}
+  <p><strong>Cost:</strong> {{ confirm.cost }}</p>
+  {% if confirm.missing %}
+  <div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in confirm.missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <form method="post" action="/batch/score">
+    <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="confirmed" value="1">
+    {% for id in confirm.ids %}<input type="hidden" name="jd" value="{{ id }}">{% endfor %}
+    <button type="submit" class="primary">Confirm and score</button> <a href="/batch">Cancel</a>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if rows %}
+<h2>Batch {{ batch_id }}</h2>
+<form method="post">
+<input type="hidden" name="csrf" value="{{ token }}">
+<div class="table-wrap">
+<table class="ads">
+  <thead><tr>
+    <th></th><th class="num">#</th><th>Company / role</th><th>Where</th><th>Filters</th>
+    <th>Seen</th><th>Verdict</th><th class="num">Score</th><th>State</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+    {% if r.refusal %}
+    <tr>
+      <td></td><td class="num muted">{{ r.number }}</td>
+      <td colspan="6"><code>{{ r.file_name }}</code><div class="detail">{{ describe(r.refusal, r.refusal_detail) }}</div></td>
+      <td><span class="pill verdict-skip">refused</span></td>
+    </tr>
+    {% elif r.jd_id is none %}
+    <tr><td></td><td class="num muted">{{ r.number }}</td><td colspan="6"><code>{{ r.file_name }}</code></td><td class="muted">not parsed yet</td></tr>
+    {% else %}
+    <tr>
+      <td><input type="checkbox" name="jd" value="{{ r.jd_id }}" aria-label="Select JD {{ r.jd_id }}"></td>
+      <td class="num muted">{{ r.number }}</td>
+      <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
+        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div>
+        {% if r.reapply == "same" %}<span class="pill verdict-skip">same job as an earlier application</span>{% endif %}
+        {% if r.reapply == "possibly_same" %}<span class="pill warn">possibly the same job</span>{% endif %}
+        {% if r.same_requisition_as %}<span class="pill warn">same requisition as row {{ r.same_requisition_as }}</span>{% endif %}
+      </td>
+      <td class="detail">{{ r.arrangement }}{% if r.salary %}<br>{{ r.salary }}{% endif %}{% if r.posting %}<br>{{ r.posting }}{% endif %}</td>
+      <td class="nowrap">{% for name, state in r.filters %}<span class="mark {{ {'ok': 'ok', 'breach': 'breach', 'unknown': 'unknown', 'note': 'muted'}[state] }}" title="{{ name }}: {{ state }}">{{ {'ok': '✓', 'breach': '✗', 'unknown': '?', 'note': '·'}[state] }}</span>{% endfor %}</td>
+      <td class="muted">{{ r.history_count or "" }}</td>
+      <td>{% if r.verdict %}<span class="pill verdict-{{ r.verdict }}">{{ r.verdict | replace("_", " ") }}</span>{% endif %}</td>
+      <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% endif %}</td>
+      <td>{{ r.state | replace("_", " ") }}</td>
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p>
+  <button type="submit" formaction="/batch/score/confirm">Score selected…</button>
+  <button type="submit" formaction="/batch/skip">Mark selected not applied</button>
+  <span class="detail">Filters: hiring status, work type, location, salary — ✓ met, ✗ breach, ? not stated, · note. Generate from each ad's page.</span>
+</p>
+</form>
+{% endif %}
+{% endblock %}

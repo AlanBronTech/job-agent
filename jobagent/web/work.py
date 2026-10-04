@@ -13,7 +13,7 @@ from jobagent.adapters.llm import RunContext
 from jobagent.core.jd import JDError
 from jobagent.core.scoring import ScoringError
 from jobagent.core.store import StoreError
-from jobagent.services import ads, documents, scoring
+from jobagent.services import ads, batches, documents, scoring
 from jobagent.services.documents import GenerationFailed
 from jobagent.services.workspace import Workspace
 from jobagent.web.runner import RunFailed
@@ -107,5 +107,13 @@ def score(ws: Workspace, config, ctx: RunContext, jd_id: int, *, force: bool):
             "recruiter_screen_score": a.recruiter_screen_score,
             "warnings": result.warnings,
         }
+
+    return work
+
+
+def parse_batch(ws: Workspace, config, batch_id: int):
+    def work() -> dict:
+        batches.parse(ws, config, batch_id, source="ui")
+        return {"batch_id": batch_id}
 
     return work

@@ -12,12 +12,15 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from jobagent.adapters.llm import RunContext
+from jobagent.core.models import ApplicationStatus
 from jobagent.services import (
     ads,
+    batches,
     costs,
     documents,
     listing,
     outputs,
+    pipeline,
     readiness,
     reapply,
     runs,
@@ -475,3 +478,163 @@ async def reapply_decide(request: Request, jd_id: int):
     if not back.startswith("/") or back.startswith("//"):
         back = f"/ads/{jd_id}"
     return RedirectResponse(back, status_code=303)
+
+
+# --------------------------------------------------------------------------- #
+# Batch review (spec 002, US1): parse new files, score several, skip several.
+# Generate stays per ad, from each row's ad page.
+# --------------------------------------------------------------------------- #
+
+
+def _batch_page(request: Request, problem: str | None = None, confirm: dict | None = None):
+    ws = workspace(request)
+    config = request.app.state.config
+    today = request.app.state.today()
+    new = batches.new_files(ws)
+    batch_id = batches.latest(ws)
+    parse_run = next(
+        (r for r in runs.running(ws) if str(r.request.get("input_key", "")).startswith("batch:")),
+        None,
+    )
+    estimate = costs.estimate(ws, config, "add_ad")
+    return render(
+        request,
+        "batch.html",
+        {
+            "nav": "batch",
+            "new": [p.name for p in new],
+            "parse_cost": _times(estimate, len(new)) if new else None,
+            "waiting": batches.waiting(ws, batch_id) if batch_id else [],
+            "batch_id": batch_id,
+            "rows": batches.rows(ws, batch_id, today) if batch_id else [],
+            "describe": batches.describe,
+            "run": parse_run,
+            "problem": problem,
+            "confirm": confirm,
+            "missing_parse": readiness.missing(ws, config, "add_ad"),
+        },
+        status_code=409 if problem else 200,
+    )
+
+
+def _times(estimate, count: int) -> str:
+    if estimate.total_usd is None:
+        return costs.describe(estimate)
+    return f"About ${estimate.total_usd * count:.2f} for {count} ({costs.describe(estimate)})"
+
+
+def _selected(form) -> list[int]:
+    ids = []
+    for value in form.getlist("jd"):
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+@router.get("/batch")
+def batch_page(request: Request):
+    return _batch_page(request)
+
+
+@router.post("/batch/parse")
+async def batch_parse(request: Request):
+    form = await checked_form(request)
+    if form.get("confirmed") != "1":
+        return _batch_page(request, "Nothing was started: confirm the cost first.")
+    ws = workspace(request)
+    config = request.app.state.config
+    missing = readiness.missing(ws, config, "add_ad")
+    if missing:
+        return _batch_page(request, "Nothing was started: " + " ".join(missing))
+    batch_id = batches.latest(ws)
+    if batch_id is None or not batches.waiting(ws, batch_id):
+        batch_id = batches.start(ws)
+    if batch_id is None:
+        return _batch_page(request, "Nothing new to parse.")
+    ctx = RunContext(command="jd add", source="ui")
+    try:
+        request.app.state.runner.start(
+            ws, kind="add_ad", jd_id=None, run_id=ctx.run_id,
+            request={"title": f"batch {batch_id}", "input_key": f"batch:{batch_id}"},
+            work=work.parse_batch(ws, config, batch_id),
+        )
+    except RunInProgress:
+        pass
+    return RedirectResponse("/batch", status_code=303)
+
+
+@router.post("/batch/score/confirm")
+async def batch_score_confirm(request: Request):
+    form = await checked_form(request)
+    ids = _selected(form)
+    if not ids:
+        return _batch_page(request, "Select at least one ad to score.")
+    ws = workspace(request)
+    config = request.app.state.config
+    plan = _score_plan(ws, ids, request.app.state.today())
+    estimate = costs.estimate(ws, config, "score")
+    return _batch_page(request, confirm={
+        "ids": [i for i, _ in plan["go"]],
+        "go": plan["go"],
+        "refused": plan["refused"],
+        "cost": _times(estimate, len(plan["go"])) if plan["go"] else None,
+        "missing": readiness.missing(ws, config, "score"),
+    })
+
+
+@router.post("/batch/score")
+async def batch_score(request: Request):
+    form = await checked_form(request)
+    ids = _selected(form)
+    if form.get("confirmed") != "1":
+        return _batch_page(request, "Nothing was started: confirm the cost first.")
+    ws = workspace(request)
+    config = request.app.state.config
+    missing = readiness.missing(ws, config, "score")
+    if missing:
+        return _batch_page(request, "Nothing was started: " + " ".join(missing))
+    for jd_id, title in _score_plan(ws, ids, request.app.state.today())["go"]:
+        ctx = RunContext(command="score", jd_id=jd_id, source="ui")
+        try:
+            request.app.state.runner.start(
+                ws, kind="score", jd_id=jd_id, run_id=ctx.run_id,
+                request={"title": title, "force": False},
+                work=work.score(ws, config, ctx, jd_id, force=False),
+            )
+        except RunInProgress:
+            continue
+    return RedirectResponse("/batch", status_code=303)
+
+
+@router.post("/batch/skip")
+async def batch_skip(request: Request):
+    form = await checked_form(request)
+    ws = workspace(request)
+    day = request.app.state.today()
+    for jd_id in _selected(form):
+        try:
+            pipeline.outcome(ws, jd_id, ApplicationStatus.not_applied,
+                             note=f"Not applied: decided at batch review {day:%Y-%m-%d}.")
+        except NoSuchAd:
+            continue
+    return RedirectResponse("/batch", status_code=303)
+
+
+def _score_plan(ws, ids: list[int], today) -> dict:
+    """Which selected ads would score, and which the free checks already refuse."""
+    go, refused = [], []
+    for jd_id in ids:
+        try:
+            jd, _ = scoring.load(ws, jd_id)
+        except NoSuchAd:
+            continue
+        state = reapply.check(ws, jd_id, today)
+        if state.kind in ("same", "possibly_same"):
+            refused.append((jd_id, jd.title, "a job you applied for recently: answer on its page"))
+        elif jd.thin:
+            refused.append((jd_id, jd.title, "too little ad text: score it from its page with the box ticked"))
+        else:
+            go.append((jd_id, jd.title))
+    return {"go": go, "refused": refused}
