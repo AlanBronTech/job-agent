@@ -27,8 +27,11 @@ from jobagent.services.refusals import (
     ProfileInvalid,
     ProfileMissing,
     SupersedeFailed,
+    PossiblySameJob,
+    SameJobRecently,
     VerdictIsSkip,
 )
+from jobagent.cli.reapply import overrule_if_asked, refuse
 from jobagent.services.workspace import Workspace
 
 console = Console()
@@ -60,6 +63,11 @@ def generate(
         "--supersede",
         help="Keep documents already generated: move their folder aside under a "
         "dated name, then write a fresh one.",
+    ),
+    overrule_reapply: bool = typer.Option(
+        False,
+        "--overrule-reapply",
+        help="Go ahead even though this is a job you applied for recently. Recorded with the ad.",
     ),
 ) -> None:
     """Generate application documents for one job description."""
@@ -101,6 +109,7 @@ def generate(
         render_company_history(err_console, planned.history)
 
     questions = _read_questions(answers) if answers else []
+    overrule_if_asked(ws, jd_id, today, overrule_reapply)
 
     try:
         result = documents.generate(
@@ -120,6 +129,8 @@ def generate(
                 config, "generate", resume=resume, cover=cover, answers=bool(questions)
             ),
         )
+    except (SameJobRecently, PossiblySameJob) as refusal:
+        refuse(err_console, refusal, jd_id, "generate")
     except VerdictIsSkip as refusal:
         err_console.print(f"[bold yellow]The assessment says skip.[/] {refusal.rationale}")
         err_console.print(

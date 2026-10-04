@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import typer
 from rich.console import Console
@@ -12,7 +13,15 @@ from rich.table import Table
 from jobagent.adapters.llm import CallType, RunContext, get_client
 from jobagent.config import get_config
 from jobagent.services import scoring
-from jobagent.services.refusals import NoModel, ProfileInvalid, ProfileMissing, ThinAd
+from jobagent.cli.reapply import overrule_if_asked, refuse
+from jobagent.services.refusals import (
+    NoModel,
+    PossiblySameJob,
+    ProfileInvalid,
+    ProfileMissing,
+    SameJobRecently,
+    ThinAd,
+)
 from jobagent.services.workspace import Workspace
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
@@ -65,6 +74,11 @@ def score(
         "--json",
         help="Print the assessment as JSON instead of a table.",
     ),
+    overrule_reapply: bool = typer.Option(
+        False,
+        "--overrule-reapply",
+        help="Go ahead even though this is a job you applied for recently. Recorded with the ad.",
+    ),
 ) -> None:
     """Assess one job description against the profile and say whether to apply."""
     config = get_config()
@@ -109,10 +123,12 @@ def score(
         _emit(jd, previous, as_json=as_json)
         return
 
+    ws = Workspace.from_config(config)
+    overrule_if_asked(ws, jd_id, date.today(), overrule_reapply)
     try:
         with console.status("Scoring…"):
             result = scoring.score(
-                Workspace.from_config(config),
+                ws,
                 config,
                 RunContext(command="score", jd_id=jd.id),
                 jd_id,
@@ -122,6 +138,8 @@ def score(
                     CallType.score, config, RunContext(command="score", jd_id=jd.id)
                 ),
             )
+    except (SameJobRecently, PossiblySameJob) as refusal:
+        refuse(err_console, refusal, jd_id, "score")
     except ThinAd as refusal:
         err_console.print(
             f"[bold red]JD {jd_id} holds only {refusal.chars:,} characters "

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import typer
@@ -24,8 +24,8 @@ from jobagent.cli import paths
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
-from jobagent.services import ads
-from jobagent.services.refusals import UnreadableAd
+from jobagent.services import ads, reapply
+from jobagent.services.refusals import NoSuchAd, UnreadableAd
 from jobagent.services.workspace import Workspace
 from jobagent.core import history, store
 from jobagent.core.jd import JDError, parse_jd
@@ -345,6 +345,33 @@ def show(jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd lis
         raise typer.Exit(code=1)
 
     _render_jd(jd)
+
+
+@app.command("same")
+def same(
+    jd_id: int = typer.Argument(..., help="The JD id the question was asked about."),
+    answer: str = typer.Argument(..., help="yes (same job: the rule applies) or no (a different job)."),
+) -> None:
+    """Answer "possibly the same job as an earlier application?" for one ad. Free."""
+    answer = answer.strip().lower()
+    if answer not in {"yes", "no"}:
+        err_console.print("[bold red]Answer yes or no.[/]")
+        raise typer.Exit(code=2)
+    ws = Workspace.from_config(get_config())
+    try:
+        state = reapply.check(ws, jd_id, date.today())
+        matched = state.match.against if hasattr(state, "match") else ""
+        reapply.decide(ws, jd_id, "same" if answer == "yes" else "different", matched)
+    except NoSuchAd:
+        err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
+        raise typer.Exit(code=1)
+    if answer == "yes":
+        console.print(
+            f"JD {jd_id}: recorded as the same job. Scoring and generating will be "
+            "refused inside the window unless you pass --overrule-reapply."
+        )
+    else:
+        console.print(f"JD {jd_id}: recorded as a different job. It is assessed like any other ad.")
 
 
 @app.command("delete")
