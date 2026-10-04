@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from datetime import datetime, timezone
 
 from jobagent.core import store
 from jobagent.core.models import CompanyHistory, JobDescription, PriorEncounter
@@ -93,6 +94,18 @@ def company_history(conn: sqlite3.Connection, jd: JobDescription) -> CompanyHist
         if other.id is not None
         and other.id != jd.id
         and same_company(jd.company, other.company)
+    ]
+    # Applications recorded outside the tool, with no ad (spec 002). A linked
+    # one is represented by its ad's application above and is not repeated.
+    encounters += [
+        PriorEncounter(
+            outside_id=record.id,
+            title=record.title,
+            ingested_at=datetime.combine(record.applied_on, datetime.min.time(), tzinfo=timezone.utc),
+            status=record.status,
+        )
+        for record in store.list_outside(conn)
+        if record.linked_jd_id is None and same_company(jd.company, record.company)
     ]
     encounters.sort(key=lambda encounter: encounter.ingested_at, reverse=True)
     return CompanyHistory(company=jd.company, encounters=encounters)

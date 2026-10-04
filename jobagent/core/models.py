@@ -797,8 +797,12 @@ class PriorEncounter(_Base):
     and the tool's job is to make sure he knows he is making it again.
     """
 
-    jd_id: int
+    # A stored ad, or, for an application recorded outside the tool with no
+    # ad (spec 002), an outside record. Exactly one of the two is set.
+    jd_id: int | None = None
+    outside_id: int | None = None
     title: str
+    # When the ad was captured; for an outside record, the date applied.
     ingested_at: datetime
     # The identical posting ingested a second time — same source_url, not
     # merely the same employer. Four of the first twenty-four rows are
@@ -809,6 +813,10 @@ class PriorEncounter(_Base):
     status: ApplicationStatus | None = None
     worth_applying: Worth | None = None
     worth_why: str = ""
+
+    @property
+    def label(self) -> str:
+        return f"JD {self.jd_id}" if self.jd_id is not None else f"outside {self.outside_id}"
 
     @property
     def applied(self) -> bool:

@@ -43,7 +43,7 @@
   <ul class="checks">
   {% for e in d.history.encounters %}
     <li><span class="mark muted">·</span>
-      <span><a href="/ads/{{ e.jd_id }}">JD {{ e.jd_id }} — {{ e.title }}</a>
+      <span>{% if e.jd_id is not none %}<a href="/ads/{{ e.jd_id }}">JD {{ e.jd_id }} — {{ e.title }}</a>{% else %}{{ e.title }} <span class="pill muted">applied outside the tool</span>{% endif %}
         <span class="muted">{{ e.ingested_at.strftime("%-d %b %Y") }}</span>
         {% if e.same_posting %}<span class="pill warn">same posting</span>{% endif %}
         · {{ status(e.status) }}

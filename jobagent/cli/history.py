@@ -52,7 +52,7 @@ def render_company_history(console: Console, history: CompanyHistory) -> None:
         return
 
     rows = history.encounters[:_MAX_ROWS]
-    id_width = max(len(f"JD {row.jd_id}") for row in rows)
+    id_width = max(len(row.label) for row in rows)
     title_width = max(len(row.title) for row in rows)
     indent = 2 + id_width + 2 + len("2026-09-01") + 2
 
@@ -62,7 +62,7 @@ def render_company_history(console: Console, history: CompanyHistory) -> None:
     for encounter in rows:
         words, style = _status(encounter)
         console.print(
-            f"  [cyan]{f'JD {encounter.jd_id}':>{id_width}}[/]"
+            f"  [cyan]{encounter.label:>{id_width}}[/]"
             f"  [dim]{encounter.ingested_at:%Y-%m-%d}[/]"
             f"  {encounter.title:<{title_width}}"
             f"  [{style}]{words}[/]"
