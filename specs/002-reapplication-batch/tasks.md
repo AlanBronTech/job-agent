@@ -26,7 +26,7 @@ US3 or US4.
 
 ## Phase 1: Setup
 
-- [ ] T001 Branch check: `002-reapplication-batch` is based on `001-local-ui` and `uv run pytest -q` passes (731 at the start). Record the starting count in this file's header.
+- [X] T001 Branch check: `002-reapplication-batch` is based on `001-local-ui` and `uv run pytest -q` passes. Starting count recorded 2026-10-04: **734 passed**.
 
 ---
 
