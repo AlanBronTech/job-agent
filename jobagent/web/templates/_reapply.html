@@ -1,0 +1,29 @@
+{# The six-month rule for one ad. `reapply` is services.reapply's Clear / SameJob / PossiblySame. #}
+{% if reapply is defined and reapply and reapply.kind in ('same', 'possibly_same') %}
+{% set m = reapply.match %}
+<div class="banner {{ 'bad' if reapply.kind == 'same' else 'warn' }}">
+  {% if reapply.kind == 'same' %}
+    <strong>Same job you applied for on {{ m.applied_on.strftime("%-d %B %Y") }}</strong>
+    ({{ m.age_days }} days ago; {{ m.company }}, {{ m.title }};
+    matched on {{ {"requisition": "requisition " ~ (m.requisition_id or ""), "url": "the same ad URL", "title": "your answer"}[m.reason] }}).
+    Scoring and generating are refused inside your reapplication window.
+  {% else %}
+    <strong>Possibly the same job as your application of {{ m.applied_on.strftime("%-d %B %Y") }}</strong>
+    ({{ m.age_days }} days ago; {{ m.company }}, {{ m.title }};
+    {% if m.requisition_id %}requisition {{ m.requisition_id }} on the earlier one, none in this ad{% else %}no requisition number on either{% endif %}).
+    Nothing is spent until you say which.
+  {% endif %}
+  <div>
+  {% for value, label in ([("same", "Same job"), ("different", "Different job")] if reapply.kind == 'possibly_same' else []) + [("overrule", "Overrule: go ahead anyway")] %}
+    <form class="inline" method="post" action="/ads/{{ ad_id }}/reapply">
+      <input type="hidden" name="csrf" value="{{ token }}">
+      <input type="hidden" name="decision" value="{{ value }}">
+      <input type="hidden" name="next" value="/ads/{{ ad_id }}">
+      <button type="submit">{{ label }}</button>
+    </form>
+  {% endfor %}
+  </div>
+</div>
+{% elif reapply is defined and reapply and reapply.kind == 'clear' and reapply.decision %}
+<p class="detail">Reapplication rule: {{ {"overrule": "overruled for this ad", "different": "you said this is a different job"}[reapply.decision] }}.</p>
+{% endif %}

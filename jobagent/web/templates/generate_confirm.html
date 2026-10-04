@@ -6,6 +6,7 @@
 <h1>Generate for {{ jd.title }}{% if jd.company %} · {{ jd.company }}{% endif %}</h1>
 
 {% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+{% set ad_id = jd.id %}{% set reapply = plan.reapply %}{% include "_reapply.html" %}
 
 <form method="post" action="/ads/{{ jd.id }}/generate">
   <input type="hidden" name="csrf" value="{{ token }}">
@@ -51,7 +52,9 @@
     <strong>Cost:</strong> {{ estimate }}
   </div>
 
-  {% if missing %}
+  {% if plan.reapply and plan.reapply.kind in ('same', 'possibly_same') %}
+  <p class="detail">Answer the question above before generating.</p>
+  {% elif missing %}
   <div class="banner bad"><strong>Cannot run yet.</strong>
     <ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
   {% else %}

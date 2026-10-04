@@ -28,6 +28,7 @@
 {% endif %}
 
 {% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+{% set ad_id = jd.id %}{% include "_reapply.html" %}
 {% if run %}{% include "_run.html" %}{% endif %}
 
 {% if d.stale %}

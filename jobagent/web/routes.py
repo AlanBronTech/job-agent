@@ -12,7 +12,17 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from jobagent.adapters.llm import RunContext
-from jobagent.services import ads, costs, documents, listing, outputs, readiness, runs, scoring
+from jobagent.services import (
+    ads,
+    costs,
+    documents,
+    listing,
+    outputs,
+    readiness,
+    reapply,
+    runs,
+    scoring,
+)
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
@@ -55,6 +65,7 @@ def ad_page(request: Request, jd_id: int):
             "nav": "ads",
             "d": detail,
             "run": runs.active_run_for(ws, jd_id) or _recent(runs.last_run_for(ws, jd_id)),
+            "reapply": reapply.check(ws, jd_id, request.app.state.today()),
         },
     )
 
@@ -219,6 +230,9 @@ async def generate_start(request: Request, jd_id: int):
         return _generate_confirm(request, jd_id, choice)
     # The same refusals the service would raise, checked here only so the page
     # can say so before a run exists. The service checks them again.
+    if isinstance(plan.reapply, (reapply.SameJob, reapply.PossiblySame)):
+        return _generate_confirm(request, jd_id, choice,
+                                 "Nothing was started: this looks like a job you applied for recently.")
     if plan.needs_overrule and not choice["overrule"]:
         return _generate_confirm(request, jd_id, choice,
                                  "The assessment says skip. Tick the overrule box to generate anyway.")
@@ -396,6 +410,7 @@ def _score_confirm(request: Request, jd_id: int, force: bool, problem: str | Non
             "force": force,
             "estimate": costs.describe(costs.estimate(ws, config, "score")),
             "missing": readiness.missing(ws, config, "score"),
+            "reapply": reapply.check(ws, jd_id, request.app.state.today()),
             "problem": problem,
         },
         status_code=409 if problem else 200,
@@ -421,6 +436,8 @@ async def score_start(request: Request, jd_id: int):
     except NoSuchAd:
         return _score_confirm(request, jd_id, force)
     # Checked again by the service; here only so the page can say so first.
+    if isinstance(reapply.check(ws, jd_id, request.app.state.today()), (reapply.SameJob, reapply.PossiblySame)):
+        return _score_confirm(request, jd_id, force, "Nothing was started: this looks like a job you applied for recently.")
     if jd.thin and not force:
         return _score_confirm(request, jd_id, force,
                               "Too little ad text to score. Tick the box to score it anyway.")
@@ -438,3 +455,23 @@ async def score_start(request: Request, jd_id: int):
     except RunInProgress:
         pass
     return RedirectResponse(f"/ads/{jd_id}", status_code=303)
+
+
+
+@router.post("/ads/{jd_id}/reapply")
+async def reapply_decide(request: Request, jd_id: int):
+    """Same job / different job / overrule, for one ad. Free."""
+    form = await checked_form(request)
+    decision = str(form.get("decision") or "")
+    if decision not in {"same", "different", "overrule"}:
+        return PlainTextResponse("Unknown decision.", 400)
+    ws = workspace(request)
+    try:
+        state = reapply.check(ws, jd_id, request.app.state.today())
+        reapply.decide(ws, jd_id, decision, getattr(getattr(state, "match", None), "against", ""))
+    except NoSuchAd:
+        return PlainTextResponse("No such ad.", 404)
+    back = str(form.get("next") or f"/ads/{jd_id}")
+    if not back.startswith("/") or back.startswith("//"):
+        back = f"/ads/{jd_id}"
+    return RedirectResponse(back, status_code=303)

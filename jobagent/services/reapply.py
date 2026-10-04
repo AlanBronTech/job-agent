@@ -26,16 +26,19 @@ from jobagent.services.workspace import Workspace
 @dataclass(frozen=True)
 class Clear:
     decision: str | None = None  # the recorded decision that cleared it, if any
+    kind: str = "clear"
 
 
 @dataclass(frozen=True)
 class SameJob:
     match: core_reapply.Match
+    kind: str = "same"
 
 
 @dataclass(frozen=True)
 class PossiblySame:
     match: core_reapply.Match
+    kind: str = "possibly_same"
 
 
 def window_days(ws: Workspace) -> int | None:

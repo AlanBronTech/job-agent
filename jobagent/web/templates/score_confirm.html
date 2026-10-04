@@ -4,6 +4,7 @@
 <p class="muted"><a href="/ads/{{ jd.id }}">← {{ jd.title }}</a></p>
 <h1>Score {{ jd.title }}{% if jd.company %} · {{ jd.company }}{% endif %}?</h1>
 {% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+{% set ad_id = jd.id %}{% include "_reapply.html" %}
 
 {% if history and history.encounters %}
 <div class="panel"><strong>You have seen {{ history.company }} before</strong> — {{ history.encounters | length }} earlier ad(s).
@@ -19,7 +20,9 @@
     <label><input type="checkbox" name="force" value="1" {% if force %}checked{% endif %}> Score it anyway.</label></div>
   {% endif %}
   <div class="panel"><strong>Cost:</strong> {{ estimate }}</div>
-  {% if missing %}
+  {% if reapply and reapply.kind in ('same', 'possibly_same') %}
+  <p class="detail">Answer the question above before scoring.</p>
+  {% elif missing %}
   <div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
   {% else %}
   <p><button type="submit" class="primary">Confirm and score</button> <a href="/ads/{{ jd.id }}">Cancel</a></p>
