@@ -29,9 +29,15 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from jobagent.core.models import Application, FitAssessment, JobDescription
+from jobagent.core.models import (
+    Application,
+    FitAssessment,
+    JobDescription,
+    OutsideApplication,
+    ReapplyDecision,
+)
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -57,6 +63,10 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # happened inside three days.
         ("amended_at", "TEXT"),
         ("superseded_text", "TEXT"),
+        # v10 — spec 002. The employer's requisition number, extracted from the
+        # text in code; and the saved file the ad was read from.
+        ("requisition_id", "TEXT"),
+        ("source_file", "TEXT"),
     ],
 }
 
@@ -90,11 +100,38 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     raw_text         TEXT NOT NULL,
     ingested_at      TEXT NOT NULL,
     amended_at       TEXT,
-    superseded_text  TEXT
+    superseded_text  TEXT,
+    requisition_id   TEXT,
+    source_file      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jd_company ON job_descriptions (company);
 CREATE INDEX IF NOT EXISTS idx_jd_ingested ON job_descriptions (ingested_at);
+
+-- v10. Applications made with no ad in the store: before the tool existed, or
+-- straight through a portal. Kept out of `applications`, which every reader,
+-- the eval builder first, assumes has an ad behind it.
+CREATE TABLE IF NOT EXISTS outside_applications (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    company        TEXT NOT NULL,
+    title          TEXT NOT NULL,
+    requisition_id TEXT,
+    applied_on     TEXT NOT NULL,
+    channel        TEXT,
+    status         TEXT NOT NULL,
+    notes          TEXT NOT NULL DEFAULT '',
+    linked_jd_id   INTEGER REFERENCES job_descriptions (id) ON DELETE SET NULL,
+    created_at     TEXT NOT NULL
+);
+
+-- v10. One decision per ad about the reapplication rule: an answer to
+-- "possibly the same job" (same / different) or an overrule.
+CREATE TABLE IF NOT EXISTS reapply_decisions (
+    jd_id      INTEGER PRIMARY KEY REFERENCES job_descriptions (id) ON DELETE CASCADE,
+    decision   TEXT NOT NULL CHECK (decision IN ('same', 'different', 'overrule')),
+    matched    TEXT NOT NULL,
+    decided_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS fit_assessments (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -275,8 +312,9 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
                 salary_json, seniority, posted_by, via_agency, hiring_status,
                 multiple_roles, must_haves, nice_to_haves, tech_stack,
                 responsibilities, red_flags, source, source_url,
-                source_metadata, raw_text, ingested_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                source_metadata, raw_text, ingested_at, requisition_id,
+                source_file
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 jd.title,
@@ -300,6 +338,8 @@ def add_jd(conn: sqlite3.Connection, jd: JobDescription) -> int:
                 jd.source_metadata,
                 jd.raw_text,
                 _to_iso(jd.ingested_at),
+                jd.requisition_id,
+                jd.source_file,
             ),
         )
         conn.commit()
@@ -341,7 +381,9 @@ def update_jd(
                 multiple_roles = ?, must_haves = ?, nice_to_haves = ?,
                 tech_stack = ?, responsibilities = ?, red_flags = ?,
                 source = ?, source_url = ?, source_metadata = ?,
-                raw_text = ?, amended_at = ?, superseded_text = ?
+                raw_text = ?, amended_at = ?, superseded_text = ?,
+                requisition_id = COALESCE(?, requisition_id),
+                source_file = COALESCE(?, source_file)
             WHERE id = ?
             """,
             (
@@ -367,6 +409,8 @@ def update_jd(
                 jd.raw_text,
                 _to_iso(amended_at),
                 existing.raw_text,
+                jd.requisition_id,
+                jd.source_file,
                 jd_id,
             ),
         )
@@ -721,6 +765,8 @@ def _row_to_jd(row: sqlite3.Row) -> JobDescription:
         "source_metadata": row["source_metadata"],
         "raw_text": row["raw_text"],
         "ingested_at": row["ingested_at"],
+        "requisition_id": row["requisition_id"],
+        "source_file": row["source_file"],
     }
     for column in _LIST_COLUMNS:
         data[column] = _load_list(row, column)
@@ -765,3 +811,128 @@ def _to_iso(moment: datetime) -> str:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     return moment.astimezone(timezone.utc).isoformat()
+
+
+# --------------------------------------------------------------------------- #
+# v10: identifiers, outside applications, reapply decisions (spec 002)
+# --------------------------------------------------------------------------- #
+
+
+def set_jd_identifiers(
+    conn: sqlite3.Connection,
+    jd_id: int,
+    *,
+    requisition_id: str | None = None,
+    source_file: str | None = None,
+) -> None:
+    """Fill in either identifier on a stored ad, leaving the other as it is.
+
+    For the backfill: neither value changes what the ad says, so this is not an
+    amendment and does not touch `amended_at`.
+    """
+    try:
+        conn.execute(
+            "UPDATE job_descriptions SET "
+            "requisition_id = COALESCE(?, requisition_id), "
+            "source_file = COALESCE(?, source_file) WHERE id = ?",
+            (requisition_id, source_file, jd_id),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not update identifiers on JD {jd_id}: {exc}") from exc
+
+
+def add_outside(conn: sqlite3.Connection, application: OutsideApplication) -> int:
+    try:
+        cursor = conn.execute(
+            "INSERT INTO outside_applications (company, title, requisition_id, "
+            "applied_on, channel, status, notes, linked_jd_id, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                application.company,
+                application.title,
+                application.requisition_id,
+                application.applied_on.isoformat(),
+                application.channel,
+                application.status.value,
+                application.notes,
+                application.linked_jd_id,
+                _to_iso(application.created_at),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save the outside application: {exc}") from exc
+    return cursor.lastrowid
+
+
+def list_outside(conn: sqlite3.Connection) -> list[OutsideApplication]:
+    try:
+        rows = conn.execute(
+            "SELECT * FROM outside_applications ORDER BY applied_on DESC, id DESC"
+        ).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list outside applications: {exc}") from exc
+    return [_row_to_outside(row) for row in rows]
+
+
+def get_outside(conn: sqlite3.Connection, outside_id: int) -> OutsideApplication | None:
+    row = conn.execute(
+        "SELECT * FROM outside_applications WHERE id = ?", (outside_id,)
+    ).fetchone()
+    return _row_to_outside(row) if row else None
+
+
+def link_outside(conn: sqlite3.Connection, outside_id: int, jd_id: int) -> None:
+    try:
+        conn.execute(
+            "UPDATE outside_applications SET linked_jd_id = ? WHERE id = ?",
+            (jd_id, outside_id),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not link outside application {outside_id}: {exc}") from exc
+
+
+def get_reapply_decision(conn: sqlite3.Connection, jd_id: int) -> ReapplyDecision | None:
+    row = conn.execute(
+        "SELECT * FROM reapply_decisions WHERE jd_id = ?", (jd_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    return ReapplyDecision(
+        jd_id=row["jd_id"],
+        decision=row["decision"],
+        matched=row["matched"],
+        decided_at=row["decided_at"],
+    )
+
+
+def set_reapply_decision(conn: sqlite3.Connection, decision: ReapplyDecision) -> None:
+    """Record or replace the one decision held for an ad."""
+    try:
+        conn.execute(
+            "INSERT INTO reapply_decisions (jd_id, decision, matched, decided_at) "
+            "VALUES (?,?,?,?) ON CONFLICT(jd_id) DO UPDATE SET "
+            "decision = excluded.decision, matched = excluded.matched, "
+            "decided_at = excluded.decided_at",
+            (decision.jd_id, decision.decision, decision.matched, _to_iso(decision.decided_at)),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not record the decision for JD {decision.jd_id}: {exc}") from exc
+
+
+def _row_to_outside(row: sqlite3.Row) -> OutsideApplication:
+    return OutsideApplication(
+        id=row["id"],
+        company=row["company"],
+        title=row["title"],
+        requisition_id=row["requisition_id"],
+        applied_on=row["applied_on"],
+        channel=row["channel"],
+        status=row["status"],
+        notes=row["notes"],
+        linked_jd_id=row["linked_jd_id"],
+        created_at=row["created_at"],
+    )

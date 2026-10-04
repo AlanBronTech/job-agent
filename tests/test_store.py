@@ -542,3 +542,89 @@ def test_deleting_a_jd_takes_its_application_with_it(conn) -> None:
     store.delete_jd(conn, jd_id)
 
     assert store.list_applications(conn) == []
+
+
+# --------------------------------------------------------------------------- #
+# v10 — spec 002: identifiers, outside applications, reapply decisions
+# --------------------------------------------------------------------------- #
+
+import sqlite3 as _sqlite3  # noqa: E402
+from datetime import date as _date  # noqa: E402
+from datetime import datetime as _dt  # noqa: E402
+from datetime import timezone as _tz  # noqa: E402
+
+from jobagent.core.models import (  # noqa: E402
+    ApplicationStatus as _Status,
+    OutsideApplication as _Outside,
+    ReapplyDecision as _Decision,
+)
+from tests.ui_seed import jd as _seed_jd  # noqa: E402
+
+
+def test_v9_database_gains_the_v10_columns_and_keeps_its_rows(tmp_path):
+    path = tmp_path / "v9.db"
+    with store.open_store(path) as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+    # Simulate a v9 file: drop the v10 columns by rebuilding without them.
+    raw = _sqlite3.connect(path)
+    raw.execute("ALTER TABLE job_descriptions DROP COLUMN requisition_id")
+    raw.execute("ALTER TABLE job_descriptions DROP COLUMN source_file")
+    raw.execute("DROP TABLE outside_applications")
+    raw.execute("DROP TABLE reapply_decisions")
+    raw.execute("UPDATE meta SET value = '9' WHERE key = 'schema_version'")
+    raw.commit()
+    raw.close()
+
+    with store.open_store(path) as conn:
+        jd = store.get_jd(conn, jd_id)
+        assert jd.title == "Engineering Manager" and jd.requisition_id is None
+        version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+        assert version == "10"
+        assert store.list_outside(conn) == []
+
+
+def test_identifiers_round_trip_and_backfill_keeps_the_other(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        ad = _seed_jd("Engineering Manager", "Fabrikam Medical", 1)
+        ad.requisition_id = "JR_000123"
+        jd_id = store.add_jd(conn, ad)
+        assert store.get_jd(conn, jd_id).requisition_id == "JR_000123"
+        store.set_jd_identifiers(conn, jd_id, source_file="fabrikam-em.pdf")
+        got = store.get_jd(conn, jd_id)
+        assert (got.requisition_id, got.source_file) == ("JR_000123", "fabrikam-em.pdf")
+
+
+def test_amend_keeps_identifiers_unless_given_new_ones(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        ad = _seed_jd("Engineering Manager", "Fabrikam Medical", 1)
+        ad.requisition_id, ad.source_file = "JR_000123", "a.pdf"
+        jd_id = store.add_jd(conn, ad)
+        store.update_jd(conn, jd_id, _seed_jd("Engineering Manager", "Fabrikam Medical", 1),
+                        amended_at=_dt(2026, 10, 4, tzinfo=_tz.utc))
+        got = store.get_jd(conn, jd_id)
+        assert (got.requisition_id, got.source_file) == ("JR_000123", "a.pdf")
+
+
+def test_outside_applications_and_linking(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+        outside_id = store.add_outside(conn, _Outside(
+            company="Fabrikam Medical", title="Engineering Manager", requisition_id="JR_000123",
+            applied_on=_date(2026, 5, 5), channel="careers site",
+            status=_Status.applied_no_reply, created_at=_dt(2026, 10, 4, tzinfo=_tz.utc)))
+        assert [o.id for o in store.list_outside(conn)] == [outside_id]
+        store.link_outside(conn, outside_id, jd_id)
+        assert store.get_outside(conn, outside_id).linked_jd_id == jd_id
+        store.delete_jd(conn, jd_id)
+        assert store.get_outside(conn, outside_id).linked_jd_id is None  # ON DELETE SET NULL
+
+
+def test_reapply_decision_is_one_per_ad_and_cascades(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+        at = _dt(2026, 10, 4, tzinfo=_tz.utc)
+        store.set_reapply_decision(conn, _Decision(jd_id=jd_id, decision="same", matched="outside:1", decided_at=at))
+        store.set_reapply_decision(conn, _Decision(jd_id=jd_id, decision="overrule", matched="outside:1", decided_at=at))
+        assert store.get_reapply_decision(conn, jd_id).decision == "overrule"
+        store.delete_jd(conn, jd_id)
+        assert store.get_reapply_decision(conn, jd_id) is None
