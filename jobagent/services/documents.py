@@ -46,7 +46,9 @@ from jobagent.services.refusals import (
     SupersedeFailed,
     VerdictIsSkip,
 )
+from jobagent.services import reapply
 from jobagent.services.results import GeneratePlan, GenerateResult
+from jobagent.services.scoring import refuse_if_reapplying
 from jobagent.services.workspace import Workspace
 
 
@@ -106,6 +108,7 @@ def plan(
         names=names,
         clashes=_clashes(ws, loaded.jd, when, names),
         history=loaded.history,
+        reapply=reapply.check(ws, jd_id, when),
     )
 
 
@@ -135,6 +138,7 @@ def generate(
 
     loaded = _load(ws, jd_id)
     jd, assessment = loaded.jd, loaded.assessment
+    refuse_if_reapplying(ws, jd_id, today)
     warnings: list[str] = []
 
     if assessment.verdict is Verdict.skip:

@@ -53,6 +53,8 @@ class GeneratePlan:
     names: list[str]
     clashes: list[tuple[str, datetime]]
     history: CompanyHistory | None = None
+    # services.reapply's Clear / SameJob / PossiblySame, for the confirm page.
+    reapply: object | None = None
 
 
 @dataclass

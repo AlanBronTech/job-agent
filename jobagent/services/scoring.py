@@ -10,13 +10,23 @@ listing service; it spends nothing and needs none of this.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 
 from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.core import history, store
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.scoring import score_fit
 from jobagent.core.store import StoreError
-from jobagent.services.refusals import NoModel, NoSuchAd, ProfileInvalid, ProfileMissing, ThinAd
+from jobagent.services import reapply
+from jobagent.services.refusals import (
+    NoModel,
+    NoSuchAd,
+    PossiblySameJob,
+    ProfileInvalid,
+    ProfileMissing,
+    SameJobRecently,
+    ThinAd,
+)
 from jobagent.services.results import ScoreResult
 from jobagent.services.workspace import Workspace
 
@@ -39,6 +49,7 @@ def score(
     force: bool = False,
     before_spend: Callable[[], None] | None = None,
     client_factory: Callable[[], object] | None = None,
+    today: date | None = None,
 ) -> ScoreResult:
     """Score and store. Raises ScoringError if the model's answer is unusable.
 
@@ -46,6 +57,7 @@ def score(
     the assessment was paid for and is shown either way.
     """
     jd, seen_before = load(ws, jd_id)
+    refuse_if_reapplying(ws, jd_id, today or date.today())
 
     if jd.thin and not force:
         raise ThinAd(len(jd.raw_text))
@@ -71,3 +83,12 @@ def score(
     except StoreError as exc:
         warnings.append(f"Scored, but could not save. {exc}")
     return ScoreResult(jd=jd, assessment=assessment, history=seen_before, warnings=warnings)
+
+
+def refuse_if_reapplying(ws: Workspace, jd_id: int, today: date) -> None:
+    """The six-month rule, before anything is spent (spec 002, FR-009)."""
+    state = reapply.check(ws, jd_id, today)
+    if isinstance(state, reapply.SameJob):
+        raise SameJobRecently(state.match)
+    if isinstance(state, reapply.PossiblySame):
+        raise PossiblySameJob(state.match)
