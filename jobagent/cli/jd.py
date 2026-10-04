@@ -347,6 +347,22 @@ def show(jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd lis
     _render_jd(jd)
 
 
+@app.command("backfill")
+def backfill() -> None:
+    """Free: fill in requisition numbers and source files for ads stored before spec 002."""
+    report = ads.backfill(Workspace.from_config(get_config()))
+    console.print(f"Requisition numbers set: {len(report.requisitions_set)}")
+    for jd_id, value in report.requisitions_set:
+        console.print(f"  JD {jd_id}  {value}")
+    for jd_id, values in report.requisitions_ambiguous:
+        console.print(f"  [yellow]JD {jd_id}: several numbers ({', '.join(values)}); none set[/]")
+    console.print(f"Source files set: {len(report.files_set)}")
+    for jd_id, names in report.files_ambiguous:
+        console.print(f"  [yellow]JD {jd_id}: same text in {', '.join(names)}; none set[/]")
+    if report.unreadable_files:
+        console.print(f"[dim]Unreadable saved files skipped: {', '.join(report.unreadable_files)}[/]")
+
+
 @app.command("same")
 def same(
     jd_id: int = typer.Argument(..., help="The JD id the question was asked about."),

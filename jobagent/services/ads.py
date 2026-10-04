@@ -24,7 +24,7 @@ from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client, lo
 from jobagent.core import history, store
 from jobagent.core.jd import parse_jd
 from jobagent.core.models import THIN_AD_CHARS
-from jobagent.core.requisition import extract_requisition
+from jobagent.core.requisition import extract_requisition, requisition_candidates
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
@@ -261,3 +261,57 @@ def _bare_name(filename: str) -> str:
         accepted = ", ".join(sorted(AD_SUFFIXES))
         raise BadUpload(f"{name} is not a saved job ad. Accepted: {accepted}.")
     return name
+
+
+# --------------------------------------------------------------------------- #
+# Backfill (spec 002, FR-017): free, no model call
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class BackfillReport:
+    requisitions_set: list[tuple[int, str]]
+    requisitions_ambiguous: list[tuple[int, list[str]]]
+    files_set: list[tuple[int, str]]
+    files_ambiguous: list[tuple[int, list[str]]]
+    unreadable_files: list[str]
+
+
+def backfill(ws: Workspace) -> BackfillReport:
+    """Fill in requisition numbers and source files for ads stored before they existed.
+
+    Requisition numbers come from each ad's stored text. A source file is set
+    only when exactly one saved file's text is identical to the ad's text: an
+    amended ad, or one parsed from pasted text, simply stays without one.
+    """
+    report = BackfillReport([], [], [], [], [])
+    by_text: dict[str, list[str]] = {}
+    for path in ads_in(ws.jd_dir):
+        try:
+            text = read_ad(file=path).raw_text
+        except UnreadableAd:
+            report.unreadable_files.append(path.name)
+            continue
+        by_text.setdefault(text, []).append(path.name)
+
+    with store.open_store(ws.db_path) as conn:
+        for jd in store.list_jds(conn):
+            requisition = None
+            if jd.requisition_id is None:
+                candidates = requisition_candidates(jd.raw_text)
+                if len(candidates) == 1:
+                    requisition = candidates[0]
+                    report.requisitions_set.append((jd.id, requisition))
+                elif len(candidates) > 1:
+                    report.requisitions_ambiguous.append((jd.id, candidates))
+            source = None
+            if jd.source_file is None:
+                names = by_text.get(jd.raw_text, [])
+                if len(names) == 1:
+                    source = names[0]
+                    report.files_set.append((jd.id, source))
+                elif len(names) > 1:
+                    report.files_ambiguous.append((jd.id, names))
+            if requisition or source:
+                store.set_jd_identifiers(conn, jd.id, requisition_id=requisition, source_file=source)
+    return report
