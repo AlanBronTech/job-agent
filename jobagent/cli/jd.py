@@ -558,6 +558,8 @@ def _render_jd(jd: JobDescription) -> None:
     header.add_column(style="cyan")
     header.add_column()
     header.add_row("company", jd.company or "[dim]not stated[/]")
+    if jd.requisition_id:
+        header.add_row("requisition", jd.requisition_id)
     if jd.posted_by:
         posted = f"{jd.posted_by} [yellow](agency)[/]" if jd.via_agency else jd.posted_by
         header.add_row("posted by", posted)

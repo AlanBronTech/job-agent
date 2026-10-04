@@ -18,6 +18,7 @@
   · {{ jd.work_type.value | replace("_", " ") }} · {{ jd.work_arrangement.value | replace("_", " ") }}
   {% if jd.salary_range and jd.salary_range.raw %} · {{ jd.salary_range.raw }}{% endif %}
   · captured {{ jd.ingested_at.strftime("%-d %b %Y") }}
+  {% if jd.requisition_id %} · requisition <code>{{ jd.requisition_id }}</code>{% endif %}
 </p>
 {% if jd.source_url or jd.source_metadata %}
 <p class="detail">

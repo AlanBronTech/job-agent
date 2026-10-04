@@ -26,7 +26,7 @@
     <tr>
       <td class="num muted">{{ r.jd_id }}</td>
       <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
-        <div class="muted">{{ r.company or "Unknown company" }}</div></td>
+        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div></td>
       <td class="muted nowrap">{{ r.captured.strftime("%-d %b %Y") }}</td>
       <td>{{ verdict(r.verdict) }}{% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
       <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>

@@ -38,6 +38,7 @@ class AdRow:
     status: ApplicationStatus | None
     has_documents: bool
     stale: bool
+    requisition_id: str | None = None
 
 
 @dataclass
@@ -78,6 +79,7 @@ def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
                 status=application.status if application else None,
                 has_documents=on_disk[jd.id].any,
                 stale=bool(assessment) and stale,
+                requisition_id=jd.requisition_id,
             )
         )
     if sort == "score":

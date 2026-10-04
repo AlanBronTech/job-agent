@@ -236,10 +236,12 @@ def _emit(jd, fit: FitAssessment, *, as_json: bool) -> None:
     if as_json:
         print(json.dumps(fit.model_dump(mode="json"), indent=2, ensure_ascii=False))
         return
-    _render(jd.title, jd.company, fit)
+    _render(jd.title, jd.company, fit, requisition_id=jd.requisition_id)
 
 
-def _render(title: str, company: str | None, fit: FitAssessment) -> None:
+def _render(
+    title: str, company: str | None, fit: FitAssessment, *, requisition_id: str | None = None
+) -> None:
     style = _VERDICT_STYLE[fit.verdict]
     verdict = fit.verdict.value.replace("_", " ").upper()
 
@@ -247,6 +249,8 @@ def _render(title: str, company: str | None, fit: FitAssessment) -> None:
     header.add_column(style="cyan")
     header.add_column()
     header.add_row("verdict", f"[{style}]{verdict}[/]")
+    if requisition_id:
+        header.add_row("requisition", requisition_id)
     header.add_row(
         "score",
         f"{fit.overall_score}/100 hiring manager  ·  "

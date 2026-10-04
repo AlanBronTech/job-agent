@@ -184,6 +184,8 @@ def assessment_markdown(
 
     if jd.source_url:
         lines += [f"Ad: {jd.source_url}", ""]
+    if jd.requisition_id:
+        lines += [f"Requisition: {jd.requisition_id}", ""]
 
     lines += ["## Hard filters", ""]
     mark = {
@@ -255,6 +257,8 @@ def job_ad_markdown(jd: JobDescription) -> str:
         facts.append(("Posting", jd.source_metadata))
     if jd.source_url:
         facts.append(("URL", jd.source_url))
+    if jd.requisition_id:
+        facts.append(("Requisition", jd.requisition_id))
     facts.append(("Ingested", f"{jd.ingested_at:%Y-%m-%d}"))
 
     lines += [f"**{label}:** {value}  " for label, value in facts]
