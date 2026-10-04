@@ -32,7 +32,9 @@ until the results table was compared against the folder.
 - Q: What counts as the same job when neither ad has a requisition number? → A:
   Same company and same role title within six months is "possibly the same
   job": Alan answers yes or no before anything is spent, and the answer is
-  recorded. Chosen because the worked example's ad carried no requisition
+  recorded. Refined during implementation (2026-10-04): "neither has a number"
+  became "at least one side has none", because the worked example had the
+  number only on the earlier application, and the narrower rule missed it. Chosen because the worked example's ad carried no requisition
   number in its text, so requisition matching alone would not have caught it,
   while generic titles make a hard block wrong for different jobs.
 
@@ -224,9 +226,9 @@ none stores nothing, never a guess.
 - **FR-008**: An ad MUST be marked "same job as an earlier application" when its
   requisition number matches an earlier application's, or its URL matches an
   earlier application's ad.
-- **FR-008a**: When neither ad has a requisition number, an ad from the same
-  company with the same role title as an application less than six months old
-  MUST be marked "possibly the same job", and Alan MUST answer yes or no before
+- **FR-008a**: When the requisition numbers do not settle it (at least one side
+  has none), an ad from the same company with the same role title as an
+  application less than six months old MUST be marked "possibly the same job", and Alan MUST answer yes or no before
   any cost is spent on it. Yes is treated as a match (FR-009); no is assessed
   normally. The answer MUST be recorded and not asked again for that ad.
 - **FR-009**: When the matching application is less than six months old,
