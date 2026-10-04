@@ -185,19 +185,22 @@ on a tab stop at **16.93cm**.
   for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
   see the invariants below for why each field is there.
 
-## Where the project is — 2026-10-01
+## Where the project is — 2026-10-04
 
 **Built and working. Phases 0-5 and 7 are done; Phase 8 (a local UI) is under
 way on branch `001-local-ui`, not yet merged.** Its spec, plan and task list
 are in `specs/001-local-ui/` (Spec Kit). The MVP is built: `jobagent ui` shows
 the shortlist and full assessments, opens documents, and generates from a
 button behind a cost confirmation; User Story 3 adds and scores ads from the
-browser too. The pipeline board and prep (User Stories 4-5) are next; `apply`,
-`outcome` and `prep` are still terminal-only. Phase 6 (Gmail triage) and the Drive upload were
+browser too. The pipeline board and prep (001 User Stories 4-5) are still to
+do. Spec 002 (`specs/002-reapplication-batch/`, branch
+`002-reapplication-batch` off `001-local-ui`) adds the six-month same-job
+rule, applications recorded outside the tool, requisition numbers, and batch
+review in the CLI and the UI. Phase 6 (Gmail triage) and the Drive upload were
 dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
 decisions.
 
-731 tests pass as of 2026-10-01 on `001-local-ui` (562 on `main`), none
+834 tests pass as of 2026-10-04 on `002-reapplication-batch` (562 on `main`), none
 touching the network. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
@@ -231,6 +234,11 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent eval run                  ~$0.11/case
     jobagent --budget <cmd>            free tier, 20 requests/day, worse
     jobagent ui                        free     the browser UI, this Mac only
+    jobagent batch [parse|skip IDS]    ~$0.04/ad several ads at once, one table
+    jobagent score ID ID …             ~$0.11 each, one combined estimate
+    jobagent jd same <id> yes|no       free     answer "possibly the same job?"
+    jobagent outside add|list|link     free     applications made outside the tool
+    jobagent jd backfill               free     requisition numbers, source files
 
 About 28 cents per application end to end. Do not quote a cost from memory or
 from this file if `jobagent spend` can answer it — that is the whole reason it
@@ -419,6 +427,17 @@ expected cost before spending (`services/costs.py`).
   nothing. The move now happens last — after every refusal, before the first
   model call — so a refused run touches nothing and a failed move spends
   nothing.
+- **The six-month rule is a refusal before spending, not a hard filter.** Hard
+  filters run inside scoring, after the model is paid; a rule whose purpose is
+  to save the $0.11 and the $0.14 has to fire before either. A reposted ad was
+  scored and had documents generated before the employer's portal showed the
+  same requisition applied for five months earlier. Same job means the same
+  requisition number or URL; same company and title where the numbers do not
+  settle it is *possibly* the same job, and Alan answers. That case had its
+  number only on the earlier application (the receipt email), not in the
+  repost: "neither side has a number" would have missed it. Only 2 of 58
+  stored ads carry a number at all, so the title question does most of the
+  work. The rule only sees applications it knows about, hence `outside add`.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment

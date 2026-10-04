@@ -55,10 +55,58 @@ confirmation says so and the old folder is kept under a dated name next to the
 new one (`2026-09.superseded-20260929T140512_Acme_EngineeringManager`), edits
 and all.
 
+- **Batch.** *Batch* in the menu: every ad saved since you last added one,
+  with the cost of parsing them all, then one table. Tick rows to score
+  several (combined cost first) or to mark them not applied; open a row to
+  generate. A file that could not be used is its own row, with the reason.
+
 **Still in the terminal for now:** `apply`, `outcome`, `prep`, and anything
 under `jd amend`, `jd delete`, `eval` and `spend`.
 
 ---
+
+## Several ads at once
+
+Save the ads as usual, then:
+
+```
+jobagent batch            # free: the new files, what parsing them costs, then the table
+jobagent batch parse      # parse them all
+jobagent score 81 82 84   # score several: one combined estimate, then each in turn
+jobagent batch skip 83 85 # record the rest as not applied
+```
+
+"New" means saved after you last added an ad, so the folder's older files are
+never offered at once. Every file gets a row, including one that was cut off at
+"…more" or is a copy of an ad already stored, with what to do about it. Generate
+stays one ad at a time.
+
+## Applying again
+
+The tool will not score or generate for **the same job you applied for less
+than six months ago** (`reapply_window_days: 183` in `profile/assets.yaml`). A
+different job at the same company is assessed like any other ad, and company
+history alone never rules one out. Nothing is spent on a refused ad.
+
+- **Same job** means the same requisition number (`JR_000123`, `Req ID: 45871`,
+  read from the ad text) or the same ad URL. To go ahead anyway:
+  `jobagent score <id> --overrule-reapply`, recorded for that ad only.
+- **Possibly the same job** means the same company and title where the numbers
+  do not settle it. You answer: `jobagent jd same <id> yes` (the rule applies)
+  or `no` (assessed normally). The UI shows the same question with buttons.
+
+The rule can only see applications it knows about. Record ones made before the
+tool, or straight through a portal:
+
+```
+jobagent outside add --company "Acme Logistics" --title "Engineering Manager" \
+    --on 2026-05-05 --req JR_000123 --status applied_no_reply
+jobagent outside list
+jobagent outside link <outside_id> <jd_id>   # once the ad is stored too
+```
+
+`jobagent jd backfill` (free) fills in requisition numbers and source files for
+ads stored before this existed.
 
 ## The loop
 
@@ -309,6 +357,9 @@ a case is recorded but cannot be marked.
 | `jobagent jd add` | Parse an ad and save it. Prints the new JD id. |
 | `jobagent jd list [-n N]` | Every ad, newest first. Where you find a JD id. |
 | `jobagent jd show <jd_id>` | One ad in full, as parsed. |
+| `jobagent jd same <jd_id> yes\|no` | Answer "possibly the same job as an earlier application?" Free. |
+| `jobagent jd backfill` | Fill in requisition numbers and source files for older ads. Free. |
+| `jobagent batch [parse\|skip IDS]` | Several ads at once; see *Several ads at once*. |
 
 `jd add` options:
 
@@ -328,6 +379,10 @@ a case is recorded but cannot be marked.
 |---|---|
 | `jobagent score <jd_id>` | Assess one ad against the profile. **Costs ~$0.11.** |
 | `jobagent score <jd_id> --last` | Show the last saved assessment. Free. |
+| `jobagent score <id> <id> …` | Score several: one combined estimate, then each; a refused one is reported and the rest go ahead. |
+
+`--overrule-reapply` goes ahead with a job you applied for recently (see
+*Applying again*).
 
 An ad under 800 characters is refused before the call is made — that is
 almost always a description that was collapsed when the page was saved,
@@ -366,6 +421,9 @@ assessment is what shapes the selection.
 `--note <text>`.
 
 `outcome` options: `--worth yes|no|unsure`, `--why <text>`, `--note <text>`.
+
+Applications made outside the tool: `jobagent outside add|list|link` (see
+*Applying again*).
 
 **Valid `<status>` values**, in order of how far it got:
 
@@ -418,7 +476,10 @@ pass `--no-save`. Costs roughly $0.11.
 - `eval run --only <case_id>` — one case. `--yes` skips the cost prompt.
 
 The case set builds itself from the applications you record, so it cannot go
-stale through neglect.
+stale through neglect. An application made before its ad was stored (say a
+May application to an ad captured from an October repost) is left out and
+named in the report: the ad text it would be graded against is not what the
+decision was made on.
 
 ### Housekeeping
 

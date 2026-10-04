@@ -103,7 +103,7 @@ US3 or US4.
 ## Phase 7: Polish
 
 - [X] T029 Eval leakage (FR-015 and the live defect): `cases_from_applications` in `jobagent/core/evals.py` takes the ads' `ingested_at` and leaves out applications with `applied_on` before the ad's capture date; `jobagent/cli/evals.py` passes the dates and `eval report` prints "N case(s) left out: the ad was captured after the application". Tests in `tests/test_evals.py`.
-- [ ] T030 [P] Update `README.md` (batch, the six-month rule, outside applications, `jd same`, `jd backfill`) and `CLAUDE.md` (the commands table, an invariant for the six-month rule as a pre-spend refusal and why it is not a hard filter, and the eval leakage exclusion).
+- [X] T030 [P] Update `README.md` (batch, the six-month rule, outside applications, `jd same`, `jd backfill`) and `CLAUDE.md` (the commands table, an invariant for the six-month rule as a pre-spend refusal and why it is not a hard filter, and the eval leakage exclusion).
 - [X] T031 Run `jobagent jd backfill` against the real store (free). Report the counts to Alan, and ask whether to record any outside applications he remembers.
 - [ ] T032 Replay the worked example per quickstart.md (≈ $0.04). **Ask Alan before running.**
 - [ ] T033 Before the final commit, scan `git diff 001-local-ui` for real names and requisition numbers (Constitution VI).
