@@ -96,7 +96,7 @@ US3 or US4.
 
 - [X] T026 [US4] Add `backfill(ws) -> BackfillReport` to `jobagent/services/ads.py`: for every stored ad with no `requisition_id`, extract one from `raw_text`; for every ad with no `source_file`, match a saved file whose extracted text equals `raw_text` exactly (no model call); report the counts and the ambiguous ones. Add `jobagent jd backfill` to `jobagent/cli/jd.py`.
 - [X] T027 [US4] Show the requisition id in `jobagent jd show`, the `score` header, `assessment.md` (`jobagent/adapters/docs.py`), and the UI detail and list pages.
-- [ ] T028 [US4] Tests in `tests/test_services_ads_scoring.py` and `tests/test_cli_jd.py`: backfill exactness, no model client built, ambiguous cases reported.
+- [X] T028 [US4] Tests in `tests/test_services_ads_scoring.py` and `tests/test_cli_jd.py`: backfill exactness, no model client built, ambiguous cases reported.
 
 ---
 

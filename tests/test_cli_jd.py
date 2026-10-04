@@ -272,3 +272,19 @@ def test_the_first_ad_from_a_company_says_nothing(wired, jd_file) -> None:
     result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
 
     assert "Seen before" not in result.output
+
+
+def test_backfill_command_reports(wired, tmp_path, monkeypatch) -> None:
+    from jobagent.core import store as _store
+    from jobagent.core.models import JobDescription as _JD, WorkArrangement as _WA, WorkType as _WT
+    from datetime import datetime as _dt, timezone as _tz
+
+    config = jd_cli.get_config()
+    with _store.open_store(config.db_path) as conn:
+        _store.add_jd(conn, _JD(title="Engineering Manager", company="Fabrikam Medical",
+                                work_type=_WT.permanent, work_arrangement=_WA.hybrid,
+                                raw_text="An invented ad. Requisition: JR_000123.",
+                                ingested_at=_dt(2026, 10, 4, tzinfo=_tz.utc)))
+    result = runner.invoke(app, ["jd", "backfill"])
+    assert result.exit_code == 0, result.output
+    assert "Requisition numbers set: 1" in result.output and "JR_000123" in result.output

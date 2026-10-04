@@ -198,3 +198,39 @@ def test_add_records_the_source_file_and_requisition_number(ws, monkeypatch):
         a, b = store.get_jd(conn, filed.jd.id), store.get_jd(conn, pasted.jd.id)
     assert (a.source_file, a.requisition_id) == ("fabrikam-em.pdf", "JR_000123")
     assert (b.source_file, b.requisition_id) == (None, None)
+
+
+# -- backfill (spec 002, US4) ----------------------------------------------------
+
+
+def test_backfill_sets_exactly_and_reports_ambiguity(ws, monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("backfill built a model client")
+
+    monkeypatch.setattr(ads, "get_client", refuse)
+    ws.jd_dir.mkdir()
+    with store.open_store(ws.db_path) as conn:
+        one = make_jd("Engineering Manager", "Fabrikam Medical", 1)
+        one.raw_text = AD + " Requisition: JR_000123."
+        one_id = store.add_jd(conn, one)
+        two = make_jd("Engineering Manager", "Northwind Freight", 2)
+        two.raw_text = AD + " Ref: JR_000456. See also JR_000789."
+        two_id = store.add_jd(conn, two)
+        plain_id = store.add_jd(conn, make_jd("Head of Engineering", "Contoso Health", 3))
+        plain_text = store.get_jd(conn, plain_id).raw_text
+    (ws.jd_dir / "fabrikam.txt").write_text(one.raw_text)
+    (ws.jd_dir / "contoso-a.txt").write_text(plain_text)
+    (ws.jd_dir / "contoso-b.txt").write_text(plain_text)
+
+    report = ads.backfill(ws)
+
+    assert report.requisitions_set == [(one_id, "JR_000123")]
+    assert report.requisitions_ambiguous == [(two_id, ["JR_000456", "JR_000789"])]
+    assert report.files_set == [(one_id, "fabrikam.txt")]
+    assert report.files_ambiguous == [(plain_id, ["contoso-a.txt", "contoso-b.txt"])] or \
+        report.files_ambiguous == [(plain_id, ["contoso-b.txt", "contoso-a.txt"])]
+    with store.open_store(ws.db_path) as conn:
+        got = store.get_jd(conn, one_id)
+        assert (got.requisition_id, got.source_file) == ("JR_000123", "fabrikam.txt")
+        assert store.get_jd(conn, two_id).requisition_id is None
+    assert ads.backfill(ws).requisitions_set == []  # idempotent
