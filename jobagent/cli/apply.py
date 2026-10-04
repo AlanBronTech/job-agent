@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date
 
 import typer
 from rich.console import Console
@@ -11,8 +11,11 @@ from rich.table import Table
 
 from jobagent.config import get_config
 from jobagent.core import store
-from jobagent.core.models import Application, ApplicationStatus, Worth
+from jobagent.core.models import ApplicationStatus, Worth
 from jobagent.core.store import StoreError
+from jobagent.services import pipeline
+from jobagent.services.refusals import NoSuchAd
+from jobagent.services.workspace import Workspace
 
 console = Console()
 err_console = Console(stderr=True)
@@ -223,37 +226,20 @@ def _save(
 ) -> None:
     config = get_config()
     try:
-        with store.open_store(config.db_path) as conn:
-            jd = store.get_jd(conn, jd_id)
-            if jd is None:
-                err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
-                raise typer.Exit(code=1)
-
-            existing = store.get_application(conn, jd_id)
-            application = existing or Application(
-                jd_id=jd_id, updated_at=datetime.now(timezone.utc)
-            )
-            application.status = status
-            application.updated_at = datetime.now(timezone.utc)
-            if applied_on is not None:
-                application.applied_on = applied_on
-            if channel is not None:
-                application.channel = channel
-            if reposted_on is not None:
-                application.reposted_on = reposted_on
-            if worth is not None:
-                application.worth_applying = worth
-                # Stated by Alan, so it is no longer an inference from notes.
-                application.worth_derived = False
-            if worth_why:
-                application.worth_why = worth_why
-            if notes:
-                application.notes = (
-                    f"{application.notes}\n{notes}".strip()
-                    if application.notes
-                    else notes
-                )
-            store.save_application(conn, application)
+        jd, _ = pipeline.save(
+            Workspace.from_config(config),
+            jd_id,
+            status=status,
+            applied_on=applied_on,
+            channel=channel,
+            reposted_on=reposted_on,
+            worth=worth,
+            worth_why=worth_why,
+            notes=notes,
+        )
+    except NoSuchAd:
+        err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
+        raise typer.Exit(code=1)
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
