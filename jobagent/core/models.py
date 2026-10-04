@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
@@ -303,6 +303,10 @@ class TargetFilters(_Base):
     # up that stuff in the initial interview, but just having the interview is
     # good practice for me."
     location_advisory: bool = False
+    # Don't apply again to the same job within this many days of applying.
+    # A different job at the same company is unaffected. None turns the rule
+    # off. Alan, 2026-10-03; 183 days is "six months" (spec 002).
+    reapply_window_days: int | None = 183
     min_salary_aud: int
     work_types: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
@@ -485,6 +489,14 @@ class JobDescription(_Base):
     # an ad open five months with 100+ applicants is a signal the text never
     # carries. Left unparsed — two samples is not enough to know its shape.
     source_metadata: str | None = None
+    # The employer's own identifier for the opening (`JR_000123`), exactly as
+    # the ad states it. Extracted from the text in code, never by the model, and
+    # None when the ad has none or more than one. The reliable "same job" key:
+    # a repost gets a new URL and often the same title, but keeps this.
+    requisition_id: str | None = None
+    # Bare file name in JD_DIR that `jd add` read. None for pasted text. Lets a
+    # batch tell which saved ads have not been taken in yet.
+    source_file: str | None = None
     raw_text: str
     ingested_at: datetime
 
@@ -737,6 +749,42 @@ class Application(_Base):
     overrode_scorer: bool = False
 
     updated_at: datetime
+
+
+class OutsideApplication(_Base):
+    """An application made without an ad in the store: before the tool existed,
+    or straight through an employer's portal.
+
+    Counts for company history and for the reapplication rule exactly as a
+    tracked application does. Kept apart from `Application`, because every
+    reader of that table, the eval builder first, assumes an ad behind each row.
+    """
+
+    id: int | None = None
+    company: str
+    title: str
+    requisition_id: str | None = None
+    applied_on: date
+    channel: str | None = None
+    status: ApplicationStatus = ApplicationStatus.applied
+    notes: str = ""
+    # Set once the ad for this application is added and linked; a linked row
+    # is then represented by that ad's application and not counted twice.
+    linked_jd_id: int | None = None
+    created_at: datetime
+
+
+class ReapplyDecision(_Base):
+    """Alan's answer about one ad and the earlier application it resembles.
+
+    `same` and `different` answer "possibly the same job". `overrule` waives the
+    six-month rule for this ad only; it never extends to another.
+    """
+
+    jd_id: int
+    decision: Literal["same", "different", "overrule"]
+    matched: str
+    decided_at: datetime
 
 
 class PriorEncounter(_Base):
