@@ -3,7 +3,20 @@
 {% set r = run.result %}
 <div class="outcome">
   {% if r.blocked %}<p><span class="pill verdict-skip">not ready: blocker</span>
-    Do not send these without fixing the blockers. An unsupported number means the claim is either invented or missing from the profile — check which before editing.</p>{% endif %}
+    Do not send these without fixing the blockers. An unsupported number means the claim is either invented or missing from the profile — check which before editing.</p>
+  {% elif r.ready %}<p><span class="pill verdict-apply">ready</span> No blockers, and the review found nothing blocking.</p>
+  {% elif r.review and r.review.state != "reviewed" %}<p><span class="pill warn">not reviewed</span>
+    {% if r.review.reason %}{{ r.review.reason }}. {% endif %}Not ready until it is.</p>
+  {% elif r.review %}<p><span class="pill verdict-skip">not ready</span> The review found something blocking.</p>{% endif %}
+  {% if r.claims_not_checked %}<p class="detail">Claims not checked: {{ r.claims_not_checked }}</p>{% endif %}
+  {% if r.review and r.review.state == "reviewed" %}
+    {% for title, items in [("Review: blocking", r.review.blocking), ("Review: suggestions", r.review.suggestions)] %}
+      {% if items %}<p><strong>{{ title }}</strong></p><ul class="checks">
+      {% for f in items %}<li><span class="mark {{ 'breach' if title.endswith('blocking') else 'unknown' }}">{{ "✗" if title.endswith('blocking') else "!" }}</span>
+        <span><code>{{ f.document or "documents" }}</code> {{ f.finding }}</span></li>{% endfor %}
+      </ul>{% endif %}
+    {% endfor %}
+  {% endif %}
   {% if r.superseded %}<p class="detail">Earlier documents kept in <code>{{ r.superseded }}</code>.</p>{% endif %}
   {% for w in r.warnings %}<p class="detail">{{ w }}</p>{% endfor %}
   <ul class="files">

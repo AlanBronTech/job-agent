@@ -142,7 +142,7 @@
 <form class="panel" method="post" action="/ads/{{ jd.id }}/generate/confirm">
   <input type="hidden" name="csrf" value="{{ token }}">
   <label><input type="checkbox" name="resume" value="1" checked> Resume</label>
-  <label><input type="checkbox" name="cover" value="1" checked> Cover letter</label>
+  <label><input type="checkbox" name="cover" value="1"> Cover letter</label>
   <details>
     <summary>Application questions (optional)</summary>
     <p class="detail">One per line, pasted from the application form. Answers are written to <code>answers.md</code> to paste back.</p>

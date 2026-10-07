@@ -187,3 +187,17 @@ def describe(est: CostEstimate) -> str:
     total = est.total_usd
     runs = "run" if est.samples == 1 else "runs"
     return f"Expected cost ~${total:.2f} (mean of {est.samples} {runs} on {est.model})."
+
+
+def label_cost(est: CostEstimate, label: str) -> str:
+    """One prompt's expected cost, as shown beside its tick box."""
+    if est.route_error:
+        return "no model configured"
+    if est.budget:
+        return "free tier"
+    value = est.per_label.get(label)
+    if value == UNKNOWN:
+        return "price unknown"
+    if value is None:
+        return "not yet measured"
+    return f"~${value[0]:.2f}"

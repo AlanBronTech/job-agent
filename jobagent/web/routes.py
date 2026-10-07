@@ -149,16 +149,22 @@ def _recent(run):
 # --------------------------------------------------------------------------- #
 
 
-def _generate_choice(form) -> dict:
+def _generate_choice(form, config) -> dict:
     questions = [
         line.strip() for line in str(form.get("questions") or "").splitlines() if line.strip()
     ]
+    # The two paid checks are on unless unticked on the confirm page, which is
+    # the only form that carries them; arriving from the ad page they take the
+    # configured default.
+    from_confirm = form.get("checks_shown") == "1"
     return {
         "resume": form.get("resume") == "1",
         "cover": form.get("cover") == "1",
         "questions": questions,
         "overrule": form.get("overrule") == "1",
         "supersede": form.get("supersede") == "1",
+        "check_claims": form.get("check_claims") == "1" if from_confirm else config.check_claims,
+        "review": form.get("review") == "1" if from_confirm else config.review,
     }
 
 
@@ -182,7 +188,11 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     estimate = costs.estimate(
         ws, config, "generate",
         resume=choice["resume"], cover=choice["cover"], answers=bool(choice["questions"]),
+        check_claims=choice["check_claims"], review=choice["review"],
         jd_id=jd_id,
+    )
+    checks_cost = costs.estimate(
+        ws, config, "generate", cover=True, check_claims=True, review=True
     )
     return render(
         request,
@@ -192,6 +202,8 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
             "plan": plan,
             "choice": choice,
             "estimate": costs.describe(estimate),
+            "check_cost": costs.label_cost(checks_cost, "check_claims"),
+            "review_cost": costs.label_cost(checks_cost, "review_documents"),
             "missing": readiness.missing(ws, config, "generate"),
             "problem": problem,
         },
@@ -212,13 +224,13 @@ def _back_to_ad(request: Request, jd_id: int, problem: str):
 @router.post("/ads/{jd_id}/generate/confirm")
 async def generate_confirm(request: Request, jd_id: int):
     form = await checked_form(request)
-    return _generate_confirm(request, jd_id, _generate_choice(form))
+    return _generate_confirm(request, jd_id, _generate_choice(form, request.app.state.config))
 
 
 @router.post("/ads/{jd_id}/generate")
 async def generate_start(request: Request, jd_id: int):
     form = await checked_form(request)
-    choice = _generate_choice(form)
+    choice = _generate_choice(form, request.app.state.config)
     if form.get("confirmed") != "1":
         return _generate_confirm(request, jd_id, choice, "Nothing was started: confirm the cost first.")
 
@@ -261,11 +273,14 @@ async def generate_start(request: Request, jd_id: int):
                 "answers": len(choice["questions"]),
                 "overrule": choice["overrule"],
                 "supersede": choice["supersede"],
+                "check_claims": choice["check_claims"],
+                "review": choice["review"],
             },
             work=work.generate(
                 ws, config, ctx, jd_id,
                 resume=choice["resume"], cover=choice["cover"], questions=choice["questions"],
                 overrule=choice["overrule"], supersede=choice["supersede"], today=today,
+                check_claims=choice["check_claims"], review=choice["review"],
             ),
         )
     except RunInProgress:

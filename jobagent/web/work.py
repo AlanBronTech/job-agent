@@ -39,6 +39,8 @@ def generate(
     overrule: bool,
     supersede: bool,
     today: date,
+    check_claims: bool = True,
+    review: bool = True,
 ):
     def work() -> dict:
         try:
@@ -47,6 +49,7 @@ def generate(
                 resume=resume, cover=cover, questions=questions,
                 overrule=overrule, supersede=supersede,
                 today=today, now=datetime.now(),
+                check_claims=check_claims, review=review,
             )
         except GenerationFailed as failure:
             message = f"{_STAGE[failure.stage]}: {failure.cause}"
@@ -73,6 +76,9 @@ def generate(
                 {"requirement": c.requirement, "status": c.status, "where": c.where}
                 for c in result.coverage
             ],
+            "ready": result.ready,
+            "review": _review_dict(result.review),
+            "claims_not_checked": getattr(result.claims, "reason", None),
             "superseded": result.superseded.name if result.superseded else None,
             "warnings": result.warnings,
         }
@@ -122,3 +128,18 @@ def parse_batch(ws: Workspace, config, batch_id: int):
         return {"batch_id": batch_id}
 
     return work
+
+
+def _review_dict(reviewed) -> dict:
+    """The review as plain data for the run record: findings, or why there are none."""
+    from jobagent.services import checks
+
+    if isinstance(reviewed, checks.Review):
+        return {
+            "state": "reviewed",
+            "blocking": [f.model_dump() for f in reviewed.blocking],
+            "suggestions": [f.model_dump() for f in reviewed.suggestions],
+        }
+    if isinstance(reviewed, checks.NotReviewed):
+        return {"state": "not reviewed", "reason": reviewed.reason}
+    return {"state": "off"}

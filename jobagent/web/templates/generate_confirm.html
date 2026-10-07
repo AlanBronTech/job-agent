@@ -49,6 +49,16 @@
   {% endif %}
 
   <div class="panel">
+    <input type="hidden" name="checks_shown" value="1">
+    <strong>Checks after writing</strong>
+    <label><input type="checkbox" name="check_claims" value="1" {% if choice.check_claims %}checked{% endif %}>
+      Claim check: each letter or answer sentence against its evidence <span class="muted">({{ check_cost }})</span></label>
+    <label><input type="checkbox" name="review" value="1" {% if choice.review %}checked{% endif %}>
+      Independent review: the ad, the policies and the documents only <span class="muted">({{ review_cost }})</span></label>
+    <p class="detail">Without the review the documents are "not reviewed", never ready.</p>
+  </div>
+
+  <div class="panel">
     <strong>Cost:</strong> {{ estimate }}
   </div>
 
