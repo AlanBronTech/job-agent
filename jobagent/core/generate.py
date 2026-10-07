@@ -504,6 +504,7 @@ def build_cover_letter(
         known=known_citations(profile, excluded),
         max_words=COVER_LETTER_MAX_WORDS,
         context="The cover letter",
+        ad_text=jd.raw_text,
     )
 
 
@@ -723,6 +724,7 @@ def _write_cited(
     known: set[str],
     max_words: int | None,
     context: str,
+    ad_text: str | None = None,
 ) -> GeneratedText:
     """Write as cited sentences, check them in code, regenerate once on blockers.
 
@@ -764,6 +766,8 @@ def _write_cited(
             cap=1,
             context=context,
         )
+        if ad_text is not None:
+            issues += check_company_sentences(paragraphs, ad_text)
         result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs)
         failures = [issue for issue in issues if issue.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
@@ -1407,3 +1411,44 @@ def _resume_places(selection: _ResumeSelection) -> list[tuple[str, list[str]]]:
         (f"bullet {ref}", [ref]) for role in selection.roles for ref in role.bullet_refs
     ]
     return places
+
+
+def _normalise(text: str) -> str:
+    return " ".join(re.sub(r"[“”‘’\"']", "", text).casefold().split())
+
+
+def check_company_sentences(
+    paragraphs: list[list[Sentence]], ad_text: str
+) -> list[ValidationIssue]:
+    """The one sentence about the employer quotes the ad, and there is one at most.
+
+    A letter with nothing about the company reads as generic; one that says
+    something the ad does not is worse. So the model must hand over the ad's
+    own words as `quote`, and the quote must be in the ad.
+    """
+    quoted = [s for p in paragraphs for s in p if s.quote]
+    issues = []
+    haystack = _normalise(ad_text)
+    for sentence in quoted:
+        if _normalise(sentence.quote) not in haystack:
+            issues.append(
+                ValidationIssue(
+                    rule="company claim not in ad",
+                    severity=Severity.blocker,
+                    detail=(
+                        "A sentence about the employer quotes words that are not "
+                        "in the ad. Say only what the ad says about them."
+                    ),
+                    excerpt=sentence.text,
+                )
+            )
+    if len(quoted) > 1:
+        issues.append(
+            ValidationIssue(
+                rule="company sentences",
+                severity=Severity.warning,
+                detail=f"The letter has {len(quoted)} sentences about the employer; one is enough.",
+                excerpt=quoted[1].text,
+            )
+        )
+    return issues
