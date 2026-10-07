@@ -35,9 +35,10 @@ from jobagent.core.models import (
     JobDescription,
     OutsideApplication,
     ReapplyDecision,
+    RoleClassification,
 )
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -67,6 +68,11 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # text in code; and the saved file the ad was read from.
         ("requisition_id", "TEXT"),
         ("source_file", "TEXT"),
+        # v11 — spec 003. The ad's role kind, classified on first need by a
+        # separate call. NULL until then; an amendment clears it.
+        ("role_kind", "TEXT"),
+        ("role_kind_secondary", "TEXT"),
+        ("role_kind_reason", "TEXT"),
     ],
 }
 
@@ -102,7 +108,10 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     amended_at       TEXT,
     superseded_text  TEXT,
     requisition_id   TEXT,
-    source_file      TEXT
+    source_file      TEXT,
+    role_kind        TEXT,
+    role_kind_secondary TEXT,
+    role_kind_reason TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jd_company ON job_descriptions (company);
@@ -383,7 +392,9 @@ def update_jd(
                 source = ?, source_url = ?, source_metadata = ?,
                 raw_text = ?, amended_at = ?, superseded_text = ?,
                 requisition_id = COALESCE(?, requisition_id),
-                source_file = COALESCE(?, source_file)
+                source_file = COALESCE(?, source_file),
+                role_kind = NULL, role_kind_secondary = NULL,
+                role_kind_reason = NULL
             WHERE id = ?
             """,
             (
@@ -840,6 +851,51 @@ def set_jd_identifiers(
         conn.commit()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not update identifiers on JD {jd_id}: {exc}") from exc
+
+
+# --------------------------------------------------------------------------- #
+# v11: role kind (spec 003)
+# --------------------------------------------------------------------------- #
+
+
+def get_role_kind(conn: sqlite3.Connection, jd_id: int) -> RoleClassification | None:
+    """The stored classification, or None if the ad was never classified."""
+    try:
+        row = conn.execute(
+            "SELECT role_kind, role_kind_secondary, role_kind_reason "
+            "FROM job_descriptions WHERE id = ?",
+            (jd_id,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not read the role kind of JD {jd_id}: {exc}") from exc
+    if row is None or row["role_kind"] is None:
+        return None
+    return RoleClassification(
+        primary=row["role_kind"],
+        secondary=row["role_kind_secondary"],
+        reason=row["role_kind_reason"] or "",
+    )
+
+
+def set_role_kind(
+    conn: sqlite3.Connection, jd_id: int, classification: RoleClassification
+) -> None:
+    try:
+        cursor = conn.execute(
+            "UPDATE job_descriptions SET role_kind = ?, role_kind_secondary = ?, "
+            "role_kind_reason = ? WHERE id = ?",
+            (
+                classification.primary.value,
+                classification.secondary.value if classification.secondary else None,
+                classification.reason,
+                jd_id,
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not store the role kind of JD {jd_id}: {exc}") from exc
+    if cursor.rowcount == 0:
+        raise StoreError(f"No job description with id {jd_id}")
 
 
 def add_outside(conn: sqlite3.Connection, application: OutsideApplication) -> int:

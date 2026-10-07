@@ -579,7 +579,7 @@ def test_v9_database_gains_the_v10_columns_and_keeps_its_rows(tmp_path):
         jd = store.get_jd(conn, jd_id)
         assert jd.title == "Engineering Manager" and jd.requisition_id is None
         version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-        assert version == "10"
+        assert version == str(store.SCHEMA_VERSION)
         assert store.list_outside(conn) == []
 
 
@@ -628,3 +628,45 @@ def test_reapply_decision_is_one_per_ad_and_cascades(tmp_path):
         assert store.get_reapply_decision(conn, jd_id).decision == "overrule"
         store.delete_jd(conn, jd_id)
         assert store.get_reapply_decision(conn, jd_id) is None
+
+
+# --------------------------------------------------------------------------- #
+# v11: role kind (spec 003)
+# --------------------------------------------------------------------------- #
+
+from jobagent.core.models import RoleClassification as _RC, RoleKind as _RK
+
+
+def test_v10_database_gains_the_role_kind_columns(tmp_path):
+    path = tmp_path / "v10.db"
+    with store.open_store(path) as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+    raw = _sqlite3.connect(path)
+    for column in ("role_kind", "role_kind_secondary", "role_kind_reason"):
+        raw.execute(f"ALTER TABLE job_descriptions DROP COLUMN {column}")
+    raw.execute("UPDATE meta SET value = '10' WHERE key = 'schema_version'")
+    raw.commit()
+    raw.close()
+
+    with store.open_store(path) as conn:
+        assert store.get_jd(conn, jd_id).title == "Engineering Manager"
+        assert store.get_role_kind(conn, jd_id) is None
+
+
+def test_role_kind_round_trips_and_an_amendment_clears_it(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+        kind = _RC(primary=_RK.people_focused, secondary=_RK.delivery_focused,
+                   reason="The must-haves lead with coaching.")
+        store.set_role_kind(conn, jd_id, kind)
+        assert store.get_role_kind(conn, jd_id) == kind
+
+        store.update_jd(conn, jd_id, _seed_jd("Engineering Manager", "Fabrikam Medical", 1),
+                        amended_at=_dt(2026, 10, 7, tzinfo=_tz.utc))
+        assert store.get_role_kind(conn, jd_id) is None
+
+
+def test_setting_the_role_kind_of_a_missing_ad_is_an_error(tmp_path):
+    with store.open_store(tmp_path / "db") as conn:
+        with pytest.raises(store.StoreError):
+            store.set_role_kind(conn, 99, _RC(primary=_RK.technical_lead, reason="x"))
