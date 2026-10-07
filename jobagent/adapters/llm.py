@@ -81,6 +81,10 @@ class CallType(str, Enum):
     score = "score"
     generate = "generate"
     prep = "prep"
+    # spec 003: the role-kind classifier, and the two paid checks after
+    # generation (claim check and independent review).
+    classify = "classify"
+    review = "review"
 
 
 @dataclass
@@ -674,6 +678,8 @@ def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
         CallType.score: config.llm_score,
         CallType.generate: config.llm_generate,
         CallType.prep: config.llm_prep,
+        CallType.classify: config.llm_classify,
+        CallType.review: config.llm_review,
     }[call_type]
 
     raw = per_call or config.llm_default

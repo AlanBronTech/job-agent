@@ -53,6 +53,13 @@ class Config(BaseSettings):
     llm_score: str | None = None
     llm_generate: str | None = None
     llm_prep: str | None = None
+    llm_classify: str | None = None
+    llm_review: str | None = None
+
+    # The two paid checks after `generate` (spec 003). On by default: they
+    # protect most when forgotten. `--no-check-claims` / `--no-review` per run.
+    check_claims: bool = True
+    review: bool = True
 
     # Budget mode: route every call to a model on a free tier, overriding the
     # per-call routing above. For when the API bill matters more than the

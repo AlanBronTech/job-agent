@@ -179,6 +179,15 @@ def test_route_falls_back_to_default():
     assert route.model == "claude-sonnet-4-6"
 
 
+def test_classify_and_review_have_their_own_routes_and_fall_back_to_default():
+    config = make_config(
+        llm_default="anthropic:claude-sonnet-4-6",
+        llm_classify="anthropic:claude-haiku-4-5-20251001",
+    )
+    assert resolve_route(config, CallType.classify).model == "claude-haiku-4-5-20251001"
+    assert resolve_route(config, CallType.review).model == "claude-sonnet-4-6"
+
+
 def test_route_legacy_anthropic_fallback():
     config = make_config(
         anthropic_model="claude-sonnet-4-6",
