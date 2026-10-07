@@ -164,7 +164,11 @@ def write_text(folder: Path, filename: str, text: str) -> Path:
 
 
 def assessment_markdown(
-    assessment: FitAssessment, jd: JobDescription, issues: list[ValidationIssue]
+    assessment: FitAssessment,
+    jd: JobDescription,
+    issues: list[ValidationIssue],
+    *,
+    role_kind=None,
 ) -> str:
     """The assessment as a readable record, kept with the documents it shaped."""
     lines = [
@@ -181,6 +185,12 @@ def assessment_markdown(
         assessment.rationale,
         "",
     ]
+
+    if role_kind is not None:
+        kind = role_kind.primary.value.replace("_", " ")
+        if role_kind.secondary:
+            kind += f" (secondary: {role_kind.secondary.value.replace('_', ' ')})"
+        lines += [f"**Role kind:** {kind} — {role_kind.reason}", ""]
 
     if jd.source_url:
         lines += [f"Ad: {jd.source_url}", ""]

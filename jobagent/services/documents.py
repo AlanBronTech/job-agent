@@ -46,7 +46,7 @@ from jobagent.services.refusals import (
     SupersedeFailed,
     VerdictIsSkip,
 )
-from jobagent.services import reapply
+from jobagent.services import reapply, role_kind
 from jobagent.services.results import GeneratePlan, GenerateResult
 from jobagent.services.scoring import refuse_if_reapplying
 from jobagent.services.workspace import Workspace
@@ -62,7 +62,7 @@ class GenerationFailed(Exception):
 
     def __init__(self, stage: str, cause: Exception, written: list[Path]) -> None:
         super().__init__(str(cause))
-        self.stage = stage  # "resume" | "cover" | "answers" | "write"
+        self.stage = stage  # "classify" | "resume" | "cover" | "answers" | "write"
         self.cause = cause
         self.written = written
 
@@ -109,6 +109,7 @@ def plan(
         clashes=_clashes(ws, loaded.jd, when, names),
         history=loaded.history,
         reapply=reapply.check(ws, jd_id, when),
+        role_kind=role_kind.stored(ws, jd_id),
     )
 
 
@@ -164,6 +165,8 @@ def generate(
 
     try:
         client = get_client(CallType.generate, config, ctx)
+        kind = role_kind.stored(ws, jd_id)
+        classify_client = None if kind else get_client(CallType.classify, config, ctx)
     except LLMError as exc:
         raise NoModel(str(exc)) from exc
 
@@ -185,9 +188,19 @@ def generate(
     issues = []
     unused = []
 
+    if kind is None:
+        try:
+            kind = role_kind.ensure(
+                ws, config, ctx, jd_id, client_factory=lambda: classify_client
+            )
+        except role_kind.RoleKindFailed as exc:
+            raise GenerationFailed("classify", exc, written) from exc
+
     if resume:
         try:
-            built = build_resume(jd, profile, assessment, client=client, today=today)
+            built = build_resume(
+                jd, profile, assessment, client=client, today=today, kind=kind
+            )
         except GenerateError as exc:
             raise GenerationFailed("resume", exc, written) from exc
         issues += built.issues
@@ -197,7 +210,7 @@ def generate(
 
     if cover:
         try:
-            letter = build_cover_letter(jd, profile, assessment, client=client)
+            letter = build_cover_letter(jd, profile, assessment, client=client, kind=kind)
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
         issues += letter.issues
@@ -213,7 +226,9 @@ def generate(
 
     if questions:
         try:
-            built_answers = build_answers(questions, jd, profile, assessment, client=client)
+            built_answers = build_answers(
+                questions, jd, profile, assessment, client=client, kind=kind
+            )
         except GenerateError as exc:
             raise GenerationFailed("answers", exc, written) from exc
         issues += built_answers.issues
@@ -224,7 +239,10 @@ def generate(
     written.append(
         _write(
             lambda: ws.documents.write_text(
-                jd, today, "assessment.md", docs.assessment_markdown(assessment, jd, issues)
+                jd,
+                today,
+                "assessment.md",
+                docs.assessment_markdown(assessment, jd, issues, role_kind=kind),
             ),
             written,
         )
@@ -240,6 +258,7 @@ def generate(
         unused=unused,
         superseded=superseded,
         warnings=warnings,
+        role_kind=kind,
     )
 
 

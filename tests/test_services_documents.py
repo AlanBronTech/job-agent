@@ -67,11 +67,11 @@ def fake_model(monkeypatch):
     ]
     issue = ValidationIssue(rule="banned_phrase", severity=Severity.warning, detail="Invented.")
 
-    def build_resume(jd, profile, assessment, *, client, today):
+    def build_resume(jd, profile, assessment, *, client, today, **_):
         calls.append("resume")
         return SimpleNamespace(content="resume content", issues=[issue], unused=unused)
 
-    def build_cover_letter(jd, profile, assessment, *, client):
+    def build_cover_letter(jd, profile, assessment, *, client, **_):
         calls.append("cover")
         return SimpleNamespace(text="First paragraph.\n\nSecond paragraph.", issues=[])
 
@@ -84,6 +84,7 @@ def fake_model(monkeypatch):
         return path
 
     monkeypatch.setattr(documents, "get_client", lambda *a, **k: object())
+    monkeypatch.setattr(documents.role_kind, "ensure", lambda *a, **k: None)
     monkeypatch.setattr(documents, "build_resume", build_resume)
     monkeypatch.setattr(documents, "build_cover_letter", build_cover_letter)
     monkeypatch.setattr(documents, "write_resume", write_resume)

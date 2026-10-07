@@ -239,6 +239,7 @@ def _ready_to_spend(wired, monkeypatch, calls):
 
     wired.profile_dir = Path(__file__).resolve().parents[1] / "profile.example"
     monkeypatch.setattr(documents, "get_client", lambda *a, **k: object())
+    monkeypatch.setattr(documents.role_kind, "ensure", lambda *a, **k: None)
 
     def first_call(*args, **kwargs):
         calls.append("model")

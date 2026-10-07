@@ -18,6 +18,7 @@ from jobagent.core.models import (
     FitAssessment,
     InterviewPrep,
     JobDescription,
+    RoleClassification,
     Verdict,
 )
 from jobagent.core.validation import ValidationIssue
@@ -39,6 +40,7 @@ class ScoreResult:
     assessment: FitAssessment
     history: CompanyHistory | None
     warnings: list[str] = field(default_factory=list)
+    role_kind: RoleClassification | None = None
 
 
 @dataclass
@@ -55,6 +57,12 @@ class GeneratePlan:
     history: CompanyHistory | None = None
     # services.reapply's Clear / SameJob / PossiblySame, for the confirm page.
     reapply: object | None = None
+    # The stored role kind; None means the run will classify first (paid).
+    role_kind: RoleClassification | None = None
+
+    @property
+    def needs_classify(self) -> bool:
+        return self.role_kind is None
 
 
 @dataclass
@@ -65,6 +73,7 @@ class GenerateResult:
     unused: list[UnusedEntry]
     superseded: Path | None = None
     warnings: list[str] = field(default_factory=list)
+    role_kind: RoleClassification | None = None
 
 
 @dataclass
