@@ -144,6 +144,7 @@ def generate(
     before_spend=None,
     check_claims: bool | None = None,
     review: bool | None = None,
+    limit: int | None = None,
 ) -> GenerateResult:
     """Run generate. `before_spend` is called once every refusal has passed and
     immediately before the first model call: the CLI prints its cost line there."""
@@ -247,10 +248,11 @@ def generate(
         rendered["cover letter"] = letter.text
         sentences = getattr(letter, "sentences", [])
         if check_claims and sentences:
-            claims = checks.check_claims(
+            found = checks.check_claims(
                 config, ctx, sentences, profile, client_factory=lambda: review_client
             )
-            issues += claim_issues(claims)
+            claims = merge_claims(claims, found)
+            issues += claim_issues(found)
         content = CoverLetterContent(
             name=profile.roles.person.name,
             contact=contact if contact is not None else contact_line(profile),
@@ -264,12 +266,19 @@ def generate(
     if questions:
         try:
             built_answers = build_answers(
-                questions, jd, profile, assessment, client=client, kind=kind
+                questions, jd, profile, assessment, client=client, kind=kind, limit=limit
             )
         except GenerateError as exc:
             raise GenerationFailed("answers", exc, written) from exc
         issues += built_answers.issues
         rendered["answers"] = built_answers.text
+        sentences = getattr(built_answers, "sentences", [])
+        if check_claims and sentences:
+            found = checks.check_claims(
+                config, ctx, sentences, profile, client_factory=lambda: review_client
+            )
+            claims = merge_claims(claims, found)
+            issues += claim_issues(found)
         written.append(
             _write(lambda: ws.documents.write_text(jd, today, "answers.md", built_answers.text), written)
         )
@@ -339,6 +348,15 @@ def is_ready(issues, claims, reviewed) -> bool:
     if isinstance(claims, checks.NotChecked):
         return False
     return isinstance(reviewed, checks.Review) and not reviewed.blocking
+
+
+def merge_claims(so_far, found):
+    """One claims result per run: a failure anywhere is NotChecked overall."""
+    if isinstance(so_far, checks.NotChecked):
+        return so_far
+    if isinstance(found, checks.NotChecked):
+        return found
+    return (so_far or []) + found
 
 
 def claim_issues(claims) -> list:

@@ -69,6 +69,12 @@ def generate(
         "--overrule-reapply",
         help="Go ahead even though this is a job you applied for recently. Recorded with the ad.",
     ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        min=50,
+        help="Character limit for each answer (with --answers).",
+    ),
     no_check_claims: bool = typer.Option(
         False,
         "--no-check-claims",
@@ -91,6 +97,10 @@ def generate(
         err_console.print(
             "[bold red]Nothing to generate.[/] Pass --resume, --cover, or --answers."
         )
+        raise typer.Exit(code=2)
+
+    if limit is not None and answers is None:
+        err_console.print("[bold red]--limit applies to --answers.[/]")
         raise typer.Exit(code=2)
 
     config = get_config()
@@ -149,6 +159,7 @@ def generate(
             ),
             check_claims=check_claims,
             review=review,
+            limit=limit,
         )
     except (SameJobRecently, PossiblySameJob) as refusal:
         refuse(err_console, refusal, jd_id, "generate")

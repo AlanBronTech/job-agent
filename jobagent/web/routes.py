@@ -163,9 +163,19 @@ def _generate_choice(form, config) -> dict:
         "questions": questions,
         "overrule": form.get("overrule") == "1",
         "supersede": form.get("supersede") == "1",
+        "limit": _limit(form.get("limit")),
         "check_claims": form.get("check_claims") == "1" if from_confirm else config.check_claims,
         "review": form.get("review") == "1" if from_confirm else config.review,
     }
+
+
+def _limit(raw) -> int | None:
+    """An answer character limit from the form; anything unusable is no limit."""
+    try:
+        value = int(str(raw or "").strip())
+    except ValueError:
+        return None
+    return value if value >= 50 else None
 
 
 def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str | None = None):
@@ -281,6 +291,7 @@ async def generate_start(request: Request, jd_id: int):
                 resume=choice["resume"], cover=choice["cover"], questions=choice["questions"],
                 overrule=choice["overrule"], supersede=choice["supersede"], today=today,
                 check_claims=choice["check_claims"], review=choice["review"],
+                limit=choice["limit"],
             ),
         )
     except RunInProgress:
