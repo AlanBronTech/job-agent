@@ -19,6 +19,15 @@
     </li>
   {% endfor %}
   </ul>
+  {% if r.coverage %}
+  <p><strong>Coverage</strong> <span class="muted">must-haves on the resume</span></p>
+  <ul class="checks">
+  {% for c in r.coverage %}
+    <li><span class="mark {{ {'covered': 'ok', 'missing': 'breach', 'weak': 'unknown'}.get(c.status, 'muted') }}">{{ {'covered': '✓', 'missing': '✗', 'weak': '!'}.get(c.status, '·') }}</span>
+      <span>{{ c.requirement }} <span class="detail">{{ c.where | join(", ") if c.where else c.status }}</span></span></li>
+  {% endfor %}
+  </ul>
+  {% endif %}
   {% set blockers = r.issues | selectattr("severity", "equalto", "blocker") | list %}
   {% set warnings = r.issues | rejectattr("severity", "equalto", "blocker") | list %}
   {% if not r.issues %}<p>No validation issues.</p>{% endif %}

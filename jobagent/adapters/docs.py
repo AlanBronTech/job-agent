@@ -169,6 +169,7 @@ def assessment_markdown(
     issues: list[ValidationIssue],
     *,
     role_kind=None,
+    coverage=None,
 ) -> str:
     """The assessment as a readable record, kept with the documents it shaped."""
     lines = [
@@ -210,6 +211,12 @@ def assessment_markdown(
     if assessment.questions_to_ask:
         lines += ["", "## Ask before applying", ""]
         lines += [f"- {question}" for question in assessment.questions_to_ask]
+
+    if coverage:
+        lines += ["", "## Coverage on the resume", ""]
+        for row in coverage:
+            where = ", ".join(row.where) if row.where else row.status
+            lines.append(f"- {row.requirement}: {where}")
 
     lines += ["", "## Requirements", ""]
     for match in assessment.requirements:

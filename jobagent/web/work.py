@@ -19,6 +19,7 @@ from jobagent.services.workspace import Workspace
 from jobagent.web.runner import RunFailed
 
 _STAGE = {
+    "classify": "Could not classify the role",
     "resume": "Could not build the resume",
     "cover": "Could not write the cover letter",
     "answers": "Could not answer the questions",
@@ -67,6 +68,10 @@ def generate(
             "unused": [
                 {"id": u.id, "label": u.label, "strong": u.strong, "highlight_only": u.highlight_only}
                 for u in result.unused
+            ],
+            "coverage": [
+                {"requirement": c.requirement, "status": c.status, "where": c.where}
+                for c in result.coverage
             ],
             "superseded": result.superseded.name if result.superseded else None,
             "warnings": result.warnings,

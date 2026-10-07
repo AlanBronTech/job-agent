@@ -175,10 +175,12 @@ def generate(
         err_console.print(f"[yellow]{warning}[/]")
     if result.superseded is not None:
         console.print(f"[dim]Earlier documents kept in {config.output_dir / result.superseded}[/]")
+    _report_coverage(result.coverage)
     _report(result.folder, result.written, result.issues, result.unused)
 
 
 _FAILED = {
+    "classify": "Could not classify the role.",
     "resume": "Could not build the resume.",
     "cover": "Could not write the cover letter.",
     "answers": "Could not answer the questions.",
@@ -229,6 +231,24 @@ def _report(
 
     _report_issues(issues)
     _report_unused(unused or [])
+
+
+_COVERAGE_STYLE = {"covered": "green", "weak": "yellow", "missing": "red", "gap": "dim"}
+
+
+def _report_coverage(rows) -> None:
+    """Each must-have: where the resume answers it, or weak / missing / gap."""
+    if not rows:
+        return
+    console.print("\n[bold]Coverage[/] [dim]must-haves on the resume[/]")
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column()
+    table.add_column(no_wrap=True)
+    for row in rows:
+        style = _COVERAGE_STYLE.get(row.status, "dim")
+        where = ", ".join(row.where) if row.where else row.status
+        table.add_row(row.requirement, f"[{style}]{where}[/]")
+    console.print(table)
 
 
 def _report_unused(unused: list[UnusedEntry]) -> None:

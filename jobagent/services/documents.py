@@ -187,6 +187,7 @@ def generate(
     written: list[Path] = []
     issues = []
     unused = []
+    coverage = []
 
     if kind is None:
         try:
@@ -205,6 +206,7 @@ def generate(
             raise GenerationFailed("resume", exc, written) from exc
         issues += built.issues
         unused = built.unused
+        coverage = getattr(built, "coverage", [])
         path = ws.documents.path_for_write(jd, today, docs.document_name("Resume", jd, when=today))
         written.append(_write(lambda: write_resume(built.content, path), written))
 
@@ -242,7 +244,9 @@ def generate(
                 jd,
                 today,
                 "assessment.md",
-                docs.assessment_markdown(assessment, jd, issues, role_kind=kind),
+                docs.assessment_markdown(
+                    assessment, jd, issues, role_kind=kind, coverage=coverage
+                ),
             ),
             written,
         )
@@ -259,6 +263,7 @@ def generate(
         superseded=superseded,
         warnings=warnings,
         role_kind=kind,
+        coverage=coverage,
     )
 
 

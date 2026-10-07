@@ -74,6 +74,8 @@ class GenerateResult:
     superseded: Path | None = None
     warnings: list[str] = field(default_factory=list)
     role_kind: RoleClassification | None = None
+    # core.coverage.CoverageRow per requirement; empty without a resume.
+    coverage: list = field(default_factory=list)
 
 
 @dataclass
