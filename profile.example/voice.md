@@ -58,6 +58,8 @@ profile has leaked something it should not contain and that is the bug to fix.
 - your esteemed company / renowned organisation
 - In today's fast-paced world
 - delve, tapestry, testament to, navigate the landscape, at the forefront of
+- not a claim / not advisory / full management authority
+- this ad is asking for / your ad asks for
 - Any sentence beginning "As a seasoned professional"
 - Any sentence whose only content is enthusiasm
 
