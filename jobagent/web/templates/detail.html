@@ -72,6 +72,9 @@
     </div>
     <p>{{ a.rationale }}</p>
     <p class="detail">{{ a.target_role_note }}</p>
+    {% if d.role_kind %}<p class="detail"><strong>Role kind:</strong>
+      {{ d.role_kind.primary.value.replace("_", " ") }}{% if d.role_kind.secondary %} (secondary: {{ d.role_kind.secondary.value.replace("_", " ") }}){% endif %}
+      — {{ d.role_kind.reason }}</p>{% endif %}
   </div>
 
   {% if a.constraints %}

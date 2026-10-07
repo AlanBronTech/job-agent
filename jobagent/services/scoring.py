@@ -17,7 +17,7 @@ from jobagent.core import history, store
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.scoring import score_fit
 from jobagent.core.store import StoreError
-from jobagent.services import reapply
+from jobagent.services import reapply, role_kind
 from jobagent.services.refusals import (
     NoModel,
     NoSuchAd,
@@ -49,12 +49,15 @@ def score(
     force: bool = False,
     before_spend: Callable[[], None] | None = None,
     client_factory: Callable[[], object] | None = None,
+    classify_factory: Callable[[], object] | None = None,
     today: date | None = None,
 ) -> ScoreResult:
     """Score and store. Raises ScoringError if the model's answer is unusable.
 
     A store failure after scoring is a warning in the result, not an error:
-    the assessment was paid for and is shown either way.
+    the assessment was paid for and is shown either way. The role kind is
+    classified afterwards if the ad has none (spec 003), and a failure there is
+    a warning too: generate will try again before it needs it.
     """
     jd, seen_before = load(ws, jd_id)
     refuse_if_reapplying(ws, jd_id, today or date.today())
@@ -82,7 +85,19 @@ def score(
             assessment.id = store.add_assessment(conn, assessment)
     except StoreError as exc:
         warnings.append(f"Scored, but could not save. {exc}")
-    return ScoreResult(jd=jd, assessment=assessment, history=seen_before, warnings=warnings)
+
+    kind = None
+    try:
+        kind = role_kind.ensure(ws, config, ctx, jd_id, client_factory=classify_factory)
+    except Exception as exc:  # noqa: BLE001 - bookkeeping never loses a paid score
+        warnings.append(f"Role kind not classified: {exc}")
+    return ScoreResult(
+        jd=jd,
+        assessment=assessment,
+        history=seen_before,
+        warnings=warnings,
+        role_kind=kind,
+    )
 
 
 def refuse_if_reapplying(ws: Workspace, jd_id: int, today: date) -> None:

@@ -19,6 +19,7 @@ from jobagent.core.models import (
     CompanyHistory,
     FitAssessment,
     JobDescription,
+    RoleClassification,
     Verdict,
 )
 from jobagent.services import outputs
@@ -49,6 +50,7 @@ class AdDetail:
     history: CompanyHistory
     folders: OutputFolders
     application: Application | None
+    role_kind: RoleClassification | None = None
 
 
 def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
@@ -98,6 +100,7 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         stale = bool(assessment) and store.latest_assessment_stale(conn, jd_id)
         seen_before = history.company_history(conn, jd)
         application = store.get_application(conn, jd_id)
+        kind = store.get_role_kind(conn, jd_id)
     return AdDetail(
         jd=jd,
         assessment=assessment,
@@ -105,4 +108,5 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         history=seen_before,
         folders=outputs.documents_for(ws, jd, today),
         application=application,
+        role_kind=kind,
     )

@@ -18,6 +18,18 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "profile.example"
 
 
+@pytest.fixture(autouse=True)
+def no_api_keys(monkeypatch):
+    """No test reaches a provider, even one a new code path forgot to fake.
+
+    The SDKs read their keys from the environment when none is passed, so a
+    shell with a real key exported would otherwise turn a missed fake into a
+    billed call.
+    """
+    for name in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def example_dir() -> Path:
     return EXAMPLE_DIR

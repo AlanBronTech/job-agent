@@ -32,6 +32,7 @@ from jobagent.core.models import (
     MatchStatus,
     Verdict,
 )
+from jobagent.core.generate import kind_label
 from jobagent.core.scoring import ScoringError
 from jobagent.core.store import StoreError
 
@@ -163,7 +164,12 @@ def _score_one(
                 f"[dim]`jobagent score {jd_id}` re-scores against the ad as it "
                 f"now stands.[/]"
             )
-        _emit(jd, previous, as_json=as_json)
+        try:
+            with store.open_store(config.db_path) as conn:
+                kind = store.get_role_kind(conn, jd_id)
+        except StoreError:
+            kind = None
+        _emit(jd, previous, as_json=as_json, kind=kind)
         return
 
     ws = Workspace.from_config(config)
@@ -218,7 +224,7 @@ def _score_one(
     for warning in result.warnings:
         err_console.print(f"[bold yellow]{warning}[/]")
     assessment = result.assessment
-    _emit(jd, assessment, as_json=as_json)
+    _emit(jd, assessment, as_json=as_json, kind=result.role_kind)
 
 
 # --------------------------------------------------------------------------- #
@@ -226,7 +232,7 @@ def _score_one(
 # --------------------------------------------------------------------------- #
 
 
-def _emit(jd, fit: FitAssessment, *, as_json: bool) -> None:
+def _emit(jd, fit: FitAssessment, *, as_json: bool, kind=None) -> None:
     """Print the assessment, as a table or as JSON.
 
     The JSON goes to stdout on its own so the command can be piped. Everything
@@ -236,11 +242,16 @@ def _emit(jd, fit: FitAssessment, *, as_json: bool) -> None:
     if as_json:
         print(json.dumps(fit.model_dump(mode="json"), indent=2, ensure_ascii=False))
         return
-    _render(jd.title, jd.company, fit, requisition_id=jd.requisition_id)
+    _render(jd.title, jd.company, fit, requisition_id=jd.requisition_id, kind=kind)
 
 
 def _render(
-    title: str, company: str | None, fit: FitAssessment, *, requisition_id: str | None = None
+    title: str,
+    company: str | None,
+    fit: FitAssessment,
+    *,
+    requisition_id: str | None = None,
+    kind=None,
 ) -> None:
     style = _VERDICT_STYLE[fit.verdict]
     verdict = fit.verdict.value.replace("_", " ").upper()
@@ -261,6 +272,8 @@ def _render(
         ("[green]yes[/] " if fit.target_role_match else "[red]no[/] ")
         + f"[dim]{fit.target_role_note}[/]",
     )
+    if kind is not None:
+        header.add_row("role kind", f"{describe_kind(kind)}  [dim]{kind.reason}[/]")
 
     console.print(
         Panel(
@@ -329,3 +342,11 @@ def _render_lines(
         marker = f"{index}." if numbered else "·"
         console.print(f"  [{style}]{marker}[/] {item}" if style else f"  {marker} {item}")
     console.print()
+
+
+def describe_kind(kind) -> str:
+    """"people-focused (secondary: technical lead)"."""
+    text = kind_label(kind.primary)
+    if kind.secondary:
+        text += f" (secondary: {kind_label(kind.secondary)})"
+    return text

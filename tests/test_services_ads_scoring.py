@@ -32,6 +32,12 @@ CONFIG = Config(_env_file=None, llm_default="anthropic:claude-sonnet-5")
 AD = "Engineering Manager at Acme Logistics. An invented advertisement. " * 30
 
 
+@pytest.fixture(autouse=True)
+def classified(monkeypatch):
+    """The role kind is spec 003's; tested in test_role_kind.py."""
+    monkeypatch.setattr(scoring.role_kind, "ensure", lambda *a, **k: None)
+
+
 @pytest.fixture
 def ws(tmp_path):
     base = workspace(tmp_path)
