@@ -36,6 +36,7 @@ from jobagent.adapters.docx_writer import (
     SkillCategory,
 )
 from jobagent.adapters.llm import LLMClient, LLMError
+from jobagent.core import coverage as cover
 from jobagent.core import roles as kinds
 from jobagent.core.models import (
     EvidenceStrength,
@@ -132,6 +133,7 @@ class GeneratedResume:
     content: ResumeContent
     issues: list[ValidationIssue] = field(default_factory=list)
     unused: list[UnusedEntry] = field(default_factory=list)
+    coverage: list[cover.CoverageRow] = field(default_factory=list)
 
 
 @dataclass
@@ -189,10 +191,21 @@ def build_resume(
         kind=kind,
         excluded=excluded,
     )
+    cited = [h.source_ref for h in selection.highlights] + [
+        ref for role in selection.roles for ref in role.bullet_refs
+    ]
+    rows = cover.coverage(
+        assessment,
+        profile,
+        [ref for ref in cited if not kinds.is_excluded(ref, excluded)],
+        skills_text=", ".join(category.skills for category in content.skills),
+        excluded=excluded,
+    )
     return GeneratedResume(
         content=content,
-        issues=issues + reference_issues,
+        issues=issues + reference_issues + cover.issues(rows),
         unused=unused_entries(selection, profile, excluded),
+        coverage=rows,
     )
 
 
@@ -212,6 +225,7 @@ def _ask_for_selection(
             jd_json=_jd_summary(jd),
             assessment_json=_assessment_summary(assessment),
             role_kind=role_kind_block(kind),
+            must_cover=_must_cover_block(assessment, excluded),
             catalogue=_render_catalogue(profile, catalogue, excluded),
             skills=", ".join(profile.roles.skills),
             voice=profile.voice,
@@ -1039,3 +1053,10 @@ def _excluded(ref: str, kind: RoleClassification | None) -> ValidationIssue:
         ),
         excerpt=ref,
     )
+
+
+def _must_cover_block(assessment: FitAssessment, excluded: set[str]) -> str:
+    rows = cover.must_cover(assessment, excluded)
+    if not rows:
+        return "(none listed)"
+    return "\n".join(f"- {requirement}  ->  cite {ref}" for requirement, ref in rows)
