@@ -312,6 +312,33 @@ your profile — check which before editing, because if it is real it belongs in
 broke a rule in `profile/voice.md`; the tool already regenerated once and this
 is the second attempt, so fix it by hand or regenerate.
 
+**Fit, coverage and checks (spec 003).** Before writing, each ad is
+classified once by the kind of role it is — people-focused, delivery-focused,
+technical lead or AI enablement — and `score` shows it with the assessment.
+The kind decides what leads the resume and the order of the skills table, and
+anything you mark `exclude_for: [people_focused]` (on a story, an entry or a
+bullet in `profile/`) is never shown to the writer for that kind of ad; citing
+it anyway is a blocker. Interview prep still uses it.
+
+After the folder list you get:
+
+- **Coverage**: each must-have the scorer found evidence for, and where the
+  resume answers it. *missing* is a blocker (the evidence exists but no
+  highlight or bullet cites it), *weak* means only a skills keyword answers it,
+  *gap* is a real gap and stays one.
+- **Story reuse**: one story at most twice on a resume (a highlight and a
+  bullet, never also the PROFILE paragraph), once in a letter, once across a
+  form's answers. Past that is a blocker.
+- **Cited prose**: the letter and the answers come back sentence by sentence,
+  each naming the evidence it rests on. A sentence citing nothing, or an id
+  that does not exist, is a blocker. A company sentence must quote the ad.
+- **Two paid checks, on by default**: the *claim check* reads each sentence
+  against the evidence it cites (merged people, a moved place, a detail the
+  evidence lacks); the *independent review* reads only the ad, the written
+  policies and the finished documents, and writes `review.md`. Then one line:
+  **Ready**, **Not ready**, or **Not reviewed**. `--no-check-claims` and
+  `--no-review` switch them off for a run; documents are then never "ready".
+
 **What to do about it:** open the .docx, read it, edit what you want, send it
 yourself. Ten minutes, not two hours.
 
@@ -397,7 +424,13 @@ whole ad. Expand the description, save the page again, re-add it.
 - `--resume` — a tailored resume.
 - `--cover` — a cover letter.
 - `--answers <path>` — a text file of application questions, one per line;
-  writes `answers.md`.
+  writes `answers.md` with a short and a long answer to each, starting from
+  your answer bank (`answers:` in `profile/stories.yaml`, keyed `summary`,
+  `why_company`, `why_role`, `why_you`, `what_made_you_apply`,
+  `salary_expectation`, `notice_period`, `right_to_work`, `why_leaving`).
+- `--limit N` — with `--answers`, a character limit every answer must meet.
+- `--no-check-claims`, `--no-review` — skip either paid check for this run
+  (`CHECK_CLAIMS=false` / `REVIEW=false` in `.env` to make it the default).
 - `--force` — generate even against a `skip`, and record the disagreement.
 - `--supersede` — keep documents already generated: move their folder aside
   under a dated name, then write a fresh one.
@@ -537,6 +570,8 @@ Claude Sonnet 5, read out of `runs.jsonl` by `jobagent spend`.
 | `jd add` | ~$0.03 |
 | `score` | ~$0.11 |
 | `generate --resume --cover` | ~$0.13 |
+| role kind, once per ad | ~$0.01 (estimate until measured) |
+| claim check + review, per generate | ~$0.08 (estimate until measured) |
 | `prep` | ~$0.11 |
 | Everything else, `spend` included | free |
 

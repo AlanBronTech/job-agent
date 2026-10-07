@@ -239,6 +239,9 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent jd same <id> yes|no       free     answer "possibly the same job?"
     jobagent outside add|list|link     free     applications made outside the tool
     jobagent jd backfill               free     requisition numbers, source files
+    (role kind, once per ad)           ~$0.01   estimate until measured
+    generate ... claim check + review  ~$0.08   on by default; --no-check-claims, --no-review
+    generate ... --answers F --limit N          short and long answers, from the bank
 
 About 28 cents per application end to end. Do not quote a cost from memory or
 from this file if `jobagent spend` can answer it — that is the whole reason it
@@ -438,6 +441,16 @@ expected cost before spending (`services/costs.py`).
   repost: "neither side has a number" would have missed it. Only 2 of 58
   stored ads carry a number at all, so the title question does most of the
   work. The rule only sees applications it knows about, hence `outside add`.
+- **Excluded evidence is removed from the writer's input, then re-checked on
+  output** (spec 003). A rule that only forbids gets satisfied by rephrasing —
+  CDK went into a letter that way. `core/roles.excluded_ids` names what an
+  ad's role kind excludes (a story takes its linked bullets with it), the
+  catalogue and story list skip those ids without renumbering the rest, and a
+  citation of one anyway is a blocker. The letter and answers return cited
+  sentences for the same reason: a citation can be counted, prose cannot.
+- **A paid check never loses the documents.** The claim check and the review
+  return `NotChecked` / `NotReviewed` on any failure; the documents are still
+  written and are never called ready.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment
