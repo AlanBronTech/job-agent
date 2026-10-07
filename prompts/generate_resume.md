@@ -1,4 +1,4 @@
-# generate_resume — v2
+# generate_resume — v3
 
 Select and order profile content for one specific job advertisement.
 
@@ -16,6 +16,27 @@ them must already appear in the catalogue, and the voice rules apply.
 <job_description>
 {jd_json}
 </job_description>
+
+## The kind of role
+
+<role_kind>
+{role_kind}
+</role_kind>
+
+What leads depends on it:
+
+- **people-focused**: lead with growing people — coaching, hiring, team
+  building, career development. The first PROFILE paragraph and the first CAREER HIGHLIGHT come from that evidence. AI
+  work gets at most one clause unless the ad itself asks for it. Never open
+  on a performance exit or a disagreement.
+- **technical lead**: lead with technical depth — architecture, re-platforms,
+  system design decisions and their trade-offs.
+- **delivery-focused**: lead with the delivery record — what shipped, at what
+  cadence, with which stakeholders.
+- **AI enablement**: lead with AI work in production and its adoption.
+
+Evidence the profile excludes for this kind of role has already been removed
+from what you are shown. Do not refer to it from memory.
 
 ## The fit assessment for this job
 
