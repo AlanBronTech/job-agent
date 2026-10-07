@@ -26,12 +26,15 @@ from jobagent.adapters.docx_writer import (
 )
 from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.core import history, store
+from jobagent.core import roles as kinds
 from jobagent.core.generate import (
     GenerateError,
     build_answers,
     build_cover_letter,
     build_resume,
+    resume_text,
 )
+from jobagent.core.validation import banned_phrases
 from jobagent.core.models import Application, JobDescription, Verdict
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.store import StoreError
@@ -75,7 +78,15 @@ class _Loaded:
     warnings: list[str] = field(default_factory=list)
 
 
-def planned_names(jd: JobDescription, when: date, *, resume: bool, cover: bool, answers: bool) -> list[str]:
+def planned_names(
+    jd: JobDescription,
+    when: date,
+    *,
+    resume: bool,
+    cover: bool,
+    answers: bool,
+    review: bool = False,
+) -> list[str]:
     """Exactly the file names a run would write, in the order it writes them.
 
     `assessment.md` and `job-ad.md` are unconditional: every run rewrites the
@@ -88,6 +99,8 @@ def planned_names(jd: JobDescription, when: date, *, resume: bool, cover: bool, 
         names.append(docs.document_name("CoverLetter", jd, when=when))
     if answers:
         names.append("answers.md")
+    if review:
+        names.append("review.md")
     return names + ["assessment.md", "job-ad.md"]
 
 
@@ -154,7 +167,9 @@ def generate(
         if warning:
             warnings.append(warning)
 
-    names = planned_names(jd, today, resume=resume, cover=cover, answers=bool(questions))
+    names = planned_names(
+        jd, today, resume=resume, cover=cover, answers=bool(questions), review=review
+    )
     # With supersede the clash is expected: the folder is moved aside below.
     if not overwrite and not supersede:
         clashes = _clashes(ws, jd, today, names)
@@ -197,6 +212,7 @@ def generate(
     unused = []
     coverage = []
     claims = None  # None: not run (switched off, or nothing to check)
+    rendered: dict[str, str] = {}  # what the reviewer reads
 
     if kind is None:
         try:
@@ -216,6 +232,9 @@ def generate(
         issues += built.issues
         unused = built.unused
         coverage = getattr(built, "coverage", [])
+        rendered["resume"] = (
+            built.content if isinstance(built.content, str) else resume_text(built.content)
+        )
         path = ws.documents.path_for_write(jd, today, docs.document_name("Resume", jd, when=today))
         written.append(_write(lambda: write_resume(built.content, path), written))
 
@@ -225,6 +244,7 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
         issues += letter.issues
+        rendered["cover letter"] = letter.text
         sentences = getattr(letter, "sentences", [])
         if check_claims and sentences:
             claims = checks.check_claims(
@@ -249,8 +269,31 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("answers", exc, written) from exc
         issues += built_answers.issues
+        rendered["answers"] = built_answers.text
         written.append(
             _write(lambda: ws.documents.write_text(jd, today, "answers.md", built_answers.text), written)
+        )
+
+    reviewed = None
+    if review:
+        excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+        reviewed = checks.review(
+            config,
+            ctx,
+            jd,
+            rendered,
+            kind=kind,
+            excluded=checks.excluded_descriptions(profile, excluded),
+            banned=banned_phrases(profile.voice),
+            client_factory=lambda: review_client,
+        )
+        written.append(
+            _write(
+                lambda: ws.documents.write_text(
+                    jd, today, "review.md", checks.review_markdown(reviewed)
+                ),
+                written,
+            )
         )
 
     written.append(
@@ -280,7 +323,22 @@ def generate(
         role_kind=kind,
         coverage=coverage,
         claims=claims,
+        review=reviewed,
+        ready=is_ready(issues, claims, reviewed),
     )
+
+
+def is_ready(issues, claims, reviewed) -> bool:
+    """Ready only when nothing blocks and the review ran and found nothing.
+
+    A review that failed or was switched off is "not reviewed", never ready;
+    so is a claim check that did not complete.
+    """
+    if any(issue.severity.value == "blocker" for issue in issues):
+        return False
+    if isinstance(claims, checks.NotChecked):
+        return False
+    return isinstance(reviewed, checks.Review) and not reviewed.blocking
 
 
 def claim_issues(claims) -> list:

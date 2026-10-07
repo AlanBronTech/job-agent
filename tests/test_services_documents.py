@@ -168,6 +168,7 @@ def test_a_clean_run(ws, ids, fake_model):
     assert names == [
         "AlanBron_Resume_AcmeLogistics_202609.docx",
         "AlanBron_CoverLetter_AcmeLogistics_202609.docx",
+        "review.md",
         "assessment.md",
         "job-ad.md",
     ]

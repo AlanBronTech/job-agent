@@ -1218,3 +1218,21 @@ def evidence_text(profile: Profile, ref: str) -> str | None:
         if key.value == ref:
             return text
     return None
+
+
+def resume_text(content: ResumeContent) -> str:
+    """The resume as plain text, in the rendered order, for the reviewer."""
+    lines = [content.name, content.tagline, "", "PROFILE", *content.profile_paragraphs, ""]
+    lines.append("CAREER HIGHLIGHTS")
+    lines += [f"- {label} — {text}" for label, text in content.highlights]
+    lines += ["", "CORE SKILLS"]
+    lines += [f"- {category.label}: {category.skills}" for category in content.skills]
+    lines += ["", "EXPERIENCE"]
+    for role in content.roles:
+        lines.append(f"{role.title} · {role.company}  {role.dates}")
+        lines += [f"- {bullet}" for bullet in role.bullets]
+    if content.earlier_career:
+        lines += ["", "EARLIER CAREER", *(f"- {line}" for line in content.earlier_career)]
+    if content.education:
+        lines += ["", "EDUCATION & CERTIFICATIONS", *content.education]
+    return "\n".join(lines)

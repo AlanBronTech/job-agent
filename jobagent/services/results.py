@@ -79,6 +79,10 @@ class GenerateResult:
     # The claim check: a list of mismatches, checks.NotChecked, or None when it
     # did not run (switched off, or no cited prose to check).
     claims: object = None
+    # checks.Review, checks.NotReviewed, or None when switched off.
+    review: object = None
+    # No blockers, the claim check did not fail, and the review found nothing.
+    ready: bool = False
 
 
 @dataclass
