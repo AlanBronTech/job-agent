@@ -185,6 +185,78 @@ def check_citations(
     return issues
 
 
+def story_of(ref: str, profile: Profile) -> str | None:
+    """The story a cited id tells: the story itself, or a bullet's linked story."""
+    if any(story.id == ref for story in profile.stories.stories):
+        return ref
+    entry_id, _, index = ref.partition(".")
+    if not index.isdigit():
+        return None
+    r = profile.roles
+    for group in (r.roles, r.founder_track_record, r.ai_capability):
+        for entry in group:
+            if entry.id == entry_id and int(index) < len(entry.bullets):
+                return entry.bullets[int(index)].linked_story
+    return None
+
+
+def story_uses(places: list[tuple[str, list[str]]], profile: Profile) -> dict[str, list[str]]:
+    """Story id -> the places it is told. A place counts a story once.
+
+    `places` is (place name, cited ids) — a resume section item, a letter
+    paragraph, one answer.
+    """
+    uses: dict[str, list[str]] = {}
+    for place, refs in places:
+        stories = {story_of(ref, profile) for ref in refs} - {None}
+        for story in sorted(stories):
+            uses.setdefault(story, []).append(place)
+    return uses
+
+
+def check_story_reuse(
+    uses: dict[str, list[str]], *, cap: int, context: str
+) -> list[ValidationIssue]:
+    """A story told more than `cap` times reads as a candidate with one story."""
+    issues = []
+    for story, places in uses.items():
+        if len(places) > cap:
+            issues.append(
+                ValidationIssue(
+                    rule="story reused",
+                    severity=Severity.blocker,
+                    detail=(
+                        f"{context} tells the {story!r} story {len(places)} times "
+                        f"({', '.join(places)}); the cap is {cap}."
+                    ),
+                    excerpt=story,
+                )
+            )
+    return issues
+
+
+def check_resume_reuse(uses: dict[str, list[str]]) -> list[ValidationIssue]:
+    """At most twice — a highlight and one bullet — and never PROFILE plus a bullet."""
+    issues = check_story_reuse(uses, cap=2, context="The resume")
+    for story, places in uses.items():
+        in_profile = any(p.startswith("PROFILE") for p in places)
+        in_bullet = any(p.startswith("bullet") for p in places)
+        if in_profile and in_bullet and len(places) <= 2:
+            issues.append(
+                ValidationIssue(
+                    rule="story reused",
+                    severity=Severity.blocker,
+                    detail=(
+                        f"The resume tells the {story!r} story in the PROFILE "
+                        "paragraph and again in an experience bullet. Once in "
+                        "the bullet is enough."
+                    ),
+                    excerpt=story,
+                )
+            )
+    return issues
+
+
 # --------------------------------------------------------------------------- #
 # Individual rules
 # --------------------------------------------------------------------------- #

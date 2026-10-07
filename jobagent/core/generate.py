@@ -52,6 +52,9 @@ from jobagent.core.validation import (
     Severity,
     ValidationIssue,
     check_citations,
+    check_resume_reuse,
+    check_story_reuse,
+    story_uses,
     validate_prose,
     validate_rendered,
 )
@@ -106,6 +109,9 @@ class _Highlight(BaseModel):
 class _ResumeSelection(BaseModel):
     tagline: str
     profile_paragraphs: list[str]
+    # The ids each PROFILE paragraph draws on, one list per paragraph. Lets the
+    # story-reuse cap see the paragraph as well as the highlights and bullets.
+    profile_refs: list[list[str]] = Field(default_factory=list)
     highlights: list[_Highlight] = Field(default_factory=list)
     skill_categories: list[str] = Field(default_factory=list)
     roles: list[_RoleSelection] = Field(default_factory=list)
@@ -210,6 +216,7 @@ def build_resume(
         else:
             issues += _check_citation(highlight.source_ref, citable)
     issues += _lead_issues(selection, profile, kind)
+    issues += check_resume_reuse(story_uses(_resume_places(selection), profile))
 
     content, reference_issues = _assemble(
         selection,
@@ -606,6 +613,17 @@ def _write_cited(
             raise GenerateError("The model returned nothing.")
         issues = validate_prose(text, profile, max_words=max_words, context=context)
         issues += check_citations(paragraphs, known, context=context)
+        issues += check_story_reuse(
+            story_uses(
+                [
+                    (f"paragraph {n}", [ref for s in paragraph for ref in s.cites])
+                    for n, paragraph in enumerate(paragraphs, 1)
+                ],
+                profile,
+            ),
+            cap=1,
+            context=context,
+        )
         result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs)
         failures = [issue for issue in issues if issue.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
@@ -1236,3 +1254,16 @@ def resume_text(content: ResumeContent) -> str:
     if content.education:
         lines += ["", "EDUCATION & CERTIFICATIONS", *content.education]
     return "\n".join(lines)
+
+
+def _resume_places(selection: _ResumeSelection) -> list[tuple[str, list[str]]]:
+    places = [
+        (f"PROFILE paragraph {n}", refs) for n, refs in enumerate(selection.profile_refs, 1)
+    ]
+    places += [
+        (f"highlight {n}", [h.source_ref]) for n, h in enumerate(selection.highlights, 1)
+    ]
+    places += [
+        (f"bullet {ref}", [ref]) for role in selection.roles for ref in role.bullet_refs
+    ]
+    return places
