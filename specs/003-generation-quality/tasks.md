@@ -100,7 +100,7 @@ and answer bank never enter the repo.
 - [X] T031 [US4] In `jobagent/cli/generate.py` add `--no-check-claims` and `--no-review` (defaults from config); estimate line lists each part; after the run print **Ready** / **Not ready** / **Not reviewed**, then blocking findings, then suggestions.
 - [X] T032 [US4] In `jobagent/services/costs.py` add actions `check_claims` and `review` (labels `check_claims`, `review_documents` on `CallType.review`); `labels_for("generate", …, check_claims=…, review=…)`; an unmeasured label states "not yet measured" rather than hiding the total (unchanged rule: no partial sums).
 - [X] T033 [US4] Web: `jobagent/web/templates/generate_confirm.html` shows two ticked boxes (claim check, review) each with its cost; `jobagent/web/routes.py` and `work.py` pass them through; the run result shows Ready/Not ready and the review.
-- [ ] T034 [P] [US4] Tests: `tests/test_checks.py` (SC-004: the worked example's original documents with a mocked reviewer; prompt contains the policies and the documents and not the writer prompt or any `note_for_scorer`; failure → `NotReviewed`, ready False); `tests/test_cli_generate.py` and `tests/test_web_generate.py` (flags, readiness line, boxes).
+- [X] T034 [P] [US4] Tests: `tests/test_checks.py` (SC-004: the worked example's original documents with a mocked reviewer; prompt contains the policies and the documents and not the writer prompt or any `note_for_scorer`; failure → `NotReviewed`, ready False); `tests/test_cli_generate.py` and `tests/test_web_generate.py` (flags, readiness line, boxes).
 
 ---
 

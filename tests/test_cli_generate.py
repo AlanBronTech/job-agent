@@ -299,3 +299,45 @@ def test_a_failed_move_spends_nothing_and_leaves_the_folder(wired, monkeypatch) 
     assert "Nothing was spent" in output
     assert calls == []
     assert resume.read_text(encoding="utf-8") == "the resume that was sent"
+
+
+# -- spec 003: the readiness line ---------------------------------------------
+
+
+def _result(**kw):
+    from types import SimpleNamespace
+    return SimpleNamespace(**{"ready": False, "review": None, "claims": None, **kw})
+
+
+def test_the_readiness_line(capsys) -> None:
+    from jobagent.services import checks
+
+    generate_cli._report_readiness(_result(ready=True, review=checks.Review()))
+    assert "Ready" in capsys.readouterr().out
+
+    generate_cli._report_readiness(_result())
+    assert "Not reviewed (switched off)" in capsys.readouterr().out
+
+    generate_cli._report_readiness(_result(review=checks.NotReviewed("timed out"),
+                                           claims=checks.NotChecked("timed out")))
+    out = capsys.readouterr().out
+    assert "Not reviewed: timed out" in out and "Claims not checked" in out
+
+    blocking = checks.Review(blocking=[checks.Finding(document="resume", finding="Opens on an exit.")])
+    generate_cli._report_readiness(_result(review=blocking))
+    out = capsys.readouterr().out
+    assert "Not ready" in out and "Opens on an exit." in out
+
+
+def test_the_switches_reach_the_service(wired, monkeypatch) -> None:
+    from jobagent.services import documents
+
+    jd_id = seed(wired)
+    seen = {}
+
+    def stop(*a, **k):
+        seen.update(check_claims=k["check_claims"], review=k["review"])
+        raise SystemExit(0)
+    monkeypatch.setattr(documents, "generate", stop)
+    runner.invoke(app, ["generate", str(jd_id), "--resume", "--force", "--no-review"])
+    assert seen == {"check_claims": True, "review": False}

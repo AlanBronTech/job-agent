@@ -268,3 +268,43 @@ def test_ui_runs_are_logged_as_source_ui(client, ids, model, monkeypatch):
     monkeypatch.setattr(documents, "generate", spy)
     start(client, ids["acme"])
     assert seen == [("ui", "generate", ids["acme"])]
+
+
+# -- spec 003: the checks, readiness, the letter opt-in --------------------------
+
+
+def test_the_letter_starts_unticked_on_the_ad_page(client, ids):
+    page = client.get(f"/ads/{ids['acme']}").text
+    assert '<input type="checkbox" name="resume" value="1" checked>' in page
+    assert '<input type="checkbox" name="cover" value="1">' in page
+
+
+def test_confirm_offers_both_checks_ticked_with_their_costs(client, ids, model):
+    body = confirm(client, ids["acme"]).text
+    assert 'name="check_claims" value="1" checked' in body
+    assert 'name="review" value="1" checked' in body
+    assert "Claim check" in body and "Independent review" in body and "not yet measured" in body
+
+
+def test_unticked_checks_reach_the_run(client, ws, ids, model, monkeypatch):
+    seen = {}
+    real = documents.generate
+
+    def spy(*a, **k):
+        seen.update(check_claims=k["check_claims"], review=k["review"])
+        return real(*a, **k)
+    monkeypatch.setattr(documents, "generate", spy)
+    start(client, ids["acme"], checks_shown="1", check_claims="1")
+    assert seen == {"check_claims": True, "review": False}
+    page = flat(client.get(f"/ads/{ids['acme']}"))
+    assert "not reviewed" in page
+
+
+def test_a_clean_reviewed_run_is_ready(client, ws, ids, model, monkeypatch):
+    from jobagent.services import checks
+    monkeypatch.setattr(documents.checks, "review",
+                        lambda *a, **k: checks.Review(blocking=[], suggestions=[
+                            checks.Finding(document="resume", finding="Invented suggestion.")]))
+    start(client, ids["acme"])
+    page = flat(client.get(f"/ads/{ids['acme']}"))
+    assert "ready No blockers" in page and "Invented suggestion." in page
