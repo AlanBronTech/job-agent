@@ -69,6 +69,16 @@ def generate(
         "--overrule-reapply",
         help="Go ahead even though this is a job you applied for recently. Recorded with the ad.",
     ),
+    no_check_claims: bool = typer.Option(
+        False,
+        "--no-check-claims",
+        help="Skip the paid check of each letter or answer sentence against its evidence.",
+    ),
+    no_review: bool = typer.Option(
+        False,
+        "--no-review",
+        help="Skip the paid independent review. The documents are then 'not reviewed'.",
+    ),
 ) -> None:
     """Generate application documents for one job description."""
     if supersede and overwrite:
@@ -110,6 +120,8 @@ def generate(
 
     questions = _read_questions(answers) if answers else []
     overrule_if_asked(ws, jd_id, today, overrule_reapply)
+    check_claims = config.check_claims and not no_check_claims
+    review = config.review and not no_review
 
     try:
         result = documents.generate(
@@ -131,8 +143,12 @@ def generate(
                 resume=resume,
                 cover=cover,
                 answers=bool(questions),
+                check_claims=check_claims,
+                review=review,
                 jd_id=jd_id,
             ),
+            check_claims=check_claims,
+            review=review,
         )
     except (SameJobRecently, PossiblySameJob) as refusal:
         refuse(err_console, refusal, jd_id, "generate")
@@ -177,6 +193,7 @@ def generate(
         console.print(f"[dim]Earlier documents kept in {config.output_dir / result.superseded}[/]")
     _report_coverage(result.coverage)
     _report(result.folder, result.written, result.issues, result.unused)
+    _report_readiness(result)
 
 
 _FAILED = {
@@ -231,6 +248,31 @@ def _report(
 
     _report_issues(issues)
     _report_unused(unused or [])
+
+
+def _report_readiness(result) -> None:
+    """Ready / Not ready / Not reviewed, then the review's findings."""
+    from jobagent.services import checks
+
+    reviewed = result.review
+    if isinstance(result.claims, checks.NotChecked):
+        console.print(f"\n[yellow]Claims not checked:[/] {result.claims.reason}")
+    if isinstance(reviewed, checks.Review):
+        for title, findings, style in (
+            ("Review: blocking", reviewed.blocking, "red"),
+            ("Review: suggestions", reviewed.suggestions, "yellow"),
+        ):
+            if findings:
+                console.print(f"\n[bold {style}]{title}[/]")
+                for f in findings:
+                    console.print(f"  [{style}]·[/] [cyan]{f.document or 'documents'}[/] {f.finding}")
+    if result.ready:
+        console.print("\n[bold green]Ready[/] [dim]no blockers; the review found nothing blocking.[/]")
+    elif reviewed is None or isinstance(reviewed, checks.NotReviewed):
+        why = f": {reviewed.reason}" if isinstance(reviewed, checks.NotReviewed) else " (switched off)"
+        console.print(f"\n[bold yellow]Not reviewed[/][dim]{why}. Not ready until it is.[/]")
+    else:
+        console.print("\n[bold red]Not ready[/] [dim]fix the blockers above before sending.[/]")
 
 
 _COVERAGE_STYLE = {"covered": "green", "weak": "yellow", "missing": "red", "gap": "dim"}
