@@ -98,6 +98,7 @@ def validate_prose(
     issues += _check_openers(text)
     issues += _check_numbers(text, profile)
     issues += _check_scorer_only_leakage(text, profile)
+    issues += _check_contrast_phrasing(text, context)
     if max_words is not None:
         issues += _check_length(text, max_words, context)
     return issues
@@ -295,6 +296,36 @@ def _check_banned_phrases(text: str, voice: str) -> list[ValidationIssue]:
                 )
             )
     return issues
+
+
+# "Not X but Y", "not just X", "rather than": one reads as precision, several
+# read as a writer arguing with an objection nobody raised (spec 003, FR-009).
+_CONTRAST_PATTERNS = (
+    r"\bnot\s+(?:just|only|merely|simply)\b",
+    r"\bnot\b[^.;:!?]{1,60}?,?\s+but\b",
+    r"\brather\s+than\b",
+)
+CONTRAST_LIMIT = 1
+
+
+def _check_contrast_phrasing(text: str, context: str) -> list[ValidationIssue]:
+    found = []
+    for pattern in _CONTRAST_PATTERNS:
+        found += [m for m in re.finditer(pattern, text, flags=re.IGNORECASE)]
+    if len(found) <= CONTRAST_LIMIT:
+        return []
+    first = min(found, key=lambda m: m.start())
+    return [
+        ValidationIssue(
+            rule="contrast phrasing",
+            severity=Severity.warning,
+            detail=(
+                f"{context} uses {len(found)} 'not X but Y' / 'rather than' "
+                "constructions. One is precision; more reads as defensive."
+            ),
+            excerpt=_excerpt(text, first.start(), first.end()),
+        )
+    ]
 
 
 def _check_openers(text: str) -> list[ValidationIssue]:

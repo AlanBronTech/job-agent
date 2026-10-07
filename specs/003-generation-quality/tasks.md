@@ -110,7 +110,7 @@ and answer bank never enter the repo.
 
 - [X] T035 [US5] In `jobagent/core/validation.py` add `story_of(ref, profile) -> str | None` (story id itself, or a bullet's `linked_story`, or an entry whose bullets link one only when cited as a bullet) and `check_story_reuse(uses: dict[str, list[str]], *, cap: int, context)` → blocker `story reused`; in `generate.py` the resume selection gains `profile_refs: list[list[str]]` (one list per profile paragraph); resume: ≤2 uses and never profile + bullet together; letter: ≤1; one form's answers: ≤1 per story.
 - [X] T036 [P] [US5] In `prompts/generate_resume.md` add `profile_refs` to the contract and the reuse caps to the rules.
-- [ ] T037 [US5] In `jobagent/core/validation.py` add a contrast-phrasing count: more than one `not X but Y` / `not just X` / `rather than` construction per document → warning `contrast phrasing`.
+- [X] T037 [US5] In `jobagent/core/validation.py` add a contrast-phrasing count: more than one `not X but Y` / `not just X` / `rather than` construction per document → warning `contrast phrasing`.
 - [ ] T038 [US5] Banned phrases: add to `profile.example/voice.md` the invented-safe list ("not a claim", "not advisory", "full management authority", "this ad is asking for", "your ad asks for"); propose the same lines for Alan's `profile/voice.md` and apply only with his agreement (his file, gitignored).
 - [ ] T039 [P] [US5] Tests in `tests/test_validation.py` and `tests/test_generate_quality.py` (SC-001 part two: four uses of one story → blocker; profile+bullet → blocker; letter reuse; contrast warning; banned phrase blocker).
 
