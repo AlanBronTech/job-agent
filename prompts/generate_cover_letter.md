@@ -2,9 +2,8 @@
 
 Write one cover letter for one job, in Alan Bron's voice.
 
-Return the body text only: no name block, no date, no address, no signature —
-the renderer adds those. Start at the salutation's next line and stop at the
-last sentence.
+Return the body only, as cited sentences: no name block, no date, no
+address, no salutation, no signature — the renderer adds those.
 
 ## The job
 
@@ -64,8 +63,13 @@ from what you are shown. Do not refer to it from memory.
    anchored on one concrete piece of evidence mapped to a stated requirement in
    the ad; one honest sentence naming the biggest gap and what compensates for
    it; a one-line close.
-3. **Every claim traces to the evidence above.** Every number you write must
-   appear there. If the ad asks for something the evidence does not contain,
+3. **Every claim traces to the evidence above, and says which.** Each
+   sentence lists the ids it rests on in `cites`: a bullet (`role_id.0`), an
+   entry, a story id, or an explanation key. A sentence about the ad or the
+   employer cites `"ad"`. A sentence that cites nothing, or cites an id not
+   shown above, is rejected — and a sentence must not say more than its
+   cited evidence says: no merged people, no moved places, no added detail.
+   Every number you write must appear there. If the ad asks for something the evidence does not contain,
    name it as the gap — do not imply it, do not approximate it, and do not
    reach for an adjacent claim and hope.
 4. **The gap sentence is not optional and is not softened.** The assessment's
@@ -81,4 +85,16 @@ from what you are shown. Do not refer to it from memory.
 
 ## Output
 
-The letter body as plain text. No JSON, no markdown, no headings, no fences.
+JSON only. Paragraphs in order, each a list of sentences:
+
+{
+  "paragraphs": [
+    [
+      {"text": "You are hiring an Engineering Manager to grow a team of eight.", "cites": ["ad"]},
+      {"text": "I recruited and onboarded nine people into a 15-person team.", "cites": ["recent_manager.0"]}
+    ],
+    [
+      {"text": "...", "cites": ["startup_em.1", "scope_disagreement"]}
+    ]
+  ]
+}
