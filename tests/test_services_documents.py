@@ -268,3 +268,22 @@ def test_a_failed_classification_spends_no_writer_call(ws, ids, fake_model, monk
     with pytest.raises(GenerationFailed) as failed:
         run(ws, ids["acme"])
     assert failed.value.stage == "classify" and fake_model.calls == []
+
+
+def test_the_claim_check_runs_on_the_letter_and_can_be_switched_off(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.generate import Sentence
+    from jobagent.services import checks
+
+    def letter(*a, **k):
+        return SimpleNamespace(text="One.", issues=[], sentences=[Sentence(text="One.", cites=["x.0"])])
+    monkeypatch.setattr(documents, "build_cover_letter", letter)
+    calls = []
+    monkeypatch.setattr(documents.checks, "check_claims",
+                        lambda *a, **k: calls.append(1) or checks.NotChecked("timed out"))
+
+    result = run(ws, ids["acme"], cover=True)
+    assert calls == [1] and isinstance(result.claims, checks.NotChecked)
+    assert any(p.name.startswith("AlanBron_CoverLetter") for p in result.written)
+
+    result = run(ws, ids["acme"], cover=True, overwrite=True, check_claims=False)
+    assert calls == [1] and result.claims is None
