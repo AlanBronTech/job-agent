@@ -51,25 +51,53 @@ from what you are shown. Do not refer to it from memory.
 {voice}
 </voice>
 
+## Alan's answer bank — his own words, by question type
+
+Where a question is of a type below, start from his answer and tailor it to
+this ad. Do not contradict it. Cite it by its type (`why_leaving`).
+
+<answer_bank>
+{answer_bank}
+</answer_bank>
+
 ## The questions
 
 {questions}
 
+Character limit per answer: {limit}
+
 ## Rules
 
-1. **One answer per question**, in order, each under 150 words unless the
-   question asks for more.
-2. **Every claim traces to the evidence above**, and every number you write
-   must appear there.
-3. **A question about something the profile does not evidence gets an honest
-   answer** naming what he has done instead and how close it is. Never
-   fabricate the experience, and never dodge the question.
-4. **Where `stories.explanations` covers the question, use its wording** — the
-   employment gap, the stack mismatch, salary expectations, why he is leaving.
-5. Never state or compute a career length.
-6. Answer the question that was asked. No preamble, no restating the question.
+1. **One answer per question**, in order. Classify each question as one of
+   `summary`, `why_company`, `why_role`, `why_you`, `what_made_you_apply`,
+   `salary_expectation`, `notice_period`, `right_to_work`, `why_leaving`, or
+   `other`.
+2. **Two variants each**: `short` (two or three sentences) and `long` (the
+   fuller answer). Both within the character limit, which is checked.
+3. **Every sentence cites what it rests on**: catalogue ids, story ids,
+   explanation keys, answer-bank types, or `"ad"` for a sentence about the ad
+   or the employer. A sentence that cites nothing or cites an unknown id is
+   rejected; a sentence must not say more than its evidence says.
+4. **A `why_company` answer uses only the ad's own words** (cite `"ad"`) or
+   Alan's bank entry. Nothing about the company that the ad does not say.
+5. **No story twice across the form.** One story, one answer.
+6. **A question about something the profile does not evidence gets an honest
+   answer** naming what he has done instead. Never fabricate, never dodge.
+7. **Where `stories.explanations` covers the question, use its wording.**
+8. Never state or compute a career length. No preamble, no restating the
+   question.
 
 ## Output
 
-Markdown. Each question as a `### ` heading, quoted exactly as it was asked,
-with the answer beneath it. Nothing else.
+JSON only:
+
+{
+  "answers": [
+    {
+      "question": "the question, exactly as asked",
+      "type": "why_role",
+      "short": [{"text": "...", "cites": ["recent_manager.0"]}],
+      "long": [{"text": "...", "cites": ["ad"]}, {"text": "...", "cites": ["scope_disagreement"]}]
+    }
+  ]
+}
