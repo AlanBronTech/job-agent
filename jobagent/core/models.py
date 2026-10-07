@@ -50,6 +50,26 @@ class EvidenceStrength(str, Enum):
     weak = "weak"
 
 
+class RoleKind(str, Enum):
+    """What kind of role an ad is, by what it leads with (spec 003).
+
+    Decides which evidence leads a resume and which stories may not appear in
+    written documents at all. Classified once per ad, by a separate call, and
+    stored with it.
+    """
+
+    people_focused = "people_focused"
+    delivery_focused = "delivery_focused"
+    technical_lead = "technical_lead"
+    ai_enablement = "ai_enablement"
+
+
+# An exclusion: the role kinds a piece of evidence must not appear for in
+# written documents (resume, letter, answers). Interview prep ignores it — a
+# story kept off a people-focused resume can still be told in the room.
+ExcludeFor = list[RoleKind]
+
+
 _PERIOD_RE = re.compile(r"^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$")
 
 PRESENT = "present"
@@ -106,6 +126,7 @@ class Bullet(_Base):
     # writer has to be kept from.
     note_for_writer: str | None = None
     linked_story: str | None = None
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class Education(_Base):
@@ -154,6 +175,7 @@ class FounderEntry(_Base):
     summary: str | None = None
     note_for_scorer: str | None = None
     note_for_writer: str | None = None
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class AiCapabilityEntry(_Base):
@@ -164,6 +186,7 @@ class AiCapabilityEntry(_Base):
     note_for_scorer: str | None = None
     note_for_writer: str | None = None
     caveats: list[str] = Field(default_factory=list)
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class Role(_Base):
@@ -186,6 +209,7 @@ class Role(_Base):
     note_for_writer: str | None = None
     anchor_story: bool = False
     bullets: list[Bullet]
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class EarlierRole(_Base):
@@ -196,6 +220,7 @@ class EarlierRole(_Base):
     summary: str
     tags: list[str] = Field(default_factory=list)
     evidence_strength: EvidenceStrength
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class ExcludedSkill(_Base):
@@ -233,6 +258,7 @@ class Story(_Base):
     # The cover letter and answers prompts see the story but not its notes.
     # See Bullet.note_for_writer.
     note_for_writer: str | None = None
+    exclude_for: ExcludeFor = Field(default_factory=list)
 
 
 class Explanations(_Base):
@@ -247,10 +273,27 @@ class Explanations(_Base):
     quality_under_pressure: str | None = None
 
 
+class QuestionType(str, Enum):
+    """The application-form question types the answer bank is keyed by."""
+
+    summary = "summary"
+    why_company = "why_company"
+    why_role = "why_role"
+    why_you = "why_you"
+    what_made_you_apply = "what_made_you_apply"
+    salary_expectation = "salary_expectation"
+    notice_period = "notice_period"
+    right_to_work = "right_to_work"
+    why_leaving = "why_leaving"
+
+
 class StoriesFile(_Base):
     question_type_vocabulary: list[str] = Field(default_factory=list)
     stories: list[Story] = Field(default_factory=list)
     explanations: Explanations = Field(default_factory=Explanations)
+    # Alan's own answers to common form questions, by type. The answers
+    # generator starts from these; numbers in them are traced like any other.
+    answers: dict[QuestionType, str] = Field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------- #
@@ -515,6 +558,19 @@ class JobDescription(_Base):
 # --------------------------------------------------------------------------- #
 # Fit assessment (Phase 3)
 # --------------------------------------------------------------------------- #
+
+
+class RoleClassification(_Base):
+    """The stored classification of one ad. See `RoleKind`."""
+
+    primary: RoleKind
+    secondary: RoleKind | None = None
+    reason: str
+
+    @property
+    def kinds(self) -> list[RoleKind]:
+        """Both kinds; exclusions for either apply."""
+        return [self.primary] + ([self.secondary] if self.secondary else [])
 
 
 class MatchStatus(str, Enum):
