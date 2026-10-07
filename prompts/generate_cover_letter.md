@@ -80,7 +80,9 @@ from what you are shown. Do not refer to it from memory.
    already agreed to give. Do not invent a different one.
 6. **Never state or compute a career length.** No years-of-experience figures
    in any form, no "since 2006", no decades. This is checked and rejected.
-7. No enthusiasm as a substitute for evidence. No restating the ad back at the
+7. **Each story once.** A story (or a bullet linked to it) is told in one
+   paragraph only; a second paragraph citing it is rejected.
+8. No enthusiasm as a substitute for evidence. No restating the ad back at the
    reader. No flattering the company. See the banned lists in the voice above.
 
 ## Output

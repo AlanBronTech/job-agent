@@ -112,6 +112,11 @@ Skill category keys available: {skills}
     AI-capability entries are not roles. Their bullets are still yours to use
     as a highlight `source_ref`, which is where the master resume puts the
     strongest of them.
+12. **One story, at most twice.** A story — a story id, or any bullet linked
+    to it — appears at most twice on the resume: a short highlight and one
+    experience bullet. Never also in the PROFILE paragraphs when it has a
+    bullet. List in `profile_refs` the ids each PROFILE paragraph draws on, so
+    this can be checked. Reuse past the cap is rejected.
 
 ## Output
 
@@ -120,6 +125,7 @@ JSON only. No prose, no markdown fences.
 {
   "tagline": "string",
   "profile_paragraphs": ["first paragraph", "second paragraph"],
+  "profile_refs": [["recent_role.0"], ["ai_entry"]],
   "highlights": [
     {"label": "short bold label", "text": "the claim", "source_ref": "easy_signs.1"}
   ],
