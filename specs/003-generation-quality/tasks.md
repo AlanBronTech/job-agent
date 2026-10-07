@@ -22,7 +22,7 @@ and answer bank never enter the repo.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the invented worked example in `tests/quality_seed.py`: a people-focused Northwind Freight Engineering Manager `JobDescription` (must-haves led by coaching, 1:1s, "addressing underperformance with care"; an about-us sentence "We build route planning for regional freight"), a `FitAssessment` whose `requirements[]` carry `met`/`partial` rows with `evidence_ref`s that exist in `profile.example/`, one `gap` row, and the original faulty documents as plain text (resume opening on managing out an underperformer, one story used four times, a letter stating an acquisition the profile does not hold, two people merged into one). A second ad, technical-lead, for the contrast case; a third with no company description.
+- [X] T001 Create the invented worked example in `tests/quality_seed.py`: a people-focused Northwind Freight Engineering Manager `JobDescription` (must-haves led by coaching, 1:1s, "addressing underperformance with care"; an about-us sentence "We build route planning for regional freight"), a `FitAssessment` whose `requirements[]` carry `met`/`partial` rows with `evidence_ref`s that exist in `profile.example/`, one `gap` row, and the original faulty documents as plain text (resume opening on managing out an underperformer, one story used four times, a letter stating an acquisition the profile does not hold, two people merged into one). A second ad, technical-lead, for the contrast case; a third with no company description.
 
 ---
 
