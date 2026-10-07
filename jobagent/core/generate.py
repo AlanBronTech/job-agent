@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from jobagent.adapters.docx_writer import (
     CoverLetterContent,
@@ -51,6 +51,7 @@ from jobagent.core.prompts import PromptError, load_prompt
 from jobagent.core.validation import (
     Severity,
     ValidationIssue,
+    check_citations,
     validate_prose,
     validate_rendered,
 )
@@ -111,6 +112,27 @@ class _ResumeSelection(BaseModel):
     earlier_career_ids: list[str] = Field(default_factory=list)
 
 
+class Sentence(BaseModel):
+    """One sentence of a letter or answer, with the evidence it rests on.
+
+    `cites` holds profile ids, or "ad" for a sentence about the ad or the
+    employer. `quote` is the ad's own words behind a company sentence.
+    Stray keys are dropped rather than failing the call (CLAUDE.md).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    text: str
+    cites: list[str] = Field(default_factory=list)
+    quote: str | None = None
+
+
+class _Letter(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    paragraphs: list[list[Sentence]]
+
+
 @dataclass(frozen=True)
 class UnusedEntry:
     """A profile entry the model was shown and then used nowhere.
@@ -140,6 +162,12 @@ class GeneratedResume:
 class GeneratedText:
     text: str
     issues: list[ValidationIssue] = field(default_factory=list)
+    # The cited sentences behind `text`, by paragraph (letters, spec 003).
+    paragraphs: list[list[Sentence]] = field(default_factory=list)
+
+    @property
+    def sentences(self) -> list[Sentence]:
+        return [sentence for paragraph in self.paragraphs for sentence in paragraph]
 
 
 # --------------------------------------------------------------------------- #
@@ -461,16 +489,14 @@ def build_cover_letter(
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
 
-    return _write_and_check(
+    return _write_cited(
         client,
         prompt,
         COVER_PROMPT,
         profile,
+        known=known_citations(profile, excluded),
         max_words=COVER_LETTER_MAX_WORDS,
         context="The cover letter",
-        clean=lambda text: strip_letter_signoff(
-            strip_letter_salutation(text), name=profile.roles.person.name
-        ),
     )
 
 
@@ -541,13 +567,109 @@ def _write_and_check(
     return GeneratedText(text=text, issues=issues)
 
 
-def _rewrite_instruction(failures: list[ValidationIssue]) -> str:
+def _write_cited(
+    client: LLMClient,
+    prompt: str,
+    label: str,
+    profile: Profile,
+    *,
+    known: set[str],
+    max_words: int | None,
+    context: str,
+) -> GeneratedText:
+    """Write as cited sentences, check them in code, regenerate once on blockers.
+
+    The text is rebuilt from the sentences for rendering, so the .docx is the
+    same shape as before. Furniture the model added anyway — a salutation, a
+    bare sign-off, a line that is just the name — is dropped from the
+    sentences before checking, as `strip_letter_*` drops it from prose.
+    """
+    attempt_prompt = prompt
+    result = GeneratedText(text="")
+    name = profile.roles.person.name
+    for attempt in range(REWRITE_ATTEMPTS + 1):
+        try:
+            parsed, _ = client.complete_json(
+                prompt=attempt_prompt, label=label, max_tokens=MAX_TOKENS
+            )
+        except LLMError as exc:
+            raise GenerateError(f"Model call failed while writing: {exc}") from exc
+        try:
+            letter = _Letter.model_validate(parsed)
+        except ValidationError as exc:
+            raise GenerateError(
+                f"The model's sentences did not match the contract.\n{exc}"
+            ) from exc
+        paragraphs = _drop_furniture(letter.paragraphs, name)
+        text = paragraphs_text(paragraphs)
+        if not text:
+            raise GenerateError("The model returned nothing.")
+        issues = validate_prose(text, profile, max_words=max_words, context=context)
+        issues += check_citations(paragraphs, known, context=context)
+        result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs)
+        failures = [issue for issue in issues if issue.severity is Severity.blocker]
+        if not failures or attempt == REWRITE_ATTEMPTS:
+            break
+        attempt_prompt = f"{prompt}\n\n{_rewrite_instruction(failures, json_output=True)}"
+    return result
+
+
+def paragraphs_text(paragraphs: list[list[Sentence]]) -> str:
+    return "\n\n".join(
+        " ".join(sentence.text.strip() for sentence in paragraph) for paragraph in paragraphs
+    )
+
+
+def _drop_furniture(paragraphs: list[list[Sentence]], name: str) -> list[list[Sentence]]:
+    """Drop a salutation, and a sign-off with whatever follows it.
+
+    As `strip_letter_signoff`: a bare sign-off among the last three sentences
+    ends the body, so a name it does not recognise goes with it.
+    """
+    flat = [(i, s) for i, paragraph in enumerate(paragraphs) for s in paragraph]
+    cut = len(flat)
+    for offset in range(1, min(3, len(flat)) + 1):
+        if _SIGNOFF.match(flat[-offset][1].text.strip()):
+            cut = len(flat) - offset
+            break
+    kept: list[list[Sentence]] = [[] for _ in paragraphs]
+    for i, sentence in flat[:cut]:
+        if sentence.text.strip() and not _is_furniture(sentence.text, name):
+            kept[i].append(sentence)
+    return [p for p in kept if p]
+
+
+def _is_furniture(text: str, name: str) -> bool:
+    line = text.strip()
+    return bool(
+        _SALUTATION.match(line) or _SIGNOFF.match(line) or _is_name_line(line, name)
+    )
+
+
+def known_citations(profile: Profile, excluded: set[str] = frozenset()) -> set[str]:
+    """Every id a letter or answer sentence may cite, besides "ad".
+
+    What the writer was shown: the citable catalogue, the stories, the agreed
+    explanations and the answer bank, less anything excluded for the kind.
+    """
+    known = set(build_citable(profile, excluded))
+    known |= {s.id for s in profile.stories.stories if s.id not in excluded}
+    known |= {
+        key
+        for key, value in profile.stories.explanations.model_dump(exclude_none=True).items()
+        if isinstance(value, str)
+    }
+    known |= {key.value for key in profile.stories.answers}
+    return known
+
+
+def _rewrite_instruction(failures: list[ValidationIssue], *, json_output: bool = False) -> str:
     lines = [
         "## Your previous draft was rejected",
         "",
         "It broke these rules. Fix every one of them and write the piece again.",
         "Do not explain the changes, do not apologise, return only the rewritten",
-        "text.",
+        "JSON, in the same contract." if json_output else "text.",
         "",
     ]
     for issue in failures:

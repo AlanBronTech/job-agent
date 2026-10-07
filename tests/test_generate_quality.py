@@ -104,14 +104,8 @@ def test_the_unused_list_does_not_report_excluded_evidence(profile):
 
 
 def test_the_letter_is_not_shown_the_excluded_story(profile):
-    client = RoutedClient({})
-
-    def complete(*, prompt, label=None, **kw):
-        client.prompts.setdefault(label, []).append(prompt)
-        from jobagent.adapters.llm import LLMResponse
-        return LLMResponse(text="A letter.", provider=client.provider, model="fake",
-                           input_tokens=1, output_tokens=1)
-    client.complete = complete
+    client = RoutedClient({"generate_cover_letter": {"paragraphs": [[
+        {"text": "I recruited and onboarded nine people.", "cites": ["recent_manager.0"]}]]}})
     build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
     prompt = client.prompts["generate_cover_letter"][0]
     assert "underperformer" not in prompt and EXIT_BULLET not in prompt

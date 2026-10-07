@@ -330,6 +330,13 @@ def test_the_prompt_carries_the_catalogue_and_the_assessment(
 # --------------------------------------------------------------------------- #
 
 
+def letter_json(*paragraphs: str) -> str:
+    """A letter in the cited-sentence contract, one sentence per paragraph."""
+    import json
+
+    return json.dumps({"paragraphs": [[{"text": p, "cites": ["recent_manager.0"]}] for p in paragraphs]})
+
+
 class ScriptedTextClient(LLMClient):
     """Returns queued completions, recording every prompt it was given."""
 
@@ -353,8 +360,8 @@ def test_a_draft_with_a_banned_phrase_is_regenerated(profile, jd, assessment) ->
 
     client = ScriptedTextClient(
         [
-            "I am thrilled to apply for this role.",
-            "I led the team that rebuilt the payments platform.",
+            letter_json("I am thrilled to apply for this role."),
+            letter_json("I led the team that rebuilt the payments platform."),
         ]
     )
 
@@ -369,7 +376,7 @@ def test_the_retry_names_the_specific_failure(profile, jd, assessment) -> None:
     """"358 words against a 350-word limit" is actionable; "too long" is not."""
     from jobagent.core.generate import build_cover_letter
 
-    client = ScriptedTextClient(["word " * 400, "A clean second draft."])
+    client = ScriptedTextClient([letter_json("word " * 400), letter_json("A clean second draft.")])
 
     build_cover_letter(jd, profile, assessment, client=client)
 
@@ -384,7 +391,7 @@ def test_a_draft_that_fails_twice_is_returned_with_its_issues(
     flagged draft."""
     from jobagent.core.generate import build_cover_letter
 
-    client = ScriptedTextClient(["I am thrilled again.", "I am thrilled once more."])
+    client = ScriptedTextClient([letter_json("I am thrilled again."), letter_json("I am thrilled once more.")])
 
     letter = build_cover_letter(jd, profile, assessment, client=client)
 
@@ -395,7 +402,7 @@ def test_a_draft_that_fails_twice_is_returned_with_its_issues(
 def test_a_clean_first_draft_is_not_regenerated(profile, jd, assessment) -> None:
     from jobagent.core.generate import build_cover_letter
 
-    client = ScriptedTextClient(["I led the team that rebuilt the platform."])
+    client = ScriptedTextClient([letter_json("I led the team that rebuilt the platform.")])
 
     build_cover_letter(jd, profile, assessment, client=client)
 
@@ -684,7 +691,7 @@ def test_an_unrecognised_signature_does_not_block_the_strip(signature: str) -> N
 
 def test_the_generated_letter_is_addressed_once(profile, jd, assessment) -> None:
     """End to end, through the builder that renders into the .docx."""
-    client = TextClient("Dear Hiring Manager,\n\nI led 15 engineers.")
+    client = TextClient(letter_json("Dear Hiring Manager,", "I led 15 engineers."))
 
     letter = build_cover_letter(jd, profile, assessment, client=client)
 
@@ -694,7 +701,7 @@ def test_the_generated_letter_is_addressed_once(profile, jd, assessment) -> None
 
 def test_the_generated_letter_is_signed_off_once(profile, jd, assessment) -> None:
     """End to end. The renderer appends the closing, so the body must not."""
-    client = TextClient("I led 15 engineers.\n\nRegards,\nAlan Bron")
+    client = TextClient(letter_json("I led 15 engineers.", "Regards,", "Alan Bron"))
 
     letter = build_cover_letter(jd, profile, assessment, client=client)
 
