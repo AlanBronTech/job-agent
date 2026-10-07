@@ -1182,3 +1182,39 @@ def _must_cover_block(assessment: FitAssessment, excluded: set[str]) -> str:
     if not rows:
         return "(none listed)"
     return "\n".join(f"- {requirement}  ->  cite {ref}" for requirement, ref in rows)
+
+
+def evidence_text(profile: Profile, ref: str) -> str | None:
+    """The full text behind a cited id, for the claim check. None if unknown.
+
+    A bullet's text; an entry's heading and every bullet; a story's situation,
+    action and result; an explanation or answer-bank entry. Never a scorer
+    note: those are facts the writer is kept from, and the checker reads what
+    the writer was allowed to rely on.
+    """
+    entry_id, _, index = ref.partition(".")
+    r = profile.roles
+    for group in (r.roles, r.founder_track_record, r.ai_capability):
+        for entry in group:
+            if entry.id != entry_id:
+                continue
+            if index.isdigit() and int(index) < len(entry.bullets):
+                return entry.bullets[int(index)].text
+            if not index:
+                return f"{_entry_label(entry)}: " + " ".join(b.text for b in entry.bullets)
+    for entry in r.earlier_career:
+        if entry.id == ref:
+            return f"{entry.company}: {entry.summary}"
+    for story in profile.stories.stories:
+        if story.id == ref:
+            return (
+                f"{story.label}. Situation: {story.situation} Action: {story.action} "
+                f"Result: {story.result}"
+            )
+    explanations = profile.stories.explanations.model_dump(exclude_none=True)
+    if isinstance(explanations.get(ref), str):
+        return explanations[ref]
+    for key, text in profile.stories.answers.items():
+        if key.value == ref:
+            return text
+    return None
