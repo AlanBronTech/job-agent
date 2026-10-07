@@ -308,3 +308,16 @@ def test_a_clean_reviewed_run_is_ready(client, ws, ids, model, monkeypatch):
     start(client, ids["acme"])
     page = flat(client.get(f"/ads/{ids['acme']}"))
     assert "ready No blockers" in page and "Invented suggestion." in page
+
+
+def test_the_answer_limit_reaches_the_run(client, ids, model, monkeypatch):
+    seen = {}
+
+    def spy(*a, **k):
+        seen["limit"] = k["limit"]
+        raise GenerateError("stop")
+    monkeypatch.setattr(documents, "generate", spy)
+    body = confirm(client, ids["acme"], questions="Why this role?", limit="600").text
+    assert "each within 600 characters" in body
+    start(client, ids["acme"], questions="Why this role?", limit="600")
+    assert seen == {"limit": 600}

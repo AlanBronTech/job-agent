@@ -124,7 +124,7 @@ and answer bank never enter the repo.
 - [X] T041 [P] [US7] Rewrite `prompts/generate_answers.md`: classify each question to a type, start from the bank entry when there is one, short and long variants within `{limit}`, JSON contract with cites, no story twice across the form.
 - [X] T042 [US7] `jobagent/cli/generate.py` `--limit N` (requires `--answers`); `services/documents.generate(..., limit=None)`; `answers.md` written from the rendering; the claim check (T026) covers answers too.
 - [X] T043 [US7] Web: in `generate_confirm.html` the cover letter starts unticked; an answers box (questions textarea, optional limit) passes through to `generate`.
-- [ ] T044 [P] [US7] Tests `tests/test_answers.py` (SC-005; bank entry reaches the prompt; over-limit → blocker and one regenerate; why-company citing profile evidence → blocker) and the unticked letter in `tests/test_web_generate.py`.
+- [X] T044 [P] [US7] Tests `tests/test_answers.py` (SC-005; bank entry reaches the prompt; over-limit → blocker and one regenerate; why-company citing profile evidence → blocker) and the unticked letter in `tests/test_web_generate.py`.
 
 ---
 
