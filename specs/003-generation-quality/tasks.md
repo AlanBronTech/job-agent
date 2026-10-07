@@ -68,7 +68,7 @@ and answer bank never enter the repo.
 - [X] T017 [US2] In `jobagent/core/generate.py` pass the must-cover list into the resume prompt (`{must_cover}`), compute `GeneratedResume.coverage`, add its issues; gap rows from the assessment listed as `gap`, never filled.
 - [X] T018 [P] [US2] In `prompts/generate_resume.md` add the must-cover block: each listed requirement must be answered by a highlight or role bullet citing the listed evidence.
 - [X] T019 [US2] Surface coverage: `GenerateResult.coverage`; `jobagent/cli/generate.py` prints a coverage table (must-have → where / weak / gap); `assessment.md` gains a Coverage section; the UI run result shows it.
-- [ ] T020 [P] [US2] Tests `tests/test_coverage.py` (SC-003: evidenced must-haves all on the resume; missing → blocker; skills only → weak; gap stays gap; excluded evidence not demanded).
+- [X] T020 [P] [US2] Tests `tests/test_coverage.py` (SC-003: evidenced must-haves all on the resume; missing → blocker; skills only → weak; gap stays gap; excluded evidence not demanded).
 
 ---
 
