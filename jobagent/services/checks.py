@@ -24,7 +24,10 @@ from jobagent.core.validation import AD
 CLAIMS_PROMPT = "check_claims"
 REVIEW_PROMPT = "review_documents"
 POLICIES_PROMPT = "review_policies"
-MAX_TOKENS = 4096
+# Generous for the same reason as the resume's ceiling: the count includes the
+# model's reasoning. The first real review (2026-10-07) hit 4,096
+# with a short answer still unwritten, and was lost.
+MAX_TOKENS = 16384
 
 
 @dataclass(frozen=True)

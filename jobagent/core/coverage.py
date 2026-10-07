@@ -72,7 +72,7 @@ def coverage(
         if ref not in resolvable and ref.split(".", 1)[0] not in resolvable:
             rows.append(CoverageRow(row.requirement, ref, UNCHECKED))
             continue
-        where = [c for c in cited if _answers(ref, c, linked)]
+        where = list(dict.fromkeys(c for c in cited if _answers(ref, c, linked)))
         if where:
             rows.append(CoverageRow(row.requirement, ref, COVERED, where))
         elif _in_skills(row.requirement, skills_text):

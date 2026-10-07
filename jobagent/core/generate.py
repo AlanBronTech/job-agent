@@ -72,7 +72,14 @@ MAX_TOKENS = 8192
 # bounds the verbosity (rules 1, 3, 5, 6 and 10 all cap counts), so the
 # ceiling is there to survive a model that derails, not to shape the output.
 # Same reasoning as MAX_TOKENS in core/scoring.py, and the same number.
-RESUME_MAX_TOKENS = 16384
+#
+# Raised to 32,768 on 2026-10-07. The output count includes the model's own
+# reasoning, which the adapter does not switch off, and on this prompt it had
+# climbed run by run: 5.8k, 7.6k, 8.9k, 12.0k tokens for a JSON answer of
+# about one thousand. With spec 003's must-cover list and reuse caps added it
+# reached the 16,384 ceiling on the first real 003 regenerate and the paid call was
+# lost. The ceiling still exists to stop a derailed answer, not to shape one.
+RESUME_MAX_TOKENS = 32768
 
 # voice.md: "Under 350 words. One page."
 COVER_LETTER_MAX_WORDS = 350
