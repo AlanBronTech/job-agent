@@ -112,7 +112,7 @@ and answer bank never enter the repo.
 - [X] T036 [P] [US5] In `prompts/generate_resume.md` add `profile_refs` to the contract and the reuse caps to the rules.
 - [X] T037 [US5] In `jobagent/core/validation.py` add a contrast-phrasing count: more than one `not X but Y` / `not just X` / `rather than` construction per document → warning `contrast phrasing`.
 - [X] T038 [US5] Banned phrases: add to `profile.example/voice.md` the invented-safe list ("not a claim", "not advisory", "full management authority", "this ad is asking for", "your ad asks for"); propose the same lines for Alan's `profile/voice.md` and apply only with his agreement (his file, gitignored).
-- [ ] T039 [P] [US5] Tests in `tests/test_validation.py` and `tests/test_generate_quality.py` (SC-001 part two: four uses of one story → blocker; profile+bullet → blocker; letter reuse; contrast warning; banned phrase blocker).
+- [X] T039 [P] [US5] Tests in `tests/test_validation.py` and `tests/test_generate_quality.py` (SC-001 part two: four uses of one story → blocker; profile+bullet → blocker; letter reuse; contrast warning; banned phrase blocker).
 
 ---
 

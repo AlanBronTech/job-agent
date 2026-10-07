@@ -109,3 +109,67 @@ def test_the_letter_is_not_shown_the_excluded_story(profile):
     build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
     prompt = client.prompts["generate_cover_letter"][0]
     assert "underperformer" not in prompt and EXIT_BULLET not in prompt
+
+
+# -- US5: story reuse and defensive phrasing ----------------------------------------
+
+
+def test_one_story_four_times_blocks(profile):
+    """The worked example: the scope story in PROFILE, a highlight, a bullet, and more."""
+    payload = selection(
+        profile_refs=[["scope_disagreement"], []],
+        highlights=[
+            {"label": "Team building", "text": "Recruited people.", "source_ref": "recent_manager.0"},
+            {"label": "Disagree and commit", "text": "Advised, then delivered.", "source_ref": "startup_em.1"},
+            {"label": "Scope", "text": "Argued for a narrower release.", "source_ref": "scope_disagreement"},
+        ],
+        roles=[{"role_id": "startup_em", "bullet_refs": ["startup_em.0", "startup_em.1"]}],
+    )
+    built, _ = resume(profile, payload)
+    reused = [i for i in built.issues if i.rule == "story reused"]
+    assert len(reused) == 1 and "4 times" in reused[0].detail
+    assert reused[0].severity is Severity.blocker
+
+
+def test_profile_plus_a_bullet_blocks_even_at_two(profile):
+    payload = selection(
+        profile_refs=[["startup_em.1"], []],
+        roles=[{"role_id": "startup_em", "bullet_refs": ["startup_em.1"]}],
+    )
+    built, _ = resume(profile, payload)
+    assert any(i.rule == "story reused" and "PROFILE" in i.detail for i in built.issues)
+
+
+def test_a_highlight_and_a_bullet_is_allowed(profile):
+    payload = selection(
+        highlights=[{"label": "Scope", "text": "Advised, then delivered.", "source_ref": "startup_em.1"}],
+        roles=[{"role_id": "startup_em", "bullet_refs": ["startup_em.1"]}],
+    )
+    built, _ = resume(profile, payload)
+    assert not any(i.rule == "story reused" for i in built.issues)
+
+
+def letter_payload(*paragraphs):
+    return {"paragraphs": [[{"text": t, "cites": c} for t, c in p] for p in paragraphs]}
+
+
+def test_a_letter_telling_one_story_in_two_paragraphs_blocks(profile):
+    payload = letter_payload(
+        [("I advised against over-scoping, then delivered.", ["startup_em.1"])],
+        [("When overruled I committed to the wider scope.", ["scope_disagreement"])],
+    )
+    client = RoutedClient({"generate_cover_letter": payload})
+    built = build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
+    assert any(i.rule == "story reused" for i in built.issues)
+    assert len(client.prompts["generate_cover_letter"]) == 2  # regenerated once
+
+
+def test_defensive_phrasing_blocks_and_contrast_warns(profile):
+    from jobagent.core.validation import validate_prose
+
+    issues = validate_prose("This ad is asking for a coach.", profile)
+    assert ("banned phrase", Severity.blocker) in {(i.rule, i.severity) for i in issues}
+    issues = validate_prose(
+        "I led people, not just code. I chose to coach rather than replace.", profile)
+    assert ("contrast phrasing", Severity.warning) in {(i.rule, i.severity) for i in issues}
+    assert not validate_prose("I chose to coach rather than replace.", profile)
