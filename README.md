@@ -570,8 +570,9 @@ Claude Sonnet 5, read out of `runs.jsonl` by `jobagent spend`.
 | `jd add` | ~$0.03 |
 | `score` | ~$0.11 |
 | `generate --resume --cover` | ~$0.13 |
-| role kind, once per ad | ~$0.01 (estimate until measured) |
-| claim check + review, per generate | ~$0.08 (estimate until measured) |
+| role kind, once per ad | ~$0.003 (one real call so far) |
+| claim check, per generate | ~$0.01 (one real call so far) |
+| independent review, per generate | ~$0.13 (one real call so far) |
 | `prep` | ~$0.11 |
 | Everything else, `spend` included | free |
 

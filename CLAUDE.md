@@ -240,8 +240,9 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent jd same <id> yes|no       free     answer "possibly the same job?"
     jobagent outside add|list|link     free     applications made outside the tool
     jobagent jd backfill               free     requisition numbers, source files
-    (role kind, once per ad)           ~$0.01   estimate until measured
-    generate ... claim check + review  ~$0.08   on by default; --no-check-claims, --no-review
+    (role kind, once per ad)           ~$0.003  one real call, 2026-10-07
+    generate ... claim check           ~$0.01   one real call; on by default, --no-check-claims
+    generate ... review                ~$0.13   one real call; on by default, --no-review
     generate ... --answers F --limit N          short and long answers, from the bank
 
 About 28 cents per application end to end. Do not quote a cost from memory or
