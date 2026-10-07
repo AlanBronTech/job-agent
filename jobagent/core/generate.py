@@ -36,12 +36,14 @@ from jobagent.adapters.docx_writer import (
     SkillCategory,
 )
 from jobagent.adapters.llm import LLMClient, LLMError
+from jobagent.core import roles as kinds
 from jobagent.core.models import (
     EvidenceStrength,
     FounderEntry,
     FitAssessment,
     JobDescription,
     Profile,
+    RoleClassification,
     Visibility,
 )
 from jobagent.core.prompts import PromptError, load_prompt
@@ -150,11 +152,19 @@ def build_resume(
     *,
     client: LLMClient,
     today: date | None = None,
+    kind: RoleClassification | None = None,
 ) -> GeneratedResume:
-    """Select and order profile content for one ad, and assemble the resume."""
-    catalogue = build_catalogue(profile)
-    citable = build_citable(profile)
-    selection = _ask_for_selection(jd, profile, assessment, catalogue, client=client)
+    """Select and order profile content for one ad, and assemble the resume.
+
+    With a role kind, evidence excluded for it is left out of what the model
+    is shown, and any reference to it in the answer is still a blocker.
+    """
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+    catalogue = build_catalogue(profile, excluded)
+    citable = build_citable(profile, excluded)
+    selection = _ask_for_selection(
+        jd, profile, assessment, catalogue, client=client, kind=kind, excluded=excluded
+    )
 
     issues: list[ValidationIssue] = []
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
@@ -165,15 +175,24 @@ def build_resume(
             profile,
             context="a CAREER HIGHLIGHTS bullet",
         )
-        issues += _check_citation(highlight.source_ref, citable)
+        if kinds.is_excluded(highlight.source_ref, excluded):
+            issues.append(_excluded(highlight.source_ref, kind))
+        else:
+            issues += _check_citation(highlight.source_ref, citable)
+    issues += _lead_issues(selection, profile, kind)
 
     content, reference_issues = _assemble(
-        selection, profile, catalogue, today=today or date.today()
+        selection,
+        profile,
+        catalogue,
+        today=today or date.today(),
+        kind=kind,
+        excluded=excluded,
     )
     return GeneratedResume(
         content=content,
         issues=issues + reference_issues,
-        unused=unused_entries(selection, profile),
+        unused=unused_entries(selection, profile, excluded),
     )
 
 
@@ -184,13 +203,16 @@ def _ask_for_selection(
     catalogue: dict[str, str],
     *,
     client: LLMClient,
+    kind: RoleClassification | None = None,
+    excluded: set[str] = frozenset(),
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
             RESUME_PROMPT,
             jd_json=_jd_summary(jd),
             assessment_json=_assessment_summary(assessment),
-            catalogue=_render_catalogue(profile, catalogue),
+            role_kind=role_kind_block(kind),
+            catalogue=_render_catalogue(profile, catalogue, excluded),
             skills=", ".join(profile.roles.skills),
             voice=profile.voice,
         )
@@ -218,6 +240,8 @@ def _assemble(
     catalogue: dict[str, str],
     *,
     today: date,
+    kind: RoleClassification | None = None,
+    excluded: set[str] = frozenset(),
 ) -> tuple[ResumeContent, list[ValidationIssue]]:
     """Turn the selection into rendered content, resolving every reference.
 
@@ -229,6 +253,9 @@ def _assemble(
 
     role_blocks: list[RoleBlock] = []
     for chosen in selection.roles:
+        if kinds.is_excluded(chosen.role_id, excluded):
+            issues.append(_excluded(chosen.role_id, kind))
+            continue
         role = roles_by_id.get(chosen.role_id)
         if role is None:
             issues.append(_unknown(chosen.role_id, "role"))
@@ -244,6 +271,9 @@ def _assemble(
             continue
         bullets = []
         for ref in chosen.bullet_refs:
+            if kinds.is_excluded(ref, excluded):
+                issues.append(_excluded(ref, kind))
+                continue
             text = catalogue.get(ref)
             if text is None:
                 issues.append(_unknown(ref, "bullet"))
@@ -264,7 +294,8 @@ def _assemble(
         highlights.append((highlight.label, highlight.text))
 
     skills = []
-    for key in selection.skill_categories or list(profile.roles.skills):
+    chosen_keys = selection.skill_categories or list(profile.roles.skills)
+    for key in kinds.order_skills(chosen_keys, kind.primary if kind else None):
         values = profile.roles.skills.get(key)
         if values is None:
             issues.append(_unknown(key, "skill category"))
@@ -275,6 +306,9 @@ def _assemble(
     by_id = {entry.id: entry for entry in profile.roles.earlier_career}
     founders_by_id = {entry.id: entry for entry in profile.roles.founder_track_record}
     for entry_id in selection.earlier_career_ids:
+        if kinds.is_excluded(entry_id, excluded):
+            issues.append(_excluded(entry_id, kind))
+            continue
         entry = by_id.get(entry_id)
         if entry is not None:
             line = f"{entry.company} — {entry.summary}"
@@ -397,14 +431,17 @@ def build_cover_letter(
     assessment: FitAssessment,
     *,
     client: LLMClient,
+    kind: RoleClassification | None = None,
 ) -> GeneratedText:
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     try:
         prompt = load_prompt(
             COVER_PROMPT,
             jd_json=_jd_summary(jd),
             assessment_json=_assessment_summary(assessment),
-            catalogue=_render_catalogue(profile, build_catalogue(profile)),
-            stories=_render_stories(profile),
+            role_kind=role_kind_block(kind),
+            catalogue=_render_catalogue(profile, build_catalogue(profile, excluded), excluded),
+            stories=_render_stories(profile, excluded),
             voice=profile.voice,
         )
     except PromptError as exc:
@@ -430,16 +467,19 @@ def build_answers(
     assessment: FitAssessment,
     *,
     client: LLMClient,
+    kind: RoleClassification | None = None,
 ) -> GeneratedText:
     if not questions:
         raise GenerateError("No application questions were supplied.")
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     try:
         prompt = load_prompt(
             ANSWERS_PROMPT,
             jd_json=_jd_summary(jd),
             assessment_json=_assessment_summary(assessment),
-            catalogue=_render_catalogue(profile, build_catalogue(profile)),
-            stories=_render_stories(profile),
+            role_kind=role_kind_block(kind),
+            catalogue=_render_catalogue(profile, build_catalogue(profile, excluded), excluded),
+            stories=_render_stories(profile, excluded),
             questions="\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1)),
             voice=profile.voice,
         )
@@ -519,11 +559,15 @@ def _ask_for_text(client: LLMClient, prompt: str, label: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def build_catalogue(profile: Profile) -> dict[str, str]:
+def build_catalogue(
+    profile: Profile, excluded: set[str] = frozenset()
+) -> dict[str, str]:
     """Every renderable bullet, keyed by a stable reference.
 
     ``easy_signs.0``, ``home_design_directory.1``. Entries marked
     ``scorer_only`` are absent: they inform a decision and are never rendered.
+    So is anything in ``excluded`` (the role kind's exclusions); the remaining
+    bullets keep their indices.
     """
     catalogue: dict[str, str] = {}
     roles = profile.roles
@@ -533,11 +577,13 @@ def build_catalogue(profile: Profile) -> dict[str, str]:
             if entry.visibility is Visibility.scorer_only:
                 continue
             for index, bullet in enumerate(entry.bullets):
-                catalogue[f"{entry.id}.{index}"] = bullet.text
+                ref = f"{entry.id}.{index}"
+                if not kinds.is_excluded(ref, excluded):
+                    catalogue[ref] = bullet.text
     return catalogue
 
 
-def build_citable(profile: Profile) -> set[str]:
+def build_citable(profile: Profile, excluded: set[str] = frozenset()) -> set[str]:
     """Every id a CAREER HIGHLIGHTS bullet may cite as its evidence.
 
     Wider than `build_catalogue`, and deliberately a different thing. The
@@ -556,23 +602,23 @@ def build_citable(profile: Profile) -> set[str]:
     Keep this in step with `_render_catalogue`: whatever that shows the model
     is what this has to accept.
     """
-    citable = set(build_catalogue(profile))
+    citable = set(build_catalogue(profile, excluded))
     roles = profile.roles
     groups = (roles.roles, roles.founder_track_record, roles.ai_capability)
     for group in groups:
         for entry in group:
-            if entry.visibility is Visibility.scorer_only:
+            if entry.visibility is Visibility.scorer_only or entry.id in excluded:
                 continue
             citable.add(entry.id)
     for entry in roles.earlier_career:
-        if entry.visibility is Visibility.scorer_only:
+        if entry.visibility is Visibility.scorer_only or entry.id in excluded:
             continue
         citable.add(entry.id)
     return citable
 
 
 def unused_entries(
-    selection: "_ResumeSelection", profile: Profile
+    selection: "_ResumeSelection", profile: Profile, excluded: set[str] = frozenset()
 ) -> list[UnusedEntry]:
     """Entries offered to the model that reached none of the generated sections.
 
@@ -606,7 +652,7 @@ def unused_entries(
         for entry in group:
             if entry.visibility is Visibility.scorer_only:
                 continue
-            if entry.id in used:
+            if entry.id in used or entry.id in excluded:
                 continue
             unused.append(
                 UnusedEntry(
@@ -661,9 +707,12 @@ def _is_strong(entry) -> bool:
     )
 
 
-def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
+def _render_catalogue(
+    profile: Profile, catalogue: dict[str, str], excluded: set[str] = frozenset()
+) -> str:
     """The catalogue as text for the prompt, grouped so the model can see
-    which bullets belong to which role."""
+    which bullets belong to which role. Excluded entries and bullets are not
+    shown at all."""
     lines: list[str] = []
     roles = profile.roles
 
@@ -675,11 +724,13 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
     )
     lines.append("## Roles (EXPERIENCE section)")
     for role in roles.roles:
-        if role.visibility is Visibility.scorer_only:
+        if role.visibility is Visibility.scorer_only or role.id in excluded:
             continue
         lines.append(f"\n{role.id} — {role.title} · {role.company} ({role.sector})")
         _append_writer_note(lines, role.note_for_writer, "  ")
         for index, bullet in enumerate(role.bullets):
+            if f"{role.id}.{index}" not in catalogue:
+                continue
             lines.append(
                 f"  {role.id}.{index}  [{bullet.evidence_strength.value}] "
                 f"{bullet.text}"
@@ -693,13 +744,15 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         "the highlights instead.)"
     )
     for entry in roles.founder_track_record:
-        if entry.visibility is Visibility.scorer_only:
+        if entry.visibility is Visibility.scorer_only or entry.id in excluded:
             continue
         dates = _founder_dates(entry.start, entry.end)
         when = "ongoing" if _is_ongoing(entry) else (dates or "undated")
         lines.append(f"\n{entry.id} [{when}] — {entry.role}, {entry.company}")
         _append_writer_note(lines, entry.note_for_writer, "  ")
         for index, bullet in enumerate(entry.bullets):
+            if f"{entry.id}.{index}" not in catalogue:
+                continue
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
             _append_writer_note(lines, bullet.note_for_writer, "    ")
 
@@ -709,11 +762,13 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         "are not employment and have no body section.)"
     )
     for entry in roles.ai_capability:
-        if entry.visibility is Visibility.scorer_only:
+        if entry.visibility is Visibility.scorer_only or entry.id in excluded:
             continue
         lines.append(f"\n{entry.id} — {entry.label}")
         _append_writer_note(lines, entry.note_for_writer, "  ")
         for index, bullet in enumerate(entry.bullets):
+            if f"{entry.id}.{index}" not in catalogue:
+                continue
             lines.append(f"  {entry.id}.{index}  {bullet.text}")
             _append_writer_note(lines, bullet.note_for_writer, "    ")
 
@@ -723,7 +778,7 @@ def _render_catalogue(profile: Profile, catalogue: dict[str, str]) -> str:
         "bullets. Thirty years of domain evidence lives here.)"
     )
     for entry in roles.earlier_career:
-        if entry.visibility is Visibility.scorer_only:
+        if entry.visibility is Visibility.scorer_only or entry.id in excluded:
             continue
         lines.append(f"  {entry.id} — {entry.company}: {entry.summary}")
 
@@ -735,9 +790,11 @@ def _append_writer_note(lines: list[str], note: str | None, indent: str) -> None
         lines.append(f"{indent}writer note: {' '.join(note.split())}")
 
 
-def _render_stories(profile: Profile) -> str:
+def _render_stories(profile: Profile, excluded: set[str] = frozenset()) -> str:
     lines = []
     for story in profile.stories.stories:
+        if story.id in excluded:
+            continue
         lines.append(
             f"{story.id} — {story.label}\n"
             f"  situation: {story.situation}\n"
@@ -912,6 +969,73 @@ def _unknown(ref: str, kind: str) -> ValidationIssue:
             f"profile's {kind} list. Check whether the id exists in another "
             "section before assuming it was invented — a real id in the wrong "
             "slot looks identical to a fabricated one here."
+        ),
+        excerpt=ref,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Role kind (spec 003)
+# --------------------------------------------------------------------------- #
+
+_KIND_WORDS = {
+    "people_focused": "people-focused",
+    "delivery_focused": "delivery-focused",
+    "technical_lead": "technical lead",
+    "ai_enablement": "AI enablement",
+}
+
+
+def kind_label(kind) -> str:
+    return _KIND_WORDS.get(getattr(kind, "value", kind), str(kind))
+
+
+def role_kind_block(kind: RoleClassification | None) -> str:
+    """The `{role_kind}` placeholder: what kind of role this is, and why."""
+    if kind is None:
+        return "Not classified. Weight evidence by the assessment alone."
+    text = f"Primary: {kind_label(kind.primary)}"
+    if kind.secondary:
+        text += f"; secondary: {kind_label(kind.secondary)}"
+    return f"{text}. {kind.reason}"
+
+
+def _lead_issues(
+    selection: _ResumeSelection, profile: Profile, kind: RoleClassification | None
+) -> list[ValidationIssue]:
+    """A warning when the first highlight is not of the ad's kind.
+
+    Warning, not blocker: tags are coarse, and the model may be right that a
+    different piece of evidence answers this particular ad best.
+    """
+    if kind is None or not selection.highlights:
+        return []
+    ref = selection.highlights[0].source_ref
+    if kinds.lead_is_on_kind(ref, profile, kind.primary):
+        return []
+    return [
+        ValidationIssue(
+            rule="lead not on-kind",
+            severity=Severity.warning,
+            detail=(
+                f"This is a {kind_label(kind.primary)} ad, and the first CAREER "
+                f"HIGHLIGHT cites {ref!r}, which is not tagged as that kind of "
+                "evidence. Check what a reader meets first."
+            ),
+            excerpt=ref,
+        )
+    ]
+
+
+def _excluded(ref: str, kind: RoleClassification | None) -> ValidationIssue:
+    label = kind_label(kind.primary) if kind else "this kind of"
+    return ValidationIssue(
+        rule="excluded evidence",
+        severity=Severity.blocker,
+        detail=(
+            f"{ref!r} is excluded from written documents for {label} roles in "
+            "the profile, and was not shown to the model, yet it was cited. "
+            "It has been left off the page."
         ),
         excerpt=ref,
     )
