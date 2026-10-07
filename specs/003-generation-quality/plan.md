@@ -96,5 +96,5 @@ jobagent/
 | Choice | Why | Rejected |
 |---|---|---|
 | Letter and answers return JSON sentences with cites, not prose | The only way to count story use and require a citation per claim in code | Inline citation markers in prose: one malformed marker breaks parsing silently; free prose: cannot be checked |
-| Exclusions applied to the writer's input, then re-checked on output | Removing evidence is stronger than forbidding it; the output check catches a model citing an id it was not shown | A prompt rule only: "a rule that only forbids gets satisfied by rephrasing", as CDK was on 2026-10-07 |
+| Exclusions applied to the writer's input, then re-checked on output | Removing evidence is stronger than forbidding it; the output check catches a model citing an id it was not shown | A prompt rule only: "a rule that only forbids gets satisfied by rephrasing", as a ruled-out technology was on 2026-10-07 |
 | Two paid checks on by default | Alan's choice (2026-10-07); together about $0.08 against an hour of hand edits | Opt-in: the checks protect most when forgotten |

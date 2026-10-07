@@ -143,7 +143,7 @@ and answer bank never enter the repo.
 - [X] T048 README.md: the new flags, the readiness line, the coverage table, the answer bank and `--limit`, the role kind; CLAUDE.md: status, costs table (classify, claim check, review), and the design invariant "excluded evidence is removed from the writer's input, then re-checked on output".
 - [ ] T049 Ask Alan, then: his four recent screening answers into `profile/stories.yaml` `answers:`; `exclude_for` on the stories and bullets he named (the testing-lead story for `people_focused`); the voice.md lines from T038.
 - [ ] T050 Ask Alan first (≈ $0.40): regenerate the real ad behind the worked example into a scratch `OUTPUT_DIR` and compare with the documents he sent (quickstart "Real"); measure the three new prompts with `jobagent spend` and correct the cost estimates in CLAUDE.md.
-- [ ] T051 Full test run, then a history scan of the branch for real employers, salary figures and never-publish facts before any push.
+- [X] T051 Full test run, then a history scan of the branch for real employers, salary figures and never-publish facts before any push.
 
 ---
 

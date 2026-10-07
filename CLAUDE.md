@@ -200,8 +200,9 @@ review in the CLI and the UI. Phase 6 (Gmail triage) and the Drive upload were
 dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
 decisions.
 
-834 tests pass as of 2026-10-04 on `002-reapplication-batch` (562 on `main`), none
-touching the network. `main` is pushed
+907 tests pass as of 2026-10-07 on `003-generation-quality` (834 on `main`),
+none touching the network; the test suite strips provider API keys from the
+environment so a forgotten fake fails instead of billing. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
 
@@ -443,7 +444,7 @@ expected cost before spending (`services/costs.py`).
   work. The rule only sees applications it knows about, hence `outside add`.
 - **Excluded evidence is removed from the writer's input, then re-checked on
   output** (spec 003). A rule that only forbids gets satisfied by rephrasing —
-  CDK went into a letter that way. `core/roles.excluded_ids` names what an
+  a technology the profile rules out went into a letter that way. `core/roles.excluded_ids` names what an
   ad's role kind excludes (a story takes its linked bullets with it), the
   catalogue and story list skip those ids without renumbering the rest, and a
   citation of one anyway is a blocker. The letter and answers return cited
