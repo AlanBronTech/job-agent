@@ -89,8 +89,9 @@ def test_score(config, monkeypatch, printed):
     monkeypatch.setattr(score_cli, "get_config", lambda: config)
     monkeypatch.setattr(score_cli, "get_client", lambda *a, **k: object())
     stop_at(monkeypatch, scoring, "score_fit", printed)
-    runner.invoke(app, ["score", str(seed(config))])
-    assert printed == [("score", {})]
+    jd_id = seed(config)
+    runner.invoke(app, ["score", str(jd_id)])
+    assert printed == [("score", {"jd_id": jd_id})]
 
 
 def test_generate(config, monkeypatch, printed):
@@ -98,8 +99,9 @@ def test_generate(config, monkeypatch, printed):
 
     monkeypatch.setattr(generate_cli, "get_config", lambda: config)
     stop_at(monkeypatch, documents, "build_resume", printed)
-    runner.invoke(app, ["generate", str(seed(config)), "--resume", "--cover"])
-    assert printed == [("generate", {"resume": True, "cover": True, "answers": False})]
+    jd_id = seed(config)
+    runner.invoke(app, ["generate", str(jd_id), "--resume", "--cover"])
+    assert printed == [("generate", {"resume": True, "cover": True, "answers": False, "jd_id": jd_id})]
 
 
 def test_prep(config, monkeypatch, printed):

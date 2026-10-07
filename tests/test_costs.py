@@ -100,3 +100,57 @@ def test_logged_cost_is_ignored_in_favour_of_todays_price(tmp_path):
     ws = workspace(tmp_path)
     write_log(ws, call("score_fit", 0.11, "a"))  # logged at $99, priced now at $0.11
     assert estimate(ws, config(tmp_path), "score").total_usd == pytest.approx(0.11)
+
+
+# -- spec 003: the classifier and the checks ------------------------------------
+
+
+def test_each_label_is_priced_on_its_own_route(tmp_path):
+    ws = workspace(tmp_path)
+    write_log(ws, call("score_fit", 0.11, "a"), call("classify_role", 0.01, "b", model="claude-haiku"))
+    PRICES["claude-haiku"] = (1.0, 0.0)
+    try:
+        cfg = config(tmp_path, llm_classify="anthropic:claude-haiku")
+        est = costs.estimate(ws, cfg, "score", price_lookup=lookup)
+        assert est.total_usd == pytest.approx(0.11)  # no jd_id: classification not counted
+        assert costs.labels_for("score", classify=True) == ["score_fit", "classify_role"]
+        est = costs.CostEstimate(model=MODEL, budget=False, per_label={
+            **est.per_label,
+            **costs.estimate(ws, cfg, "classify", price_lookup=lookup).per_label,
+        })
+        assert est.total_usd == pytest.approx(0.12)
+    finally:
+        del PRICES["claude-haiku"]
+
+
+def test_an_unclassified_ad_adds_the_classifier(tmp_path):
+    from jobagent.core import store
+    from tests.ui_seed import seed
+
+    ws = workspace(tmp_path)
+    ids = seed(ws)
+    write_log(ws, call("score_fit", 0.11, "a"), call("classify_role", 0.01, "b"))
+    est = estimate(ws, config(tmp_path), "score", jd_id=ids["acme"])
+    assert est.total_usd == pytest.approx(0.12)
+
+    from jobagent.core.models import RoleClassification, RoleKind
+    with store.open_store(ws.db_path) as conn:
+        store.set_role_kind(conn, ids["acme"], RoleClassification(primary=RoleKind.people_focused, reason="x"))
+    est = estimate(ws, config(tmp_path), "score", jd_id=ids["acme"])
+    assert est.total_usd == pytest.approx(0.11)
+
+
+def test_generate_with_checks_lists_them(tmp_path):
+    assert costs.labels_for("generate", resume=True, cover=True, check_claims=True, review=True) == [
+        "generate_resume", "generate_cover_letter", "check_claims", "review_documents"]
+    # No prose, nothing for the claim check to read.
+    assert costs.labels_for("generate", resume=True, check_claims=True) == ["generate_resume"]
+
+
+def test_a_new_label_without_samples_names_itself_beside_the_measured_part(tmp_path):
+    ws = workspace(tmp_path)
+    write_log(ws, call("generate_resume", 0.08, "a"))
+    est = estimate(ws, config(tmp_path), "generate", resume=True, review=True)
+    assert est.total_usd is None
+    line = costs.describe(est)
+    assert "$0.08 for what has been measured" in line and "review_documents" in line

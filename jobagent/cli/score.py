@@ -182,7 +182,7 @@ def _score_one(
                 RunContext(command="score", jd_id=jd.id),
                 jd_id,
                 force=force,
-                before_spend=lambda: print_estimate(config, "score"),
+                before_spend=lambda: print_estimate(config, "score", jd_id=jd_id),
                 client_factory=lambda: get_client(
                     CallType.score, config, RunContext(command="score", jd_id=jd.id)
                 ),

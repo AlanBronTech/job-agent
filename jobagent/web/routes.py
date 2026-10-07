@@ -182,6 +182,7 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     estimate = costs.estimate(
         ws, config, "generate",
         resume=choice["resume"], cover=choice["cover"], answers=bool(choice["questions"]),
+        jd_id=jd_id,
     )
     return render(
         request,
@@ -411,7 +412,7 @@ def _score_confirm(request: Request, jd_id: int, force: bool, problem: str | Non
             "jd": jd,
             "history": seen_before,
             "force": force,
-            "estimate": costs.describe(costs.estimate(ws, config, "score")),
+            "estimate": costs.describe(costs.estimate(ws, config, "score", jd_id=jd_id)),
             "missing": readiness.missing(ws, config, "score"),
             "reapply": reapply.check(ws, jd_id, request.app.state.today()),
             "problem": problem,

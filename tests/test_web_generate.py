@@ -125,7 +125,7 @@ def test_confirm_shows_cost_and_files_and_spends_nothing(client, ids, model):
     page = confirm(client, ids["acme"])
     body = flat(page)
     assert page.status_code == 200
-    assert "Expected cost ~$" in body and "claude-sonnet-5" in body
+    assert "Expected" in body and "classify_role" in body  # an unclassified ad: the classifier is named
     assert "AlanBron_Resume_AcmeLogistics_202609.docx" in body
     assert "Confirm and generate" in body
     assert model.clients == 0 and model.calls == []

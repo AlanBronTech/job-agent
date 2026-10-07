@@ -126,7 +126,12 @@ def generate(
             today=today,
             now=datetime.now(),
             before_spend=lambda: print_estimate(
-                config, "generate", resume=resume, cover=cover, answers=bool(questions)
+                config,
+                "generate",
+                resume=resume,
+                cover=cover,
+                answers=bool(questions),
+                jd_id=jd_id,
             ),
         )
     except (SameJobRecently, PossiblySameJob) as refusal:

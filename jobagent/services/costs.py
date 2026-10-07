@@ -22,6 +22,22 @@ _CALL_TYPE = {
     "score": CallType.score,
     "generate": CallType.generate,
     "prep": CallType.prep,
+    "classify": CallType.classify,
+}
+
+# Each prompt label runs on its own call type's route, which need not be the
+# action's: the classifier may be a cheaper model than the writer, and each is
+# priced from its own history.
+_LABEL_CALL = {
+    "parse_jd": CallType.parse_jd,
+    "score_fit": CallType.score,
+    "generate_resume": CallType.generate,
+    "generate_cover_letter": CallType.generate,
+    "generate_answers": CallType.generate,
+    "interview_prep": CallType.prep,
+    "classify_role": CallType.classify,
+    "check_claims": CallType.review,
+    "review_documents": CallType.review,
 }
 
 
@@ -57,18 +73,36 @@ class CostEstimate:
         return min(counts) if counts else 0
 
 
-def labels_for(action: str, *, resume=False, cover=False, answers=False) -> list[str]:
+def labels_for(
+    action: str,
+    *,
+    resume=False,
+    cover=False,
+    answers=False,
+    classify=False,
+    check_claims=False,
+    review=False,
+) -> list[str]:
+    """The prompt labels an action will run. `classify` adds the role-kind call
+    an unclassified ad needs first; the two checks follow generate (spec 003)."""
+    first = ["classify_role"] if classify else []
     if action == "add_ad":
         return ["parse_jd"]
     if action == "score":
-        return ["score_fit"]
+        return ["score_fit"] + first
     if action == "prep":
         return ["interview_prep"]
+    if action == "classify":
+        return ["classify_role"]
     if action == "generate":
+        prose = cover or answers
         return (
-            (["generate_resume"] if resume else [])
+            first
+            + (["generate_resume"] if resume else [])
             + (["generate_cover_letter"] if cover else [])
             + (["generate_answers"] if answers else [])
+            + (["check_claims"] if check_claims and prose else [])
+            + (["review_documents"] if review else [])
         )
     raise ValueError(f"unknown action {action!r}")
 
@@ -81,33 +115,54 @@ def estimate(
     resume=False,
     cover=False,
     answers=False,
+    check_claims=False,
+    review=False,
+    jd_id: int | None = None,
     price_lookup=None,
 ) -> CostEstimate:
     """Past calls' tokens at today's prices (`prices.yaml`), averaged per action.
 
     If the price table cannot be read, every label is "unknown" rather than
-    falling back to logged costs that are known to be stale.
+    falling back to logged costs that are known to be stale. With `jd_id`, a
+    score or generate of an ad that has no role kind yet includes the
+    classifier's call.
     """
     budget = bool(config.budget_mode)
+    classify = False
+    if jd_id is not None and action in ("score", "generate"):
+        from jobagent.services import role_kind
+
+        try:
+            classify = role_kind.needs_classify(ws, jd_id)
+        except Exception:  # noqa: BLE001 - an estimate never blocks the work
+            classify = False
+    labels = labels_for(
+        action,
+        resume=resume,
+        cover=cover,
+        answers=answers,
+        classify=classify,
+        check_claims=check_claims,
+        review=review,
+    )
     try:
         model = resolve_route(config, _CALL_TYPE[action]).model
+        models = {label: resolve_route(config, _LABEL_CALL[label]).model for label in labels}
     except LLMError as exc:
         return CostEstimate(model=None, budget=budget, route_error=str(exc))
     try:
         records = load_runs(ws.runs_log_path)
     except SpendError:
         records = []
-    labels = labels_for(action, resume=resume, cover=cover, answers=answers)
     if price_lookup is None:
         try:
             price_lookup = load_prices().lookup
         except PriceError:
             price_lookup = lambda _model: None  # noqa: E731 - every label "unknown"
-    return CostEstimate(
-        model=model,
-        budget=budget,
-        per_label=expected_cost(records, labels, model, price_lookup),
-    )
+    per_label = {}
+    for label in labels:
+        per_label.update(expected_cost(records, [label], models[label], price_lookup))
+    return CostEstimate(model=model, budget=budget, per_label=per_label)
 
 
 def describe(est: CostEstimate) -> str:
@@ -119,7 +174,16 @@ def describe(est: CostEstimate) -> str:
     if est.unknown:
         return f"Price unknown for {est.model}: check prices.yaml."
     if est.unmeasured:
-        return f"No measurement for {est.model} yet ({', '.join(est.unmeasured)})."
+        measured = [v for v in est.per_label.values() if isinstance(v, tuple)]
+        if not measured:
+            return f"No measurement for {est.model} yet ({', '.join(est.unmeasured)})."
+        # Never a partial sum presented as the total: the measured part is
+        # stated as such, and what is missing is named.
+        part = sum(v[0] for v in measured)
+        return (
+            f"Expected ~${part:.2f} for what has been measured. "
+            f"No measurement yet for {', '.join(est.unmeasured)}."
+        )
     total = est.total_usd
     runs = "run" if est.samples == 1 else "runs"
     return f"Expected cost ~${total:.2f} (mean of {est.samples} {runs} on {est.model})."

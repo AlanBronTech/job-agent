@@ -226,7 +226,7 @@ def test_paste_round_trip_and_double_submit(client, ws, model, monkeypatch):
 
 def test_score_confirm_then_start(client, ws, ids, model):
     body = flat(client.post(f"/ads/{ids['contoso']}/score/confirm", data={"csrf": TOKEN}))
-    assert "Score Head of Engineering" in body and "Expected cost ~$" in body
+    assert "Score Head of Engineering" in body and "Expected" in body and "classify_role" in body
     assert model.clients == 0
 
     refused = client.post(f"/ads/{ids['contoso']}/score", data={"csrf": TOKEN})
