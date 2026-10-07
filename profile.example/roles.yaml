@@ -256,6 +256,12 @@ roles:
           practices.
         tags: [agile_transformation, cicd, leadership]
         evidence_strength: strong
+      - text: >-
+          Resolved a sustained performance problem with written expectations
+          and weekly check-ins, ending in a managed exit.
+        tags: [leadership]
+        evidence_strength: moderate
+        linked_story: underperformer
 
   - id: consultancy_lead
     title: Team Lead & Consultant (Contract)

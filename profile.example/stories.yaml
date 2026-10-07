@@ -110,6 +110,10 @@ stories:
     what_id_do_differently: >-
       Engage HR earlier. Waiting until the informal route had failed narrowed
       the options that remained.
+    # Kept out of written documents for people-focused roles: an ad that leads
+    # with coaching and care should not meet a managed exit first. Interview
+    # prep may still use it — the question will come.
+    exclude_for: [people_focused]
 
   - id: quality_under_pressure
     label: Compromised testing under deadline pressure
@@ -184,3 +188,21 @@ explanations:
     between stacks. Pre-empting this in writing converts better than waiting to
     be asked, because stack fit is a screening objection rather than a hiring
     one.
+
+# ---------------------------------------------------------------------------
+# Answer bank. Your own words for common application-form questions, keyed by
+# question type. The answers generator starts from these and tailors them to
+# the ad; numbers in them are checked against the profile like any other.
+# Types: summary, why_company, why_role, why_you, what_made_you_apply,
+# salary_expectation, notice_period, right_to_work, why_leaving.
+# ---------------------------------------------------------------------------
+
+answers:
+  summary: >-
+    Engineering manager who builds teams and ships platforms. Recently led a
+    15-person team through a move to Scrum and into daily use of agentic
+    coding tools, without lowering the review bar.
+  notice_period: Available to start within two weeks.
+  why_leaving: >-
+    The role ended because the commute was unsustainable. I am looking for a
+    team I can stay with.

@@ -338,3 +338,38 @@ def test_role_note_for_scorer_is_preserved(profile_factory) -> None:
     profile = load_profile(profile_factory(mutate))
 
     assert profile.roles.roles[0].note_for_scorer == "Title understates the scope."
+
+# --------------------------------------------------------------------------- #
+# Spec 003: exclusions and the answer bank
+# --------------------------------------------------------------------------- #
+
+
+def test_exclusions_and_the_answer_bank_load(example_dir: Path) -> None:
+    from jobagent.core.models import QuestionType, RoleKind
+
+    profile = load_profile(example_dir)
+    story = next(s for s in profile.stories.stories if s.id == "underperformer")
+    assert story.exclude_for == [RoleKind.people_focused]
+    assert QuestionType.notice_period in profile.stories.answers
+
+
+def test_an_unknown_role_kind_in_an_exclusion_is_rejected(profile_factory) -> None:
+    def mutate(path: Path) -> None:
+        def change(data: dict) -> None:
+            data["stories"][0]["exclude_for"] = ["people_person"]
+
+        edit_yaml(path / "stories.yaml", change)
+
+    with pytest.raises(ProfileError):
+        load_profile(profile_factory(mutate))
+
+
+def test_an_unknown_answer_type_is_rejected(profile_factory) -> None:
+    def mutate(path: Path) -> None:
+        def change(data: dict) -> None:
+            data["answers"]["favourite_colour"] = "Blue."
+
+        edit_yaml(path / "stories.yaml", change)
+
+    with pytest.raises(ProfileError):
+        load_profile(profile_factory(mutate))
