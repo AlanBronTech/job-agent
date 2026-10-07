@@ -66,7 +66,7 @@ and answer bank never enter the repo.
 
 - [X] T016 [P] [US2] Create `jobagent/core/coverage.py` (pure): `CoverageRow(requirement, evidence_ref, status: "covered"|"weak"|"missing"|"gap", where: list[str])`; `must_cover(assessment, excluded) -> list[(requirement, ref)]` from `requirements[]` with status `met`/`partial` and an `evidence_ref` not excluded; `coverage(rows, cited_refs, skills_text) -> list[CoverageRow]` where a ref counts as cited if a highlight or role bullet cites it, its entry, or a bullet within it; skills-table hit only → `weak`; `issues(rows)` → blocker `must-have missing`, warning `covered weakly`.
 - [X] T017 [US2] In `jobagent/core/generate.py` pass the must-cover list into the resume prompt (`{must_cover}`), compute `GeneratedResume.coverage`, add its issues; gap rows from the assessment listed as `gap`, never filled.
-- [ ] T018 [P] [US2] In `prompts/generate_resume.md` add the must-cover block: each listed requirement must be answered by a highlight or role bullet citing the listed evidence.
+- [X] T018 [P] [US2] In `prompts/generate_resume.md` add the must-cover block: each listed requirement must be answered by a highlight or role bullet citing the listed evidence.
 - [ ] T019 [US2] Surface coverage: `GenerateResult.coverage`; `jobagent/cli/generate.py` prints a coverage table (must-have → where / weak / gap); `assessment.md` gains a Coverage section; the UI run result shows it.
 - [ ] T020 [P] [US2] Tests `tests/test_coverage.py` (SC-003: evidenced must-haves all on the resume; missing → blocker; skills only → weak; gap stays gap; excluded evidence not demanded).
 

@@ -48,6 +48,17 @@ to answer the met requirements and to blunt the challenge points.
 {assessment_json}
 </assessment>
 
+## Must cover
+
+Each requirement below is evidenced in the profile. The resume must answer
+every one with a CAREER HIGHLIGHT or a role bullet that cites the evidence
+named — that id, its entry, or a bullet within it. A skills keyword alone does
+not count: a screener may read only the resume. This is checked.
+
+<must_cover>
+{must_cover}
+</must_cover>
+
 ## The catalogue — the only content that may appear
 
 <catalogue>
