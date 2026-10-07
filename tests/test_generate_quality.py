@@ -215,3 +215,21 @@ def test_two_company_sentences_warn(profile):
                                    "quote": "regional freight carriers"}])
     built = write_letter(profile, payload)
     assert ("company sentences", Severity.warning) in rules(built)
+
+
+def test_an_unlinked_bullet_in_profile_and_a_highlight_and_a_bullet_blocks(profile):
+    """The first real review's finding: one bullet told three times, no story linked."""
+    payload = selection(
+        profile_refs=[["startup_em.0"], []],
+        highlights=[{"label": "Startup delivery", "text": "Recruited and led a team of 6.",
+                     "source_ref": "startup_em.0"}],
+        roles=[{"role_id": "startup_em", "bullet_refs": ["startup_em.0"]}],
+    )
+    built, _ = resume(profile, payload)
+    assert any(i.rule == "story reused" and "startup_em.0" in i.detail for i in built.issues)
+
+
+def test_a_bare_entry_in_profile_and_a_highlight_is_not_reuse(profile):
+    payload = selection(profile_refs=[["recent_manager"], []])
+    built, _ = resume(profile, payload)
+    assert not any(i.rule == "story reused" for i in built.issues)

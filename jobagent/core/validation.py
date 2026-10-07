@@ -201,15 +201,32 @@ def story_of(ref: str, profile: Profile) -> str | None:
     return None
 
 
+def _evidence_key(ref: str, profile: Profile) -> str | None:
+    """What counts as "the same story" for the reuse caps.
+
+    The linked story when there is one; otherwise a single bullet is its own
+    story. Without the second half, the first real review caught what the
+    code did not: one team-building bullet in PROFILE, a highlight and the letter,
+    told from a bullet that links no story. A whole entry cited bare is not
+    counted — DataLlama in PROFILE and a highlight is how the master resume
+    reads.
+    """
+    story = story_of(ref, profile)
+    if story is not None:
+        return story
+    _, _, index = ref.partition(".")
+    return ref if index.isdigit() else None
+
+
 def story_uses(places: list[tuple[str, list[str]]], profile: Profile) -> dict[str, list[str]]:
-    """Story id -> the places it is told. A place counts a story once.
+    """Story (or unlinked bullet) -> the places it is told. A place counts it once.
 
     `places` is (place name, cited ids) — a resume section item, a letter
     paragraph, one answer.
     """
     uses: dict[str, list[str]] = {}
     for place, refs in places:
-        stories = {story_of(ref, profile) for ref in refs} - {None}
+        stories = {_evidence_key(ref, profile) for ref in refs} - {None}
         for story in sorted(stories):
             uses.setdefault(story, []).append(place)
     return uses
