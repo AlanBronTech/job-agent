@@ -46,7 +46,7 @@ from jobagent.services.refusals import (
     SupersedeFailed,
     VerdictIsSkip,
 )
-from jobagent.services import reapply, role_kind
+from jobagent.services import checks, reapply, role_kind
 from jobagent.services.results import GeneratePlan, GenerateResult
 from jobagent.services.scoring import refuse_if_reapplying
 from jobagent.services.workspace import Workspace
@@ -129,11 +129,16 @@ def generate(
     now: datetime,
     contact: str | None = None,
     before_spend=None,
+    check_claims: bool | None = None,
+    review: bool | None = None,
 ) -> GenerateResult:
     """Run generate. `before_spend` is called once every refusal has passed and
     immediately before the first model call: the CLI prints its cost line there."""
     if supersede and overwrite:
         raise ValueError("supersede and overwrite are mutually exclusive")
+    # None means "as configured"; both checks are on unless switched off.
+    check_claims = config.check_claims if check_claims is None else check_claims
+    review = config.review if review is None else review
     if not (resume or cover or questions):
         raise NothingSelected()
 
@@ -167,6 +172,9 @@ def generate(
         client = get_client(CallType.generate, config, ctx)
         kind = role_kind.stored(ws, jd_id)
         classify_client = None if kind else get_client(CallType.classify, config, ctx)
+        review_client = (
+            get_client(CallType.review, config, ctx) if (check_claims or review) else None
+        )
     except LLMError as exc:
         raise NoModel(str(exc)) from exc
 
@@ -188,6 +196,7 @@ def generate(
     issues = []
     unused = []
     coverage = []
+    claims = None  # None: not run (switched off, or nothing to check)
 
     if kind is None:
         try:
@@ -216,6 +225,12 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
         issues += letter.issues
+        sentences = getattr(letter, "sentences", [])
+        if check_claims and sentences:
+            claims = checks.check_claims(
+                config, ctx, sentences, profile, client_factory=lambda: review_client
+            )
+            issues += claim_issues(claims)
         content = CoverLetterContent(
             name=profile.roles.person.name,
             contact=contact if contact is not None else contact_line(profile),
@@ -264,7 +279,25 @@ def generate(
         warnings=warnings,
         role_kind=kind,
         coverage=coverage,
+        claims=claims,
     )
+
+
+def claim_issues(claims) -> list:
+    """Mismatches from the claim check as blockers, beside the code checks'."""
+    from jobagent.core.validation import Severity, ValidationIssue
+
+    if not isinstance(claims, list):
+        return []
+    return [
+        ValidationIssue(
+            rule="claim mismatch",
+            severity=Severity.blocker,
+            detail=m.problem,
+            excerpt=m.sentence,
+        )
+        for m in claims
+    ]
 
 
 def record_overrule(ws: Workspace, jd_id: int) -> str | None:

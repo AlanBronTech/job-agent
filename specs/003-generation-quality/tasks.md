@@ -83,7 +83,7 @@ and answer bank never enter the repo.
 - [X] T023 [P] [US3] Rewrite the output section of `prompts/generate_cover_letter.md` for the JSON contract: every sentence cites ids from the catalogue or stories, `"ad"` for framing the ad; never state a fact no cited evidence holds.
 - [X] T024 [P] [US3] Write `prompts/check_claims.md`: input is each sentence with the full text of each cited item; output `{"mismatches": [{"sentence": str, "problem": str}]}`; problems: overstated, merged people, wrong place or employer, detail not in evidence.
 - [X] T025 [US3] Create `jobagent/services/checks.py` with `NotChecked(reason)` and `check_claims(config, ctx, sentences, evidence: dict[str, str]) -> list[Mismatch] | NotChecked` on `CallType.review` with label `check_claims`; never raises on a model failure; `evidence_text(profile, id)` resolves an id to its text (bullet, entry, story, explanation, bank entry; `"ad"` → skipped).
-- [ ] T026 [US3] In `jobagent/services/documents.py` add `check_claims: bool = True` to `generate`; run after the letter (and answers) pass the code checks; mismatches become blocker issues `claim mismatch`; `GenerateResult.claims`.
+- [X] T026 [US3] In `jobagent/services/documents.py` add `check_claims: bool = True` to `generate`; run after the letter (and answers) pass the code checks; mismatches become blocker issues `claim mismatch`; `GenerateResult.claims`.
 - [ ] T027 [P] [US3] Tests `tests/test_citations.py` (SC-002; seeded "acquisition" test: the profile lacks it, a sentence citing a story that lacks it is flagged by the mocked claim check and the word is absent from a clean letter) and claim-check failure → `NotChecked` with documents still written.
 
 ---
