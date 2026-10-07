@@ -223,3 +223,48 @@ def test_a_failure_after_spending_names_what_was_written(ws, ids, fake_model, mo
 def test_supersede_and_overwrite_contradict(ws, ids, no_client):
     with pytest.raises(ValueError):
         run(ws, ids["acme"], supersede=True, overwrite=True)
+
+
+# -- spec 003: the role kind -------------------------------------------------------
+
+
+def test_the_kind_is_classified_after_the_estimate_and_reaches_every_builder(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.models import RoleClassification, RoleKind
+
+    kind = RoleClassification(primary=RoleKind.people_focused, reason="Invented.")
+    order, seen = [], []
+    monkeypatch.setattr(documents.role_kind, "ensure",
+                        lambda *a, **k: order.append("classify") or kind)
+    real_resume = documents.build_resume
+
+    def build_resume(*a, kind=None, **k):
+        seen.append(kind)
+        return real_resume(*a, **k)
+    monkeypatch.setattr(documents, "build_resume", build_resume)
+
+    result = run(ws, ids["acme"], before_spend=lambda: order.append("estimate"))
+    assert order == ["estimate", "classify"] and seen == [kind]
+    assert result.role_kind == kind
+    assessment_md = (result.folder / "assessment.md").read_text(encoding="utf-8")
+    assert "**Role kind:** people focused — Invented." in assessment_md
+
+
+def test_a_stored_kind_builds_no_classify_client(ws, ids, fake_model, monkeypatch):
+    from jobagent.adapters.llm import CallType
+    from jobagent.core.models import RoleClassification, RoleKind
+
+    with store.open_store(ws.db_path) as conn:
+        store.set_role_kind(conn, ids["acme"], RoleClassification(primary=RoleKind.technical_lead, reason="x"))
+    built = []
+    monkeypatch.setattr(documents, "get_client", lambda call_type, *a, **k: built.append(call_type) or object())
+    run(ws, ids["acme"])
+    assert CallType.classify not in built
+
+
+def test_a_failed_classification_spends_no_writer_call(ws, ids, fake_model, monkeypatch):
+    def fail(*a, **k):
+        raise documents.role_kind.RoleKindFailed("unusable")
+    monkeypatch.setattr(documents.role_kind, "ensure", fail)
+    with pytest.raises(GenerationFailed) as failed:
+        run(ws, ids["acme"])
+    assert failed.value.stage == "classify" and fake_model.calls == []
