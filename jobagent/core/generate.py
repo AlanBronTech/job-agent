@@ -515,7 +515,15 @@ def build_answers(
     *,
     client: LLMClient,
     kind: RoleClassification | None = None,
-) -> GeneratedText:
+    limit: int | None = None,
+) -> "GeneratedAnswers":
+    """One answer per question, short and long, each sentence cited (spec 003, US7).
+
+    Starts from Alan's answer bank where it has an entry for the question's
+    type. Checked in code: the character limit on every variant, the
+    citations, each story told in one answer at most across the form, and a
+    "why this company" answer citing only the ad (or his own bank entry).
+    """
     if not questions:
         raise GenerateError("No application questions were supplied.")
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
@@ -527,14 +535,146 @@ def build_answers(
             role_kind=role_kind_block(kind),
             catalogue=_render_catalogue(profile, build_catalogue(profile, excluded), excluded),
             stories=_render_stories(profile, excluded),
+            answer_bank=_render_bank(profile),
+            limit=f"{limit} characters" if limit else "none given; keep the long variant under 150 words",
             questions="\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1)),
             voice=profile.voice,
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
 
-    return _write_and_check(
-        client, prompt, ANSWERS_PROMPT, profile, context="The answers"
+    known = known_citations(profile, excluded)
+    attempt_prompt = prompt
+    result = GeneratedAnswers(text="")
+    for attempt in range(REWRITE_ATTEMPTS + 1):
+        try:
+            parsed, _ = client.complete_json(
+                prompt=attempt_prompt, label=ANSWERS_PROMPT, max_tokens=MAX_TOKENS
+            )
+            form = _Form.model_validate(parsed)
+        except LLMError as exc:
+            raise GenerateError(f"Model call failed while writing: {exc}") from exc
+        except ValidationError as exc:
+            raise GenerateError(f"The model's answers did not match the contract.\n{exc}") from exc
+        result = _check_answers(form.answers, profile, known, limit)
+        failures = [i for i in result.issues if i.severity is Severity.blocker]
+        if not failures or attempt == REWRITE_ATTEMPTS:
+            break
+        attempt_prompt = f"{prompt}\n\n{_rewrite_instruction(failures, json_output=True)}"
+    return result
+
+
+class _Answer(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    question: str
+    type: str = "other"
+    short: list[Sentence] = Field(default_factory=list)
+    long: list[Sentence] = Field(default_factory=list)
+
+
+class _Form(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    answers: list[_Answer]
+
+
+@dataclass
+class GeneratedAnswers:
+    text: str
+    issues: list[ValidationIssue] = field(default_factory=list)
+    answers: list = field(default_factory=list)
+
+    @property
+    def sentences(self) -> list[Sentence]:
+        return [s for a in self.answers for s in (*a.short, *a.long)]
+
+
+# The answer types that may cite only the ad, or Alan's own words for them.
+_COMPANY_TYPES = {"why_company": {"ad", "why_company"}}
+
+
+def _check_answers(
+    answers: list[_Answer], profile: Profile, known: set[str], limit: int | None
+) -> GeneratedAnswers:
+    issues: list[ValidationIssue] = []
+    for n, answer in enumerate(answers, 1):
+        context = f"Answer {n}"
+        for variant in ("short", "long"):
+            sentences = getattr(answer, variant)
+            text = " ".join(s.text.strip() for s in sentences)
+            if not text:
+                issues.append(
+                    ValidationIssue(
+                        rule="missing variant",
+                        severity=Severity.blocker,
+                        detail=f"{context} has no {variant} variant.",
+                        excerpt=answer.question,
+                    )
+                )
+                continue
+            issues += validate_prose(text, profile, context=f"{context} ({variant})")
+            issues += check_citations([sentences], known, context=f"{context} ({variant})")
+            if limit and len(text) > limit:
+                issues.append(
+                    ValidationIssue(
+                        rule="answer over limit",
+                        severity=Severity.blocker,
+                        detail=(
+                            f"{context}'s {variant} variant is {len(text)} characters "
+                            f"against a {limit}-character limit."
+                        ),
+                        excerpt=answer.question,
+                    )
+                )
+        allowed = _COMPANY_TYPES.get(answer.type)
+        if allowed:
+            stray = {
+                ref for s in (*answer.short, *answer.long) for ref in s.cites
+            } - allowed
+            if stray:
+                issues.append(
+                    ValidationIssue(
+                        rule="company claim not from the ad",
+                        severity=Severity.blocker,
+                        detail=(
+                            f"{context} is about the company and cites "
+                            f"{', '.join(sorted(stray))}. Say only what the ad says, "
+                            "or what Alan's own answer bank says."
+                        ),
+                        excerpt=answer.question,
+                    )
+                )
+    issues += check_story_reuse(
+        story_uses(
+            [
+                (f"answer {n}", [r for s in (*a.short, *a.long) for r in s.cites])
+                for n, a in enumerate(answers, 1)
+            ],
+            profile,
+        ),
+        cap=1,
+        context="The form's answers",
+    )
+    return GeneratedAnswers(text=answers_markdown(answers), issues=issues, answers=answers)
+
+
+def answers_markdown(answers: list[_Answer]) -> str:
+    """`answers.md`: each question, its type, then the short and long variants."""
+    lines: list[str] = []
+    for answer in answers:
+        lines += [f"### {answer.question}", "", f"*{answer.type.replace('_', ' ')}*", ""]
+        for variant in ("short", "long"):
+            text = " ".join(s.text.strip() for s in getattr(answer, variant))
+            lines += [f"**{variant.capitalize()}** ({len(text)} characters)", "", text, ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_bank(profile: Profile) -> str:
+    if not profile.stories.answers:
+        return "(empty)"
+    return "\n".join(
+        f"{key.value}: {' '.join(text.split())}" for key, text in profile.stories.answers.items()
     )
 
 
