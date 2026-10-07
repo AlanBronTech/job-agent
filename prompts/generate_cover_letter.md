@@ -80,9 +80,15 @@ from what you are shown. Do not refer to it from memory.
    already agreed to give. Do not invent a different one.
 6. **Never state or compute a career length.** No years-of-experience figures
    in any form, no "since 2006", no decades. This is checked and rejected.
-7. **Each story once.** A story (or a bullet linked to it) is told in one
+7. **One sentence about the employer, from the ad alone.** If the ad says
+   what the company does — its product, customers or mission — write one
+   sentence that draws on it, cite `"ad"`, and put the ad's own words you drew
+   on in `quote` (verbatim, a phrase or a sentence). The quote is checked
+   against the ad. If the ad says nothing about the company, write no such
+   sentence: never fill it from general knowledge.
+8. **Each story once.** A story (or a bullet linked to it) is told in one
    paragraph only; a second paragraph citing it is rejected.
-8. No enthusiasm as a substitute for evidence. No restating the ad back at the
+9. No enthusiasm as a substitute for evidence. No restating the ad back at the
    reader. No flattering the company. See the banned lists in the voice above.
 
 ## Output
@@ -93,6 +99,7 @@ JSON only. Paragraphs in order, each a list of sentences:
   "paragraphs": [
     [
       {"text": "You are hiring an Engineering Manager to grow a team of eight.", "cites": ["ad"]},
+      {"text": "Route planning for regional carriers is a problem I would like to work on.", "cites": ["ad"], "quote": "route planning for regional freight carriers"},
       {"text": "I recruited and onboarded nine people into a 15-person team.", "cites": ["recent_manager.0"]}
     ],
     [

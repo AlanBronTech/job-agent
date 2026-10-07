@@ -133,7 +133,7 @@ and answer bank never enter the repo.
 **Independent test**: an ad describing route planning yields one sentence naming it; an ad without a company description yields none.
 
 - [X] T045 [US6] Letter contract: a sentence about the employer cites `"ad"` and carries `quote`, a verbatim span of the ad; in `generate.py` check the quote occurs in `jd.raw_text` (whitespace- and case-normalised) → else blocker `company claim not in ad`; more than one quoted sentence → warning.
-- [ ] T046 [P] [US6] `prompts/generate_cover_letter.md`: one company sentence drawn only from the ad's own words, with its `quote`; none when the ad says nothing about the company.
+- [X] T046 [P] [US6] `prompts/generate_cover_letter.md`: one company sentence drawn only from the ad's own words, with its `quote`; none when the ad says nothing about the company.
 - [ ] T047 [P] [US6] Tests in `tests/test_generate_quality.py` (quote present passes; invented quote blocks; second ad with no about-us text and no company sentence passes).
 
 ---
