@@ -14,11 +14,12 @@
   {% if choice.resume %}<input type="hidden" name="resume" value="1">{% endif %}
   {% if choice.cover %}<input type="hidden" name="cover" value="1">{% endif %}
   <textarea name="questions" hidden>{{ choice.questions | join('\n') }}</textarea>
+  {% if choice.limit %}<input type="hidden" name="limit" value="{{ choice.limit }}">{% endif %}
 
   <div class="panel">
     <strong>Will write</strong> into <code>{{ plan.folder }}</code>
     <ul>{% for name in plan.names %}<li>{{ name }}</li>{% endfor %}</ul>
-    {% if choice.questions %}<p class="detail">{{ choice.questions | length }} application question(s) to answer.</p>{% endif %}
+    {% if choice.questions %}<p class="detail">{{ choice.questions | length }} application question(s) to answer{% if choice.limit %}, each within {{ choice.limit }} characters{% endif %}.</p>{% endif %}
   </div>
 
   {% if plan.history and plan.history.encounters %}
