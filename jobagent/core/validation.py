@@ -134,6 +134,57 @@ def blockers(issues: list[ValidationIssue]) -> list[ValidationIssue]:
     return [issue for issue in issues if issue.severity is Severity.blocker]
 
 
+# The citation a sentence about the ad or the employer carries instead of a
+# profile id. Framing, not a claim about Alan.
+AD = "ad"
+
+
+def check_citations(
+    paragraphs, known: set[str], *, context: str = "The letter"
+) -> list[ValidationIssue]:
+    """Every sentence cites something, and everything cited exists (spec 003).
+
+    `paragraphs` is a list of lists of sentences, each with `.text` and
+    `.cites`. A sentence asserting something about Alan cites profile ids; one
+    framing the ad cites `"ad"`. No citation, or an id that is not in `known`,
+    is a blocker: the first is how the worked example's letter stated a fact
+    the profile did not hold, the second is an id made up to look like one.
+    """
+    issues: list[ValidationIssue] = []
+    for paragraph in paragraphs:
+        for sentence in paragraph:
+            if not sentence.cites:
+                issues.append(
+                    ValidationIssue(
+                        rule="uncited claim",
+                        severity=Severity.blocker,
+                        detail=(
+                            f"{context} has a sentence that cites no evidence. "
+                            f"Every sentence about Alan cites a profile id; one "
+                            f"about the ad cites {AD!r}."
+                        ),
+                        excerpt=sentence.text,
+                    )
+                )
+                continue
+            for ref in sentence.cites:
+                if ref != AD and ref not in known:
+                    issues.append(
+                        ValidationIssue(
+                            rule="unknown citation",
+                            severity=Severity.blocker,
+                            detail=(
+                                f"{context} cites {ref!r}, which is not evidence "
+                                "the writer was shown. Check the sentence: either "
+                                "the id was invented, or the evidence is excluded "
+                                "for this kind of role."
+                            ),
+                            excerpt=sentence.text,
+                        )
+                    )
+    return issues
+
+
 # --------------------------------------------------------------------------- #
 # Individual rules
 # --------------------------------------------------------------------------- #
