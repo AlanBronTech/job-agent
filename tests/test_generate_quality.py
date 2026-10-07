@@ -173,3 +173,45 @@ def test_defensive_phrasing_blocks_and_contrast_warns(profile):
         "I led people, not just code. I chose to coach rather than replace.", profile)
     assert ("contrast phrasing", Severity.warning) in {(i.rule, i.severity) for i in issues}
     assert not validate_prose("I chose to coach rather than replace.", profile)
+
+
+# -- US6: one company sentence, from the ad -------------------------------------------
+
+
+def company_letter(quote):
+    sentence = {"text": "You build route planning for regional freight carriers.", "cites": ["ad"]}
+    if quote:
+        sentence["quote"] = quote
+    return {"paragraphs": [[sentence,
+                            {"text": "I recruited and onboarded nine people.", "cites": ["recent_manager.0"]}]]}
+
+
+def write_letter(profile, payload, jd=None):
+    client = RoutedClient({"generate_cover_letter": [payload]})
+    return build_cover_letter(jd or northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
+
+
+def test_a_company_sentence_quoting_the_ad_passes(profile):
+    built = write_letter(profile, company_letter("route planning for regional freight carriers"))
+    assert built.issues == [] and "route planning" in built.text
+
+
+def test_an_invented_quote_blocks(profile):
+    built = write_letter(profile, company_letter("the market leader in freight software"))
+    assert any(i.rule == "company claim not in ad" for i in built.issues)
+
+
+def test_an_ad_without_a_company_description_needs_no_company_sentence(profile):
+    from tests.quality_seed import fabrikam
+
+    payload = {"paragraphs": [[{"text": "I recruited and onboarded nine people.", "cites": ["recent_manager.0"]}]]}
+    built = write_letter(profile, payload, jd=fabrikam())
+    assert built.issues == []
+
+
+def test_two_company_sentences_warn(profile):
+    payload = company_letter("route planning for regional freight carriers")
+    payload["paragraphs"].append([{"text": "Regional freight is your market.", "cites": ["ad"],
+                                   "quote": "regional freight carriers"}])
+    built = write_letter(profile, payload)
+    assert ("company sentences", Severity.warning) in rules(built)
