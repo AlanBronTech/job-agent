@@ -49,7 +49,7 @@ def ad_list(request: Request, sort: str = "date"):
 
 
 @router.get("/ads/{jd_id:int}")
-def ad_page(request: Request, jd_id: int):
+def ad_page(request: Request, jd_id: int, saved: int = 0):
     try:
         detail = listing.ad_detail(workspace(request), jd_id, today=request.app.state.today())
     except NoSuchAd:
@@ -69,8 +69,34 @@ def ad_page(request: Request, jd_id: int):
             "d": detail,
             "run": runs.active_run_for(ws, jd_id) or _recent(runs.last_run_for(ws, jd_id)),
             "reapply": reapply.check(ws, jd_id, request.app.state.today()),
+            "pipeline_saved": bool(saved),
         },
     )
+
+
+@router.post("/ads/{jd_id:int}/pipeline")
+async def pipeline_save(request: Request, jd_id: int):
+    """Record where an application stands, as `apply` and `outcome` do. Free."""
+    form = await checked_form(request)
+    try:
+        pipeline.update_from_form(
+            workspace(request),
+            jd_id,
+            status=str(form.get("status") or ""),
+            applied_on=str(form.get("applied_on") or ""),
+            channel=str(form.get("channel") or ""),
+            channel_detail=str(form.get("channel_detail") or ""),
+            worth=str(form.get("worth") or ""),
+            why=str(form.get("why") or ""),
+            note=str(form.get("note") or ""),
+            today=request.app.state.today(),
+        )
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except ValueError as exc:
+        return _back_to_ad(request, jd_id, f"Not saved: {exc}")
+    return RedirectResponse(f"/ads/{jd_id}?saved=1#pipeline", status_code=303)
 
 
 # Plain form POSTs answered with 204: the browser stays on the page, and the

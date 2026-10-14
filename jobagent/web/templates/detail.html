@@ -190,7 +190,7 @@
 {% endif %}
 </div>
 
-<h2>Pipeline</h2>
+<h2 id="pipeline">Pipeline</h2>
 <div class="panel">
 {% if d.application %}
   {{ status(d.application.status) }}
@@ -202,6 +202,38 @@
   <span class="muted">No application recorded.</span>
   {% if d.folders.any %}<span class="pill warn">documents generated, not recorded as applied</span>{% endif %}
 {% endif %}
+  {% if pipeline_saved %}<p class="detail"><strong>Saved.</strong></p>{% endif %}
+  {% if pipeline_problem %}<div class="banner bad">{{ pipeline_problem }}</div>{% endif %}
+  <form class="pipeline" method="post" action="/ads/{{ jd.id }}/pipeline">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    {% set current = d.application.status.value if d.application else "" %}
+    <div class="fields">
+      <label>Status
+        <select id="status" name="status">
+          {% for value, label in pipeline.statuses.items() %}
+          <option value="{{ value }}" {% if value == (current or "applied") %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select></label>
+      <label>Applied on
+        <input type="date" id="applied_on" name="applied_on"
+               value="{{ d.application.applied_on.isoformat() if d.application and d.application.applied_on else '' }}"></label>
+      <label>Channel
+        <select id="channel" name="channel">
+          <option value="">{{ "keep: " ~ d.application.channel if d.application and d.application.channel else "—" }}</option>
+          {% for c in pipeline.channels %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select></label>
+      <label>Who or where <input type="text" id="channel_detail" name="channel_detail" placeholder="e.g. recruiter's name, agency"></label>
+      <label>Worth applying?
+        <select id="worth" name="worth">
+          <option value="">{{ "keep: " ~ pipeline.worth[d.application.worth_applying.value] if d.application else "—" }}</option>
+          {% for value, label in pipeline.worth.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select></label>
+      <label>Why <input type="text" id="why" name="why" placeholder="one line, read in the eval report"></label>
+    </div>
+    <label>Note <input type="text" id="note" name="note" class="wide" placeholder="added to the notes, never replacing them"></label>
+    <p><button type="submit" class="primary">Save</button>
+      <span class="detail">Free. Applied with no date gets today's.</span></p>
+  </form>
 </div>
 
 <details>

@@ -72,8 +72,14 @@ on an invented person and seven invented ads, in `~/job-agent-demo`. Setting it
 up spends nothing; the Score and Generate buttons are live and show their cost
 first.
 
-**Still in the terminal for now:** `apply`, `outcome`, `prep`, and anything
-under `jd amend`, `jd delete`, `eval` and `spend`.
+- **Pipeline.** At the foot of each job's page: dropdowns for the status
+  (applied, recruiter call, first interview, rejected at screening …), the
+  channel, and whether it was worth applying, plus the date, who or where, a
+  one-line why and a note. It writes what `apply` and `outcome` write; applied
+  with no date gets today's, and a note is added, never replacing earlier ones.
+
+**Still in the terminal for now:** `prep`, and anything under `jd amend`,
+`jd delete`, `eval` and `spend`.
 
 ---
 

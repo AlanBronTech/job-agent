@@ -228,3 +228,40 @@ def test_hundred_ads_render_quickly(client, ws):
         started = time.perf_counter()
         assert client.get(path).status_code == 200
         assert time.perf_counter() - started < 1.0, path
+
+
+# -- recording where an application stands, from its page -------------------------
+
+
+def test_the_pipeline_form_records_applied_with_todays_date(client, ws, ids):
+    page = client.get(f"/ads/{ids['contoso']}").text
+    assert 'name="status"' in page and "Applied, no reply" in page and "careers site" in page
+    saved = client.post(f"/ads/{ids['contoso']}/pipeline", data={
+        "csrf": TOKEN, "status": "applied", "channel": "recruiter", "channel_detail": "Jane Smith",
+        "note": "Sent the v2 resume."})
+    assert saved.status_code == 303
+    with store.open_store(ws.db_path) as conn:
+        app = store.get_application(conn, ids["contoso"])
+    assert app.status.value == "applied" and app.applied_on == TODAY
+    assert app.channel == "recruiter — Jane Smith" and app.notes == "Sent the v2 resume."
+    assert "Saved." in client.get(f"/ads/{ids['contoso']}?saved=1").text
+
+
+def test_the_pipeline_form_moves_an_outcome_and_keeps_what_is_not_changed(client, ws, ids):
+    client.post(f"/ads/{ids['contoso']}/pipeline", data={"csrf": TOKEN, "status": "applied",
+                                                          "channel": "seek", "applied_on": "2026-09-20"})
+    client.post(f"/ads/{ids['contoso']}/pipeline", data={"csrf": TOKEN, "status": "interview_1",
+                                                          "worth": "yes", "why": "Got a call."})
+    with store.open_store(ws.db_path) as conn:
+        app = store.get_application(conn, ids["contoso"])
+    assert (app.status.value, app.channel, str(app.applied_on)) == ("interview_1", "seek", "2026-09-20")
+    assert app.worth_applying.value == "yes" and app.worth_why == "Got a call."
+
+
+def test_a_bad_status_or_token_changes_nothing(client, ws, ids):
+    assert client.post(f"/ads/{ids['contoso']}/pipeline",
+                       data={"csrf": TOKEN, "status": "hired"}).status_code == 409
+    assert client.post(f"/ads/{ids['contoso']}/pipeline",
+                       data={"csrf": "wrong", "status": "applied"}).status_code in (400, 403)
+    with store.open_store(ws.db_path) as conn:
+        assert store.get_application(conn, ids["contoso"]) is None

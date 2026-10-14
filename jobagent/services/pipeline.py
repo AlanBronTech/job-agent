@@ -72,3 +72,88 @@ def outcome(
 ) -> tuple[JobDescription, Application]:
     """Record what became of an application, or that it was never made."""
     return save(ws, jd_id, status=status, worth=worth, worth_why=why, notes=note)
+
+
+# What the UI's dropdowns offer. Plain words for each status, in the order an
+# application moves through them.
+STATUS_LABELS: dict[str, str] = {
+    "identified": "Saved, not applied yet",
+    "applied": "Applied",
+    "applied_no_reply": "Applied, no reply",
+    "recruiter_call": "Recruiter call",
+    "interview_1": "First interview",
+    "interview_2": "Second interview",
+    "offer": "Offer",
+    "rejected_screen": "Rejected at screening",
+    "rejected_after_interview": "Rejected after interview",
+    "ghosted_after_contact": "Went quiet after contact",
+    "withdrew": "Withdrew",
+    "not_applied": "Not applied",
+}
+
+CHANNELS: tuple[str, ...] = (
+    "seek",
+    "linkedin",
+    "careers site",
+    "recruiter",
+    "email",
+    "referral",
+    "other",
+)
+
+WORTH_LABELS: dict[str, str] = {
+    "yes": "Yes, worth the day",
+    "no": "No, not worth it",
+    "unsure": "Unsure",
+}
+
+
+def update_from_form(
+    ws: Workspace,
+    jd_id: int,
+    *,
+    status: str,
+    applied_on: str = "",
+    channel: str = "",
+    channel_detail: str = "",
+    worth: str = "",
+    why: str = "",
+    note: str = "",
+    today: date,
+) -> tuple[JobDescription, Application]:
+    """The UI's pipeline form, validated, as one `save`.
+
+    An application recorded as applied with no date gets today's, the way
+    `jobagent apply` does. A channel is "recruiter — Jane Smith" when a detail
+    is given, the convention the CLI's records already use.
+    """
+    try:
+        new_status = ApplicationStatus(status)
+    except ValueError as exc:
+        raise ValueError(f"Unknown status {status!r}") from exc
+    day: date | None = None
+    if applied_on:
+        day = date.fromisoformat(applied_on)
+    chosen = channel if channel in CHANNELS else ""
+    detail = channel_detail.strip()
+    full_channel = None
+    if chosen and detail:
+        full_channel = f"{chosen} — {detail}"
+    elif chosen:
+        full_channel = chosen
+    elif detail:
+        full_channel = detail
+    with store.open_store(ws.db_path) as conn:
+        existing = store.get_application(conn, jd_id)
+    if day is None and new_status is ApplicationStatus.applied and not (existing and existing.applied_on):
+        day = today
+    return save(
+        ws,
+        jd_id,
+        status=new_status,
+        applied_on=day,
+        channel=full_channel,
+        worth=Worth(worth) if worth in WORTH_LABELS else None,
+        worth_why=why.strip(),
+        notes=note.strip(),
+    )
