@@ -102,6 +102,14 @@ def workspace(request: Request) -> Workspace:
     return request.app.state.workspace_factory()
 
 
+def config_of(request: Request):
+    """The config with the Settings page's choices applied, read fresh each
+    request so a saved change takes effect without a restart."""
+    from jobagent.services import settings
+
+    return settings.apply(request.app.state.config)
+
+
 def render(request: Request, name: str, context: dict, status_code: int = 200):
     """Render a page. Every page carries the banner of finished, unseen runs (FR-016b)."""
     from jobagent.services import runs

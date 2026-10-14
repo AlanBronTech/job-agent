@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Settings · job-agent{% endblock %}
+{% block main %}
+<h1>Settings</h1>
+{% if saved %}<div class="banner done">Saved. The next run uses these.</div>{% endif %}
+<p class="detail">Which model does each step, and how hard it thinks. "Default" means the built-in choice shown beside it.
+  Free-tier models have a daily cap; when it runs out the step moves to Claude Haiku 4.5, the cheapest paid model.
+  Google may use what is sent on the free tier to improve its products, so the column "Sees" says what each step sends.</p>
+
+<form method="post" action="/settings">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <div class="panel">
+    <table class="settings">
+      <thead><tr><th>Step</th><th>Sees</th><th>Model</th><th>Reasoning</th></tr></thead>
+      <tbody>
+      {% for v in s.steps %}
+        <tr>
+          <td><strong>{{ v.step.label }}</strong></td>
+          <td class="muted">{{ v.step.sees }}</td>
+          <td>
+            <select id="route_{{ v.step.key }}" name="route_{{ v.step.key }}">
+              <option value="" {% if not v.chosen %}selected{% endif %}>Default ({{ v.default_route.split(':')[1] if ':' in v.default_route else v.default_route }})</option>
+              {% for m in s.models %}
+              <option value="{{ m.route }}" {% if v.chosen == m.route %}selected{% endif %} {% if not m.available %}disabled{% endif %}>
+                {{ m.label }}{% if not m.available %} (no API key){% endif %}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select id="effort_{{ v.step.key }}" name="effort_{{ v.step.key }}">
+              <option value="default" {% if v.effort == "default" %}selected{% endif %}>Default ({{ v.default_effort }})</option>
+              {% for e in s.efforts %}<option value="{{ e }}" {% if v.effort == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <strong>Checks after writing</strong>
+    <label><input type="checkbox" id="check_claims" name="check_claims" value="1" {% if s.check_claims %}checked{% endif %}>
+      Claim check: each letter or answer sentence against its evidence, about $0.01</label>
+    <label><input type="checkbox" id="review" name="review" value="1" {% if s.review %}checked{% endif %}>
+      Independent review of the finished documents, about $0.12</label>
+    <p class="detail">These are the defaults. The confirm page before each run still lets you change them for that run.</p>
+  </div>
+
+  <div class="panel">
+    <strong>Models</strong>
+    <ul class="checks">
+    {% for m in s.models %}<li><span class="mark muted">·</span><span>{{ m.label }} — <span class="muted">{{ m.price }}</span>{% if not m.available %} <span class="pill warn">no API key</span>{% endif %}</span></li>{% endfor %}
+    </ul>
+    <p class="detail">Reasoning: low is fastest and cheapest, high the most thorough. Most of a call's cost is its reasoning, so this matters more than the model for the steps that write.</p>
+  </div>
+
+  <p><button type="submit" class="primary">Save settings</button>
+    <span class="detail">Saved to <code>{{ s.path }}</code>.</span></p>
+</form>
+{% endblock %}

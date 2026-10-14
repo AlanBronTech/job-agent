@@ -29,6 +29,6 @@ def test_the_demo_seeds_once_and_every_page_renders(tmp_path):
                      port=8765, token="t", runner=SyncRunner())
     client = TestClient(app, base_url="http://127.0.0.1:8765", follow_redirects=False)
     client.get("/?t=t")
-    for url in ["/", "/?sort=score", "/ads/1", "/ads/4", "/ads/7", "/batch", "/ads/new"]:
+    for url in ["/", "/?sort=score", "/ads/1", "/ads/4", "/ads/7", "/batch", "/ads/new", "/settings"]:
         assert client.get(url).status_code == 200, url
     assert "Northwind Freight" in client.get("/").text

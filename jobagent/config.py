@@ -110,5 +110,7 @@ class Config(BaseSettings):
 
 @lru_cache
 def get_config() -> Config:
-    """Return the process-wide config, loaded once."""
-    return Config()
+    """The config from `.env`, with the UI's saved settings laid over it."""
+    from jobagent.services import settings
+
+    return settings.apply(Config())

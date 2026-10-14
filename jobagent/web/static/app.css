@@ -133,3 +133,10 @@ textarea { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--lin
 .outcome { color: var(--ink); margin-top: 8px; }
 h2.inline-h { margin: 0 0 8px; }
 input[type="text"] { font: inherit; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+
+/* Settings */
+table.settings { width: 100%; border-collapse: collapse; }
+table.settings th, table.settings td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+table.settings th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+table.settings select { max-width: 100%; }
+.panel label { display: block; margin-top: 6px; }

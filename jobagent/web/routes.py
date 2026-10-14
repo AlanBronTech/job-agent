@@ -36,7 +36,7 @@ from jobagent.services.refusals import (
     UnreadableAd,
 )
 from jobagent.web import work
-from jobagent.web.app import checked_form, render, workspace
+from jobagent.web.app import checked_form, config_of, render, workspace
 
 router = APIRouter()
 
@@ -181,7 +181,7 @@ def _limit(raw) -> int | None:
 def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str | None = None):
     """The confirmation page. Everything on it is free to compute."""
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     today = request.app.state.today()
     try:
         plan = documents.plan(
@@ -234,18 +234,18 @@ def _back_to_ad(request: Request, jd_id: int, problem: str):
 @router.post("/ads/{jd_id}/generate/confirm")
 async def generate_confirm(request: Request, jd_id: int):
     form = await checked_form(request)
-    return _generate_confirm(request, jd_id, _generate_choice(form, request.app.state.config))
+    return _generate_confirm(request, jd_id, _generate_choice(form, config_of(request)))
 
 
 @router.post("/ads/{jd_id}/generate")
 async def generate_start(request: Request, jd_id: int):
     form = await checked_form(request)
-    choice = _generate_choice(form, request.app.state.config)
+    choice = _generate_choice(form, config_of(request))
     if form.get("confirmed") != "1":
         return _generate_confirm(request, jd_id, choice, "Nothing was started: confirm the cost first.")
 
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     today = request.app.state.today()
     try:
         plan = documents.plan(
@@ -359,7 +359,7 @@ async def _add_input(request: Request, form, ws):
 
 def _add_confirm(request: Request, ad, name: str | None, source: str, problem: str | None = None):
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     return render(
         request,
         "add_confirm.html",
@@ -391,7 +391,7 @@ async def add_confirm(request: Request):
 async def add_start(request: Request):
     form = await checked_form(request)
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     source = str(form.get("source") or "").strip() or None
     try:
         ad, name = await _add_input(request, form, ws)
@@ -424,7 +424,7 @@ async def add_start(request: Request):
 
 def _score_confirm(request: Request, jd_id: int, force: bool, problem: str | None = None):
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     try:
         jd, seen_before = scoring.load(ws, jd_id)
     except NoSuchAd:
@@ -460,7 +460,7 @@ async def score_start(request: Request, jd_id: int):
     if form.get("confirmed") != "1":
         return _score_confirm(request, jd_id, force, "Nothing was started: confirm the cost first.")
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     try:
         jd, _ = scoring.load(ws, jd_id)
     except NoSuchAd:
@@ -515,7 +515,7 @@ async def reapply_decide(request: Request, jd_id: int):
 
 def _batch_page(request: Request, problem: str | None = None, confirm: dict | None = None):
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     today = request.app.state.today()
     new = batches.new_files(ws)
     batch_id = batches.latest(ws)
@@ -571,7 +571,7 @@ async def batch_parse(request: Request):
     if form.get("confirmed") != "1":
         return _batch_page(request, "Nothing was started: confirm the cost first.")
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     missing = readiness.missing(ws, config, "add_ad")
     if missing:
         return _batch_page(request, "Nothing was started: " + " ".join(missing))
@@ -599,7 +599,7 @@ async def batch_score_confirm(request: Request):
     if not ids:
         return _batch_page(request, "Select at least one ad to score.")
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     plan = _score_plan(ws, ids, request.app.state.today())
     estimate = costs.estimate(ws, config, "score")
     return _batch_page(request, confirm={
@@ -618,7 +618,7 @@ async def batch_score(request: Request):
     if form.get("confirmed") != "1":
         return _batch_page(request, "Nothing was started: confirm the cost first.")
     ws = workspace(request)
-    config = request.app.state.config
+    config = config_of(request)
     missing = readiness.missing(ws, config, "score")
     if missing:
         return _batch_page(request, "Nothing was started: " + " ".join(missing))
@@ -665,3 +665,28 @@ def _score_plan(ws, ids: list[int], today) -> dict:
         else:
             go.append((jd_id, jd.title))
     return {"go": go, "refused": refused}
+
+
+# --------------------------------------------------------------------------- #
+# Settings
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/settings")
+def settings_page(request: Request, saved: int = 0):
+    from jobagent.services import settings
+
+    return render(request, "settings.html", {
+        "nav": "settings",
+        "s": settings.view(request.app.state.config),
+        "saved": bool(saved),
+    })
+
+
+@router.post("/settings")
+async def settings_save(request: Request):
+    from jobagent.services import settings
+
+    form = await checked_form(request)
+    settings.save(request.app.state.config, settings.from_form(form))
+    return RedirectResponse("/settings?saved=1", status_code=303)
