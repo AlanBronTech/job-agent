@@ -213,6 +213,7 @@ def generate(
     unused = []
     coverage = []
     claims = None  # None: not run (switched off, or nothing to check)
+    on_resume: dict[str, str] = {}  # what the letter must not repeat
     rendered: dict[str, str] = {}  # what the reviewer reads
 
     if kind is None:
@@ -233,6 +234,7 @@ def generate(
         issues += built.issues
         unused = built.unused
         coverage = getattr(built, "coverage", [])
+        on_resume = getattr(built, "on_page", {})
         rendered["resume"] = (
             built.content if isinstance(built.content, str) else resume_text(built.content)
         )
@@ -243,7 +245,9 @@ def generate(
 
     if cover:
         try:
-            letter = build_cover_letter(jd, profile, assessment, client=client, kind=kind)
+            letter = build_cover_letter(
+                jd, profile, assessment, client=client, kind=kind, on_resume=on_resume
+            )
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
         sentences = getattr(letter, "sentences", [])
@@ -258,7 +262,7 @@ def generate(
                 try:
                     letter = build_cover_letter(
                         jd, profile, assessment, client=client, kind=kind,
-                        feedback=claims_feedback(found),
+                        feedback=claims_feedback(found), on_resume=on_resume,
                     )
                 except GenerateError as exc:
                     raise GenerationFailed("cover", exc, written) from exc

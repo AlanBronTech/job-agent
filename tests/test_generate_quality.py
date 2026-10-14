@@ -286,3 +286,17 @@ def test_a_highlight_restating_a_bullet_blocks_and_the_resume_is_asked_again(pro
     prompts = client.prompts["generate_resume"]
     assert len(prompts) == 2 and "highlight repeats a bullet" in prompts[1]
     assert not any(i.rule == "highlight repeats a bullet" for i in built.issues)
+
+
+def test_the_letter_is_told_what_the_resume_says_and_may_not_copy_it(profile):
+    line = profile.roles.roles[0].bullets[0].text
+    copied = {"paragraphs": [[{"text": line, "cites": ["recent_manager.0"]}]]}
+    retold = {"paragraphs": [[{"text": "Building that team taught me to hire for range.",
+                               "cites": ["recent_manager.0"]}]]}
+    client = RoutedClient({"generate_cover_letter": [copied, retold]})
+    built = build_cover_letter(northwind(), profile, northwind_assessment(), client=client,
+                               kind=PEOPLE, on_resume={"recent_manager.0": line})
+    prompts = client.prompts["generate_cover_letter"]
+    assert "[recent_manager.0]" in prompts[0]
+    assert len(prompts) == 2 and "letter repeats the resume" in prompts[1]
+    assert not any(i.rule == "letter repeats the resume" for i in built.issues)

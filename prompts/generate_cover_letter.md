@@ -94,12 +94,21 @@ from what you are shown. Do not refer to it from memory.
    on in `quote` (verbatim, a phrase or a sentence). The quote is checked
    against the ad. If the ad says nothing about the company, write no such
    sentence: never fill it from general knowledge.
-8. **Each story once.** A story (or a bullet linked to it) is told in one
+8. **The resume already says these.** The resume going with this letter
+   carries the lines below. Prefer evidence it does not show. If you tell one
+   of these stories again, tell it differently — what it meant, what you
+   decided, what changed — never the same sentence: a copy is rejected.
+
+   <on_resume>
+   {on_resume}
+   </on_resume>
+
+9. **Each story once.** A story (or a bullet linked to it) is told in one
    paragraph only; a second paragraph citing it is rejected.
-9. **Do not open by reading the ad back.** No sentence may begin "You're
+10. **Do not open by reading the ad back.** No sentence may begin "You're
    hiring", "You are looking for", "You want someone" — rejected, and every
    letter opened that way reads as a template. Open on the strongest evidence.
-10. No enthusiasm as a substitute for evidence. No restating the ad back at the
+11. No enthusiasm as a substitute for evidence. No restating the ad back at the
    reader. No flattering the company. See the banned lists in the voice above.
 
 ## Output

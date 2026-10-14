@@ -172,6 +172,8 @@ class GeneratedResume:
     issues: list[ValidationIssue] = field(default_factory=list)
     unused: list[UnusedEntry] = field(default_factory=list)
     coverage: list[cover.CoverageRow] = field(default_factory=list)
+    # Text already on the page, by ref: what the letter must not repeat.
+    on_page: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -273,6 +275,11 @@ def _check_resume(
         issues=issues + reference_issues + cover.issues(rows),
         unused=unused_entries(selection, profile, excluded),
         coverage=rows,
+        on_page={
+            **{f"highlight {n}": h.text for n, h in enumerate(selection.highlights, 1)},
+            **{ref: catalogue[ref] for role in selection.roles
+               for ref in role.bullet_refs if ref in catalogue},
+        },
     )
 
 
@@ -552,6 +559,7 @@ def build_cover_letter(
     client: LLMClient,
     kind: RoleClassification | None = None,
     feedback: str | None = None,
+    on_resume: dict[str, str] | None = None,
 ) -> GeneratedText:
     """`feedback` is appended to the prompt: what a previous draft got wrong
     that only a later check could see (the paid claim check)."""
@@ -566,6 +574,9 @@ def build_cover_letter(
             stories=_render_stories(profile, excluded),
             must_have_gaps="\n".join(f"- {g}" for g in must_have_gaps(jd, assessment))
             or "(none: write no gap sentence)",
+            on_resume="\n".join(f"- [{ref}] {' '.join(text.split())}"
+                                 for ref, text in (on_resume or {}).items())
+            or "(no resume in this run)",
             voice=profile.voice,
         )
     except PromptError as exc:
@@ -582,6 +593,7 @@ def build_cover_letter(
         max_words=COVER_LETTER_MAX_WORDS,
         context="The cover letter",
         ad_text=jd.raw_text,
+        on_resume=on_resume or {},
     )
 
 
@@ -802,6 +814,7 @@ def _write_cited(
     max_words: int | None,
     context: str,
     ad_text: str | None = None,
+    on_resume: dict[str, str] | None = None,
 ) -> GeneratedText:
     """Write as cited sentences, check them in code, regenerate once on blockers.
 
@@ -845,6 +858,7 @@ def _write_cited(
         )
         if ad_text is not None:
             issues += check_company_sentences(paragraphs, ad_text)
+        issues += _repeats_resume(paragraphs, on_resume or {})
         result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs)
         failures = [issue for issue in issues if issue.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
@@ -1575,3 +1589,31 @@ _SOFTENER = re.compile(
 
 def _firm_part(must_have: str) -> str:
     return _SOFTENER.split(must_have, maxsplit=1)[0]
+
+
+def _repeats_resume(paragraphs, on_resume: dict[str, str]) -> list[ValidationIssue]:
+    """A letter sentence that copies a line the resume already carries.
+
+    The letter is written after the resume and is told what is on it; this is
+    the check that it listened. A story may come back in the letter once, but
+    told differently — a reader of both documents should not meet the same
+    sentence twice.
+    """
+    issues = []
+    for paragraph in paragraphs:
+        for sentence in paragraph:
+            for ref, text in on_resume.items():
+                if overlap(sentence.text, text) >= REPEAT_OVERLAP:
+                    issues.append(
+                        ValidationIssue(
+                            rule="letter repeats the resume",
+                            severity=Severity.blocker,
+                            detail=(
+                                f"A letter sentence restates the resume's {ref}. Tell "
+                                "it differently or use evidence the resume does not show."
+                            ),
+                            excerpt=sentence.text[:120],
+                        )
+                    )
+                    break
+    return issues
