@@ -58,6 +58,9 @@ class Config(BaseSettings):
     # Reasoning effort per call type, "score=high,generate=medium"; unset uses
     # adapters/llm.py:DEFAULT_EFFORT. "default" lets the model decide.
     llm_effort: str | None = None
+    # Where a free-tier call goes when the free daily allowance runs out.
+    # Unset: Claude Haiku 4.5, the cheapest paid model.
+    llm_fallback: str | None = None
 
     # The two paid checks after `generate` (spec 003). On by default: they
     # protect most when forgotten. `--no-check-claims` per run. The review is

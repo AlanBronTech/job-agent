@@ -234,6 +234,9 @@ def test_get_client_builds_provider_specific_client():
     assert score_client.model == "claude-sonnet-4-6"
     assert score_client._api_key == "key-a"
 
+    # A Gemini route is wrapped so a spent free tier hands over; the client
+    # underneath is still the provider's own.
+    prep_client = getattr(prep_client, "_primary", prep_client)
     assert isinstance(prep_client, GeminiClient)
     assert prep_client.model == "gemini-2.5-flash"
     assert prep_client._api_key == "key-g"
@@ -636,3 +639,46 @@ def test_gemini_thinking_is_billed_and_budgeted(monkeypatch) -> None:
     response = client.complete(prompt="hi")
     assert response.output_tokens == 450
     assert seen["config"].thinking_config.thinking_budget == 0
+
+
+def test_cheap_steps_default_to_free_then_cheap_and_never_override_a_choice():
+    from jobagent.adapters.llm import CHEAP_MODEL, FREE_MODEL
+
+    both = make_config(llm_default="anthropic:claude-sonnet-5", gemini_api_key="g", anthropic_api_key="a")
+    assert resolve_route(both, CallType.parse_jd).model == FREE_MODEL.split(":")[1]
+    assert resolve_route(both, CallType.classify).provider is Provider.gemini
+    # The screen sees a profile summary: cheap paid, not free, by default.
+    assert resolve_route(both, CallType.triage).model == CHEAP_MODEL.split(":")[1]
+    assert resolve_route(both, CallType.score).model == "claude-sonnet-5"
+
+    no_gemini = make_config(llm_default="anthropic:claude-sonnet-5", gemini_api_key=None)
+    assert resolve_route(no_gemini, CallType.parse_jd).model == CHEAP_MODEL.split(":")[1]
+
+    chosen = make_config(llm_parse="anthropic:claude-sonnet-5", gemini_api_key="g")
+    assert resolve_route(chosen, CallType.parse_jd).model == "claude-sonnet-5"
+
+
+def test_a_free_call_hands_over_to_the_cheap_model_at_the_daily_cap(monkeypatch):
+    from jobagent.adapters import llm
+    from jobagent.adapters.llm import FallbackClient, QuotaExhaustedError
+
+    calls = []
+
+    class Free(llm.GeminiClient):
+        def _complete(self, *, system, prompt, max_tokens):
+            calls.append("free")
+            raise QuotaExhaustedError("daily cap")
+
+    class Cheap(llm.AnthropicClient):
+        def _complete(self, *, system, prompt, max_tokens):
+            calls.append("cheap")
+            return LLMResponse(text="{}", provider=Provider.anthropic, model=self.model,
+                               input_tokens=1, output_tokens=1)
+
+    monkeypatch.setitem(llm._CLIENTS, Provider.gemini, Free)
+    monkeypatch.setattr(llm, "AnthropicClient", Cheap)
+    client = get_client(CallType.parse_jd, make_config(llm_default="anthropic:claude-sonnet-5"))
+    assert isinstance(client, FallbackClient)
+    assert client.complete(prompt="a").model == "claude-haiku-4-5-20251001"
+    client.complete(prompt="b")
+    assert calls == ["free", "cheap", "cheap"]  # the free tier is not retried once spent

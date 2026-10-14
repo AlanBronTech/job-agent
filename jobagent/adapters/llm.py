@@ -90,6 +90,18 @@ class CallType(str, Enum):
     review = "review"
 
 
+
+FREE_MODEL = "gemini:gemini-2.5-flash"
+CHEAP_MODEL = "anthropic:claude-haiku-4-5-20251001"
+
+# Routes used when nothing is configured for the call type; see resolve_route.
+CHEAP_DEFAULTS: dict[CallType, tuple[str, ...]] = {
+    CallType.parse_jd: (FREE_MODEL, CHEAP_MODEL),
+    CallType.classify: (FREE_MODEL, CHEAP_MODEL),
+    CallType.triage: (CHEAP_MODEL,),
+}
+
+
 @dataclass
 class RunContext:
     """What a logged call was for, so its cost can be attributed afterwards.
@@ -134,6 +146,14 @@ DEFAULT_EFFORT: dict[str, str] = {
     "prep": "medium",
     "review": "medium",
 }
+
+def _has_key(config: "Config", provider: Provider) -> bool:
+    import os
+
+    if provider is Provider.gemini:
+        return bool(config.gemini_api_key or os.environ.get("GEMINI_API_KEY"))
+    return bool(config.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY"))
+
 
 # Claude models that accept `output_config.effort`. Anything else gets no
 # effort parameter rather than a 400.
@@ -718,7 +738,12 @@ def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
         return _parse_route(config.budget_model)
 
     per_call = {
-        CallType.triage: config.llm_triage,
+        CallType.triage: config.llm_triage
+        or (
+            f"anthropic:{config.anthropic_triage_model}"
+            if config.anthropic_triage_model
+            else None
+        ),
         CallType.parse_jd: config.llm_parse,
         CallType.score: config.llm_score,
         CallType.generate: config.llm_generate,
@@ -727,7 +752,20 @@ def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
         CallType.review: config.llm_review,
     }[call_type]
 
-    raw = per_call or config.llm_default
+    if per_call:
+        return _parse_route(per_call)
+
+    # The cheap steps get a cheap model without being asked (2026-10-14).
+    # Reading an ad and classifying it see only the ad, so they may go to
+    # Gemini's free tier; the first-pass screen also sees a summary of the
+    # profile, so its default is a cheap paid model whose terms do not allow
+    # training on the input. A provider without a key is skipped.
+    for raw in CHEAP_DEFAULTS.get(call_type, ()):
+        route = _parse_route(raw)
+        if _has_key(config, route.provider):
+            return route
+
+    raw = config.llm_default
     if raw:
         return _parse_route(raw)
 
@@ -762,6 +800,17 @@ def get_client(
 
     route = resolve_route(config, call_type)
     effort = resolve_effort(config, call_type)
+    client = _build(route, config, context, effort)
+    if route.provider is Provider.gemini and not config.budget_mode:
+        fallback = _parse_route(config.llm_fallback or CHEAP_MODEL)
+        if fallback != route and _has_key(config, fallback.provider):
+            return FallbackClient(
+                client, lambda: _build(fallback, config, context, effort)
+            )
+    return client
+
+
+def _build(route: CallRoute, config: "Config", context, effort) -> LLMClient:
     if route.provider is Provider.anthropic:
         return AnthropicClient(
             model=route.model,
@@ -778,6 +827,41 @@ def get_client(
         context=context,
         effort=effort,
     )
+
+
+class FallbackClient(LLMClient):
+    """A free-tier client that hands over to a cheap paid one at the daily cap.
+
+    Gemini's free tier caps requests per day, and a batch of thirteen ads is
+    twenty-six cheap calls. Without this the fourteenth parse fails the batch;
+    with it, the rest go to the cheap model and the run log says which model
+    answered each call. Only a daily quota hands over — anything else is a real
+    failure and is raised as one.
+    """
+
+    def __init__(self, primary: LLMClient, make_fallback) -> None:
+        super().__init__(
+            primary.model,
+            runs_log_path=None,
+            context=primary.context,
+            effort=primary.effort,
+        )
+        self.provider = primary.provider
+        self._primary = primary
+        self._make_fallback = make_fallback
+        self._fallback: LLMClient | None = None
+
+    def _complete(self, *, system, prompt, max_tokens):  # pragma: no cover
+        raise NotImplementedError
+
+    def complete(self, **kwargs) -> LLMResponse:
+        if self._fallback is None:
+            try:
+                return self._primary.complete(**kwargs)
+            except QuotaExhaustedError:
+                self._fallback = self._make_fallback()
+                self.model, self.provider = self._fallback.model, self._fallback.provider
+        return self._fallback.complete(**kwargs)
 
 
 def parse_efforts(raw: str | None) -> dict[str, str]:

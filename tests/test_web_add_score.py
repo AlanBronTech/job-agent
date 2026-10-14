@@ -47,7 +47,8 @@ def config(tmp_path):
         for label in ["parse_jd", "score_fit"]
     ))
     return Config(_env_file=None, db_path=tmp_path / "jobagent.db", runs_log_path=runs_log,
-                  llm_default="anthropic:claude-sonnet-5", anthropic_api_key="test-key")
+                  llm_default="anthropic:claude-sonnet-5", llm_parse="anthropic:claude-sonnet-5",
+                  anthropic_api_key="test-key")
 
 
 @pytest.fixture
