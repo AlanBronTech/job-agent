@@ -496,3 +496,66 @@ def _load(
         )
         raise typer.Exit(code=1)
     return cases, results
+
+
+@app.command("screen")
+def screen_eval(
+    cases_path: Path | None = typer.Option(
+        None, "--cases", help="Replay a snapshot file instead of the pipeline.", callback=paths.expand,
+    ),
+) -> None:
+    """Run the cheap first-pass screen over the labelled cases (~1¢ each).
+
+    The number that matters is how many ads you judged worth applying to the
+    screen would have skipped: those are jobs lost to save twelve cents. The
+    screen is only worth using while that number is zero.
+    """
+    from jobagent.core.screen import ScreenError, screen
+    from jobagent.cli.estimate import print_estimate
+
+    cases, _ = _load(cases_path)
+    config = get_config()
+    try:
+        profile = load_profile(config.profile_dir)
+    except ProfileError as exc:
+        err_console.print(f"[bold red]Profile invalid.[/] {exc}")
+        raise typer.Exit(code=1)
+    print_estimate(config, "screen")
+    err_console.print(f"[dim]Screening {len(cases)} labelled case(s).[/]")
+
+    rows = []
+    with store.open_store(config.db_path) as conn:
+        for case in cases:
+            jd = store.get_jd(conn, case.jd_id)
+            if jd is None:
+                continue
+            try:
+                client = get_client(CallType.triage, config,
+                                    RunContext(command="eval screen", jd_id=case.jd_id, source="eval"))
+                result = screen(jd, profile, client=client)
+                rows.append((case, jd, result.decision, result.reason))
+            except (ScreenError, LLMError) as exc:
+                rows.append((case, jd, None, str(exc)))
+
+    lost = [r for r in rows if r[0].worth_applying is Worth.yes and r[2] == "skip"]
+    saved = [r for r in rows if r[0].worth_applying is Worth.no and r[2] == "skip"]
+    missed = [r for r in rows if r[0].worth_applying is Worth.no and r[2] == "score"]
+    failed = [r for r in rows if r[2] is None]
+
+    table = Table(box=None, pad_edge=False)
+    for name in ("JD", "role", "worth it?", "screen", "why"):
+        table.add_column(name)
+    for case, jd, decision, reason in rows:
+        style = "bold red" if (case.worth_applying is Worth.yes and decision == "skip") else ""
+        mark = {"skip": "skip", "score": "score"}.get(decision, "failed")
+        table.add_row(str(case.jd_id), f"{jd.company or '—'} · {jd.title}",
+                      case.worth_applying.value, f"[{style}]{mark}[/]" if style else mark, reason)
+    console.print(table)
+    console.print(
+        f"\n[bold]Jobs worth applying to that the screen would skip: "
+        f"{'[red]' if lost else '[green]'}{len(lost)}[/][/]"
+    )
+    console.print(f"Not-worth-it ads it would skip (assessments saved): {len(saved)}")
+    console.print(f"Not-worth-it ads it would still send to scoring: {len(missed)}")
+    if failed:
+        console.print(f"[yellow]{len(failed)} case(s) failed to screen.[/]")
