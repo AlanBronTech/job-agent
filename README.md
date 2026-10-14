@@ -27,7 +27,7 @@ including the `?t=…` part, or the buttons will be refused.
 - **Jobs.** The main page: every job description — from an ad, a recruiter's
   email or a message — with its verdict, both scores, where it is in the
   pipeline and whether documents exist. Sort by date or score.
-- **The assessment.** Click an ad for everything `score` would print — hard
+- **The assessment.** Click a job for everything `score` would print — hard
   filters (a breach says so; an unstated one says "not stated", never met),
   requirements, what they will push on, questions to ask — plus any history
   with the same company, and the ad text as parsed.
