@@ -208,10 +208,31 @@ def build_resume(
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     catalogue = build_catalogue(profile, excluded)
     citable = build_citable(profile, excluded)
-    selection = _ask_for_selection(
-        jd, profile, assessment, catalogue, client=client, kind=kind, excluded=excluded
-    )
+    retry_note = None
+    built: GeneratedResume | None = None
+    # A blocker is a stop, not a note (2026-10-15): the selection is asked for
+    # again once with the failures named, as the letter always was. Whatever
+    # survives the retry is returned with its issues, and the caller marks the
+    # file NOT READY.
+    for attempt in range(REWRITE_ATTEMPTS + 1):
+        selection = _ask_for_selection(
+            jd, profile, assessment, catalogue, client=client, kind=kind,
+            excluded=excluded, retry_note=retry_note,
+        )
+        built = _check_resume(
+            selection, jd, profile, assessment, catalogue, citable, excluded, kind,
+            today=today or date.today(),
+        )
+        failures = [i for i in built.issues if i.severity is Severity.blocker]
+        if not failures or attempt == REWRITE_ATTEMPTS:
+            break
+        retry_note = _rewrite_instruction(failures, json_output=True)
+    return built
 
+
+def _check_resume(
+    selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today
+) -> GeneratedResume:
     issues: list[ValidationIssue] = []
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
         issues += validate_prose(paragraph, profile, context="the PROFILE section")
@@ -227,12 +248,13 @@ def build_resume(
             issues += _check_citation(highlight.source_ref, citable)
     issues += _lead_issues(selection, profile, kind)
     issues += check_resume_reuse(story_uses(_resume_places(selection), profile))
+    issues += _highlight_repeats(selection, catalogue)
 
     content, reference_issues = _assemble(
         selection,
         profile,
         catalogue,
-        today=today or date.today(),
+        today=today,
         kind=kind,
         excluded=excluded,
     )
@@ -254,6 +276,41 @@ def build_resume(
     )
 
 
+# A highlight and an experience bullet sharing this much of their wording is
+# the same sentence twice on one page. Measured on the smaller text's words.
+REPEAT_OVERLAP = 0.7
+
+
+def _highlight_repeats(selection, catalogue: dict[str, str]) -> list[ValidationIssue]:
+    """A CAREER HIGHLIGHT that restates a bullet printed below it.
+
+    Both resumes of 2026-10-14 condensed a bullet into a highlight and kept
+    the bullet in EXPERIENCE, so the reader met each claim twice in nearly the
+    same words. A highlight must say something the experience section does
+    not, or be worded so it does not read as a copy.
+    """
+    bullets = {ref: catalogue[ref] for role in selection.roles
+               for ref in role.bullet_refs if ref in catalogue}
+    issues = []
+    for highlight in selection.highlights:
+        for ref, text in bullets.items():
+            if overlap(highlight.text, text) >= REPEAT_OVERLAP:
+                issues.append(
+                    ValidationIssue(
+                        rule="highlight repeats a bullet",
+                        severity=Severity.blocker,
+                        detail=(
+                            f"The highlight '{highlight.label}' restates bullet {ref}, "
+                            "which is also in EXPERIENCE. Drop the bullet, cite other "
+                            "evidence, or say what the bullet does not."
+                        ),
+                        excerpt=highlight.text[:120],
+                    )
+                )
+                break
+    return issues
+
+
 def _ask_for_selection(
     jd: JobDescription,
     profile: Profile,
@@ -263,6 +320,7 @@ def _ask_for_selection(
     client: LLMClient,
     kind: RoleClassification | None = None,
     excluded: set[str] = frozenset(),
+    retry_note: str | None = None,
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
@@ -278,6 +336,8 @@ def _ask_for_selection(
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
 
+    if retry_note:
+        prompt = f"{prompt}\n\n{retry_note}"
     try:
         parsed, _ = client.complete_json(
             prompt=prompt, label=RESUME_PROMPT, max_tokens=RESUME_MAX_TOKENS
@@ -491,7 +551,10 @@ def build_cover_letter(
     *,
     client: LLMClient,
     kind: RoleClassification | None = None,
+    feedback: str | None = None,
 ) -> GeneratedText:
+    """`feedback` is appended to the prompt: what a previous draft got wrong
+    that only a later check could see (the paid claim check)."""
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     try:
         prompt = load_prompt(
@@ -507,6 +570,8 @@ def build_cover_letter(
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
+    if feedback:
+        prompt = f"{prompt}\n\n{feedback}"
 
     return _write_cited(
         client,

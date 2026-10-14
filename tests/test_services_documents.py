@@ -287,3 +287,30 @@ def test_the_claim_check_runs_on_the_letter_and_can_be_switched_off(ws, ids, fak
 
     result = run(ws, ids["acme"], cover=True, overwrite=True, check_claims=False)
     assert calls == [1] and result.claims is None
+
+
+def test_a_surviving_blocker_marks_the_file_not_ready(ws, ids, fake_model, monkeypatch):
+    blocker = ValidationIssue(rule="banned phrase", severity=Severity.blocker, detail="Invented.")
+    monkeypatch.setattr(documents, "build_resume", lambda *a, **k: SimpleNamespace(
+        content="resume content", issues=[blocker], unused=[]))
+    result = run(ws, ids["acme"])
+    assert result.written[0].name == "AlanBron_Resume_AcmeLogistics_202609_NOT-READY.docx"
+
+
+def test_a_claim_mismatch_writes_the_letter_once_more(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.generate import Sentence
+    from jobagent.services import checks
+
+    drafts = []
+
+    def letter(*a, feedback=None, **k):
+        drafts.append(feedback)
+        return SimpleNamespace(text="One.", issues=[], sentences=[Sentence(text="One.", cites=["x.0"])])
+    monkeypatch.setattr(documents, "build_cover_letter", letter)
+    verdicts = [[checks.Mismatch(sentence="One.", problem="unsupported detail")], []]
+    monkeypatch.setattr(documents.checks, "check_claims", lambda *a, **k: verdicts.pop(0))
+
+    result = run(ws, ids["acme"], cover=True)
+    assert drafts[0] is None and "unsupported detail" in drafts[1]
+    assert result.claims == [] and not any(i.rule == "claim mismatch" for i in result.issues)
+    assert any(p.name == "AlanBron_CoverLetter_AcmeLogistics_202609.docx" for p in result.written)

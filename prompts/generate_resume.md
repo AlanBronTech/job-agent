@@ -91,6 +91,10 @@ Skill category keys available: {skills}
    it must appear in the bullet you cite as `source_ref`. Label style, from the
    master resume: "AI in production", "Built and sold", "Early bet that paid",
    "Enterprise product", "Startup delivery".
+   **A highlight must not restate a bullet you also put in EXPERIENCE** —
+   the reader would meet the same claim twice in nearly the same words. Cite
+   evidence that is not in the experience section, or say what its bullet
+   does not. This is checked and rejected.
 6. **Eight skill categories, ordered with the most relevant first.** Return the
    keys, not the values.
 7. **PROFILE is two short paragraphs.** The first says what he is and the

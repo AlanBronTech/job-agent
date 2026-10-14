@@ -236,7 +236,9 @@ def generate(
         rendered["resume"] = (
             built.content if isinstance(built.content, str) else resume_text(built.content)
         )
-        path = ws.documents.path_for_write(jd, today, docs.document_name("Resume", jd, when=today))
+        path = ws.documents.path_for_write(
+            jd, today, _name("Resume", jd, today, blocked=_blocked(built.issues))
+        )
         written.append(_write(lambda: write_resume(built.content, path), written))
 
     if cover:
@@ -244,15 +246,30 @@ def generate(
             letter = build_cover_letter(jd, profile, assessment, client=client, kind=kind)
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
-        issues += letter.issues
-        rendered["cover letter"] = letter.text
         sentences = getattr(letter, "sentences", [])
+        found = None
         if check_claims and sentences:
             found = checks.check_claims(
                 config, ctx, sentences, profile, client_factory=lambda: review_client
             )
+            if isinstance(found, list) and found:
+                # A mismatch is a blocker, and a blocker means write it again:
+                # once, with the mismatches named, then check the new draft.
+                try:
+                    letter = build_cover_letter(
+                        jd, profile, assessment, client=client, kind=kind,
+                        feedback=claims_feedback(found),
+                    )
+                except GenerateError as exc:
+                    raise GenerationFailed("cover", exc, written) from exc
+                found = checks.check_claims(
+                    config, ctx, getattr(letter, "sentences", []), profile,
+                    client_factory=lambda: review_client,
+                )
             claims = merge_claims(claims, found)
-            issues += claim_issues(found)
+        letter_issues = list(letter.issues) + claim_issues(found)
+        issues += letter_issues
+        rendered["cover letter"] = letter.text
         content = CoverLetterContent(
             name=profile.roles.person.name,
             contact=contact if contact is not None else contact_line(profile),
@@ -260,7 +277,9 @@ def generate(
             recipient=[jd.company] if jd.company else [],
             paragraphs=[p.strip() for p in letter.text.split("\n\n") if p.strip()],
         )
-        path = ws.documents.path_for_write(jd, today, docs.document_name("CoverLetter", jd, when=today))
+        path = ws.documents.path_for_write(
+            jd, today, _name("CoverLetter", jd, today, blocked=_blocked(letter_issues))
+        )
         written.append(_write(lambda: write_cover_letter(content, path), written))
 
     if questions:
@@ -348,6 +367,33 @@ def is_ready(issues, claims, reviewed) -> bool:
     if isinstance(claims, checks.NotChecked):
         return False
     return isinstance(reviewed, checks.Review) and not reviewed.blocking
+
+
+def _blocked(issues) -> bool:
+    return any(getattr(i.severity, "value", i.severity) == "blocker" for i in issues)
+
+
+def _name(kind: str, jd, today, *, blocked: bool) -> str:
+    """The document's file name; NOT-READY in it when a blocker survived the rewrite.
+
+    A blocker printed beside a finished file was sent anyway on 2026-10-14. A
+    name cannot be overlooked the way a report line can.
+    """
+    name = docs.document_name(kind, jd, when=today)
+    return name.replace(".docx", "_NOT-READY.docx") if blocked else name
+
+
+def claims_feedback(mismatches) -> str:
+    lines = [
+        "## Your previous letter was checked against its evidence and failed",
+        "",
+        "These sentences said more than, or something different from, what they",
+        "cite. Write the letter again without these faults, in the same JSON.",
+        "",
+    ]
+    for m in mismatches:
+        lines.append(f"- \"{m.sentence}\" — {m.problem}")
+    return "\n".join(lines)
 
 
 def merge_claims(so_far, found):

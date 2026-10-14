@@ -273,3 +273,16 @@ def test_reading_the_ad_back_and_order_claims_block(profile):
     found = validate_prose("Example Startup was my first engineering leadership role.", profile)
     assert any(i.rule == "unverifiable chronology" for i in found)
     assert not validate_prose("I led the first release of the platform.", profile)
+
+
+def test_a_highlight_restating_a_bullet_blocks_and_the_resume_is_asked_again(profile):
+    repeat = selection(highlights=[{"label": "Team building", "text": profile.roles.roles[0].bullets[0].text,
+                                    "source_ref": "recent_manager.0"}])
+    clean = selection(highlights=[{"label": "Team building", "text": "Built a 15-person team.",
+                                   "source_ref": "recent_manager.0"}])
+    client = RoutedClient({"generate_resume": [repeat, clean]})
+    built = build_resume(northwind(), profile, northwind_assessment(), client=client,
+                         today=TODAY, kind=PEOPLE)
+    prompts = client.prompts["generate_resume"]
+    assert len(prompts) == 2 and "highlight repeats a bullet" in prompts[1]
+    assert not any(i.rule == "highlight repeats a bullet" for i in built.issues)
