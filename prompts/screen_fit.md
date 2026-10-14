@@ -1,4 +1,4 @@
-# screen_fit — v1
+# screen_fit — v2
 
 A first pass over one job ad, before the full fit assessment is paid for.
 Your only question: **is this ad obviously not worth assessing?**
@@ -19,23 +19,35 @@ shape; anything arguable goes through.
 {ad_json}
 </ad>
 
-## Skip only when one of these is plainly true
+## How to decide
 
-- **Wrong kind of job.** The work is not what the candidate targets: an
-  individual-contributor role despite a "lead" title, IT operations or
-  business-systems administration rather than software engineering, a
-  specialist role (frontend, SRE, data science, healthcare IT) whose first
-  must-haves the candidate does not have at all.
-- **Wrong level.** A manager-of-managers or executive role the candidate's
-  record does not reach, or a role well below target with nothing to
-  compensate.
-- **Something the candidate avoids**, from the avoid list above, stated
-  outright in the ad.
+Read the title, then the **first three must-haves**. Answer `skip` when any
+of these holds; otherwise `score`.
 
-Do **not** skip for: a missing salary band, an unknown office location, one
-or two technologies the candidate lacks, a domain he has not worked in, or
-anything you are unsure about. Those are for the full assessment. When in
-doubt, the answer is `score`.
+1. **The job is a specialism the candidate does not have.** The first
+   must-haves are built around a discipline that appears nowhere in the
+   candidate's roles or skills: site reliability and on-call operations,
+   deep frontend/UX specialisation, data science or ML modelling, healthcare
+   IT standards (HL7, FHIR), ERP or business-systems administration (NetSuite,
+   Dynamics, payroll/HR platforms), network or infrastructure operations,
+   game engines, embedded-only roles. A title saying "manager" does not rescue
+   a job whose must-haves are this.
+2. **It is not a job he targets.** An individual-contributor role despite a
+   "lead" title (hands-on delivery with no people leadership asked for), an
+   IT-operations role rather than software engineering, or a role well below
+   his level.
+3. **The level is out of reach.** It requires managing other managers, or is
+   an executive role (CTO, VP) scaling an organisation beyond anything in his
+   record.
+4. **It is on his avoid list**, stated outright in the ad.
+
+Not reasons to skip: a missing salary band, an unknown location, one or two
+technologies he lacks, an unfamiliar industry, a contract or fixed term he
+accepts. Those are for the full assessment.
+
+An engineering-management, delivery or AI-adoption role whose first
+must-haves are about leading engineers or delivering software is always
+`score`, even if the stack differs.
 
 ## Output
 
