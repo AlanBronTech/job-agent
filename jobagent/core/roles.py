@@ -30,7 +30,10 @@ from jobagent.core.models import JobDescription, Profile, RoleClassification, Ro
 from jobagent.core.prompts import PromptError, load_prompt
 
 CLASSIFY_PROMPT = "classify_role"
-CLASSIFY_MAX_TOKENS = 1024
+# The answer is under a hundred tokens; the rest is the model's reasoning,
+# which counts as output. 1,024 cut off two of thirteen real calls on
+# 2026-10-14, so the ceiling is sized for the reasoning, not the answer.
+CLASSIFY_MAX_TOKENS = 8192
 
 
 class ClassifyError(Exception):
