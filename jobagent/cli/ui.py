@@ -35,9 +35,24 @@ def ui(
     no_browser: bool = typer.Option(
         False, "--no-browser", help="Print the link instead of opening it."
     ),
+    demo: bool = typer.Option(
+        False,
+        "--demo",
+        help="Show an invented person and invented ads (~/job-agent-demo), never your own.",
+    ),
 ) -> None:
     """Start the local UI on this machine and open it in the browser."""
     config = get_config()
+    if demo:
+        from jobagent import demo as demo_data
+
+        if demo_data.ensure():
+            console.print(f"[dim]Demo workspace created in {demo_data.DEFAULT_DIR}.[/]")
+        config = config.model_copy(update=demo_data.paths(demo_data.DEFAULT_DIR))
+        console.print(
+            "[bold yellow]Demo:[/] an invented person (profile.example) and invented ads. "
+            "Paid buttons still call the model, with the cost shown first."
+        )
     if _port_busy(port):
         err_console.print(
             f"[bold red]Something is already listening on http://{HOST}:{port}[/] "
@@ -56,7 +71,8 @@ def ui(
     token = secrets.token_urlsafe(24)
     runner = Runner()
     app = create_app(
-        workspace_factory=lambda: Workspace.from_config(get_config()),
+        workspace_factory=(lambda: Workspace.from_config(config)) if demo
+        else (lambda: Workspace.from_config(get_config())),
         config=config,
         port=port,
         token=token,
