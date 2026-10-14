@@ -184,8 +184,29 @@ on a tab stop at **16.93cm**.
 - Log every call to `runs.jsonl` — prompt name, tokens, cost, and what it was
   for (`command`, `jd_id`, `source`, `run_id`). `jobagent spend` reads it back;
   see the invariants below for why each field is there.
+- **Most of a call's cost is its hidden reasoning, so effort is set per call
+  type** (2026-10-14). A resume selection wrote 15-30k output tokens for a
+  ~1k-token answer, and output costs five times input. `DEFAULT_EFFORT` in
+  `adapters/llm.py`: low for parse, classify and the screen; medium for score,
+  generate, prep and review. Sent as `output_config.effort` only to Claude
+  models known to accept it (`_EFFORT_MODELS`), as a thinking budget to
+  Gemini, and to nothing else. Gemini's `thoughts_token_count` is added to
+  output tokens: leaving it out made every Gemini call look cheaper than it was.
+- **Output ceilings are sized for the reasoning, not the answer.** Four real
+  calls were lost at their ceilings in one week (resume 16k, review 4k,
+  classify 1k, letters 8k). Resume and letters now 32k, checks 16k, classify 8k.
+- **Cheap steps get cheap models by default** (`CHEAP_DEFAULTS`): parse and
+  classify on Gemini's free tier (they see only the ad), the screen on Haiku
+  (it sees a profile summary, and the free tier's terms allow training on
+  input). A spent free tier hands over to `LLM_FALLBACK` (Haiku) through
+  `FallbackClient`. A route configured in `.env` or on the Settings page always
+  wins over these defaults.
+- **Settings live beside the database** (`services/settings.py`,
+  `settings.json`): per-step route and effort, and the two checks. Applied by
+  `get_config()` and by the UI on every request, so the CLI and the browser
+  agree and a change needs no restart.
 
-## Where the project is — 2026-10-04
+## Where the project is — 2026-10-15
 
 **Built and working. Phases 0-5 and 7 are done; Phase 8 (a local UI) is under
 way on branch `001-local-ui`, not yet merged.** Its spec, plan and task list
@@ -200,8 +221,12 @@ review in the CLI and the UI. Phase 6 (Gmail triage) and the Drive upload were
 dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
 decisions.
 
-907 tests pass as of 2026-10-07 on `003-generation-quality` (834 on `main`),
-none touching the network; the test suite strips provider API keys from the
+Spec 003 (generation quality) is merged. Since then, on `main`: the demo
+(`jobagent ui --demo`), the Settings page, cheap-model defaults, per-step
+reasoning effort, the first-pass screen, and the fixes from an outside review
+of two real applications (see the invariants on blockers and repeats).
+
+930 tests pass as of 2026-10-15 on `main`, none touching the network; the test suite strips provider API keys from the
 environment so a forgotten fake fails instead of billing. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
@@ -240,10 +265,16 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent jd same <id> yes|no       free     answer "possibly the same job?"
     jobagent outside add|list|link     free     applications made outside the tool
     jobagent jd backfill               free     requisition numbers, source files
-    (role kind, once per ad)           ~$0.003  one real call, 2026-10-07
-    generate ... claim check           ~$0.01   one real call; on by default, --no-check-claims
-    generate ... review                ~$0.13   one real call; on by default, --no-review
+    (role kind, once per ad)           ~$0.003
+    jobagent screen ID … | batch screen ~$0.002/ad cheap first pass: score or skip, advisory
+    jobagent eval screen               ~$0.002/case how many worthwhile jobs the screen would skip
+    generate ... claim check           ~$0.01   on by default; --no-check-claims
+    generate ... review                ~$0.12   off by default; --review
     generate ... --answers F --limit N          short and long answers, from the bank
+    jobagent ui --demo                 free     invented person and ads, ~/job-agent-demo
+
+The figures above predate the cheap-model defaults and per-step effort of
+2026-10-14; re-measure with `jobagent spend` before quoting any of them.
 
 About 28 cents per application end to end. Do not quote a cost from memory or
 from this file if `jobagent spend` can answer it — that is the whole reason it
@@ -453,6 +484,29 @@ expected cost before spending (`services/costs.py`).
 - **A paid check never loses the documents.** The claim check and the review
   return `NotChecked` / `NotReviewed` on any failure; the documents are still
   written and are never called ready.
+- **A blocker is a stop, not a note** (2026-10-15). "Regulated banking
+  contract" was flagged as a blocker in the report and sent anyway, because
+  the file was written regardless. Now the resume is selected again once with
+  the failures named (as the letter always was), a claim-check mismatch has
+  the letter written once more, and a blocker that survives puts
+  `_NOT-READY` in the file name. A name cannot be skimmed past.
+- **Checking reuse afterwards only works if failing forces a rewrite.** The
+  reuse caps existed and both real resumes still repeated themselves. A
+  highlight may not restate a bullet printed below it (word overlap ≥ 0.7);
+  the letter is told what the resume says and a copied line blocks; an
+  unlinked bullet counts as its own story. With blockers now forcing a
+  rewrite, these bind.
+- **Admit a gap only in a real must-have.** A letter volunteered a Kubernetes
+  gap the ad listed as "e.g. Kubernetes". `must_have_gaps` keeps only gaps
+  matching the firm part of a must-have (before "e.g.", "ideally", "a plus").
+- **Claims about order are unverifiable and get contradicted.** A letter
+  called a role his first in leadership while EARLIER CAREER listed three
+  earlier team-lead roles. "My first …", "for the first time" and "never
+  before" are blockers.
+- **The first-pass screen is advice and must stay cautious.** Measured on 65
+  labelled cases (`eval screen`): 0 of 11 worthwhile jobs skipped, 9 of 40
+  scorer skips caught. Its value is the zero, not the nine; tune it towards
+  bolder only with that number re-measured.
 - **A guard that fires when nothing is at risk stops being a guard.** The
   overwrite check names only the files that run would write, so an
   `interview-prep.md` from a `prep` run never triggers it. The moment

@@ -60,6 +60,17 @@ and all.
   several (combined cost first) or to mark them not applied; open a row to
   generate. A file that could not be used is its own row, with the reason.
 
+- **Settings.** *Settings* in the menu: which model does each step, how hard
+  it reasons, and whether the claim check and the review run by default. Each
+  row says what that step sends to the model (the ad only, or your profile),
+  so you can decide where a free model is acceptable. Saved beside the
+  database and used by the terminal commands too; no restart needed.
+
+**A demo with nothing of yours in it:** `jobagent ui --demo` opens the same UI
+on an invented person and seven invented ads, in `~/job-agent-demo`. Setting it
+up spends nothing; the Score and Generate buttons are live and show their cost
+first.
+
 **Still in the terminal for now:** `apply`, `outcome`, `prep`, and anything
 under `jd amend`, `jd delete`, `eval` and `spend`.
 
@@ -72,9 +83,19 @@ Save the ads as usual, then:
 ```
 jobagent batch            # free: the new files, what parsing them costs, then the table
 jobagent batch parse      # parse them all
+jobagent batch screen     # ~0.2¢ an ad: a cheap first pass, "score" or "skip" with a reason
 jobagent score 81 82 84   # score several: one combined estimate, then each in turn
 jobagent batch skip 83 85 # record the rest as not applied
 ```
+
+**The screen** reads each parsed ad's title and first must-haves against a
+short summary of your profile, on a cheap model, and says whether it is
+obviously the wrong job: an SRE or frontend specialism, IT operations, an
+individual-contributor role, managing managers. It is advice, never a filter,
+and it lets anything arguable through. Measured on 65 past ads it skipped none
+you judged worth applying to and caught 9 of the 40 the full scorer skipped.
+`jobagent screen ID …` does the same for chosen ads; `jobagent eval screen`
+re-measures it.
 
 "New" means saved after you last added an ad, so the folder's older files are
 never offered at once. Every file gets a row, including one that was cut off at
@@ -332,12 +353,25 @@ After the folder list you get:
 - **Cited prose**: the letter and the answers come back sentence by sentence,
   each naming the evidence it rests on. A sentence citing nothing, or an id
   that does not exist, is a blocker. A company sentence must quote the ad.
-- **Two paid checks, on by default**: the *claim check* reads each sentence
-  against the evidence it cites (merged people, a moved place, a detail the
-  evidence lacks); the *independent review* reads only the ad, the written
-  policies and the finished documents, and writes `review.md`. Then one line:
-  **Ready**, **Not ready**, or **Not reviewed**. `--no-check-claims` and
-  `--no-review` switch them off for a run; documents are then never "ready".
+- **No repeats**: a CAREER HIGHLIGHT may not restate a bullet printed below
+  it, and the letter is written knowing what the resume says, so it retells a
+  story rather than copying a line.
+- **Gaps only where they count**: the letter's one gap sentence comes only
+  from a must-have the assessment marked as a gap — never an "e.g.",
+  "ideally" or nice-to-have item. No must-have gap, no gap sentence.
+- **Banned shapes**: a letter may not open "You're hiring…" or "You are
+  looking for…", and claims about order ("my first leadership role") are
+  blocked, because the record can contradict them.
+- **Two paid checks**: the *claim check* (on by default, ~$0.01) reads each
+  sentence against the evidence it cites — merged people, a moved place, a
+  detail the evidence lacks — and a mismatch has the letter written once
+  more. The *independent review* (off by default, ~$0.12) reads only the ad,
+  the written policies and the finished documents, and writes `review.md`.
+  Then one line: **Ready**, **Not ready**, or **Not reviewed**.
+- **A blocker stops the document.** The resume is selected again once with
+  the failures named, as the letter always was. If a blocker still survives,
+  the file is written as `…_NOT-READY.docx`, so it cannot be sent by
+  mistake.
 
 **What to do about it:** open the .docx, read it, edit what you want, send it
 yourself. Ten minutes, not two hours.
@@ -429,8 +463,10 @@ whole ad. Expand the description, save the page again, re-add it.
   `why_company`, `why_role`, `why_you`, `what_made_you_apply`,
   `salary_expectation`, `notice_period`, `right_to_work`, `why_leaving`).
 - `--limit N` — with `--answers`, a character limit every answer must meet.
-- `--no-check-claims`, `--no-review` — skip either paid check for this run
-  (`CHECK_CLAIMS=false` / `REVIEW=false` in `.env` to make it the default).
+- `--no-check-claims` — skip the claim check for this run.
+- `--review` / `--no-review` — run the independent review this time, or not.
+  The defaults come from the Settings page (or `CHECK_CLAIMS` / `REVIEW` in
+  `.env`): claim check on, review off.
 - `--force` — generate even against a `skip`, and record the disagreement.
 - `--supersede` — keep documents already generated: move their folder aside
   under a dated name, then write a fresh one.
@@ -524,6 +560,27 @@ decision was made on.
 
 ---
 
+## Which model does what
+
+The routine steps use cheap models without being asked:
+
+| Step | Default model | Reasoning |
+|---|---|---|
+| Read an ad, classify the role | Gemini 2.5 Flash, free tier | low |
+| First-pass screen | Claude Haiku 4.5 | low |
+| Score, write, interview prep, checks | your `ANTHROPIC_MODEL` (Sonnet 5) | medium |
+
+Reading and classifying see only the ad, so they may go to Google's free tier,
+which may use what it is sent. The screen also sees a summary of your profile,
+so its default is a cheap paid model instead. When the free daily allowance
+runs out, the rest of the run moves to Haiku and the run log says which model
+answered each call. Most of what a call costs is its hidden reasoning, not its
+answer, which is why the reasoning level is set per step.
+
+Change any of it on the UI's Settings page, or in `.env`: `LLM_PARSE`,
+`LLM_CLASSIFY`, `LLM_TRIAGE`, `LLM_SCORE`, `LLM_GENERATE`, `LLM_REVIEW`,
+`LLM_EFFORT` (e.g. `score=high,generate=high`) and `LLM_FALLBACK`.
+
 ## Running low on cash
 
 ```
@@ -562,17 +619,20 @@ that matters. The rest regenerates.
 
 ## Costs, roughly
 
-Measured, not estimated — these are the mean per call over 183 real calls on
-Claude Sonnet 5, read out of `runs.jsonl` by `jobagent spend`.
+Measured, not estimated — the mean per call from `runs.jsonl`. These figures
+predate the cheap-model defaults and the per-step reasoning levels of
+2026-10-14; reading an ad should now cost nothing on the free tier, and the
+estimate each command prints is the current one.
 
 | Action | Cost |
 |---|---|
 | `jd add` | ~$0.03 |
 | `score` | ~$0.11 |
 | `generate --resume --cover` | ~$0.13 |
-| role kind, once per ad | ~$0.003 (one real call so far) |
-| claim check, per generate | ~$0.01 (one real call so far) |
-| independent review, per generate | ~$0.13 (one real call so far) |
+| first-pass screen, per ad | ~$0.002 (65 real calls) |
+| role kind, once per ad | ~$0.003 |
+| claim check, per generate | ~$0.01 |
+| independent review, when asked for | ~$0.12 |
 | `prep` | ~$0.11 |
 | Everything else, `spend` included | free |
 
