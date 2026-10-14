@@ -57,9 +57,12 @@ class Config(BaseSettings):
     llm_review: str | None = None
 
     # The two paid checks after `generate` (spec 003). On by default: they
-    # protect most when forgotten. `--no-check-claims` / `--no-review` per run.
+    # protect most when forgotten. `--no-check-claims` per run. The review is
+    # off by default since 2026-10-14: at ~$0.12 it was the dearest step after
+    # the resume, and Alan often reviews in Claude.ai instead. `--review` asks
+    # for it on one run; REVIEW=true makes it the default again.
     check_claims: bool = True
-    review: bool = True
+    review: bool = False
 
     # Budget mode: route every call to a model on a free tier, overriding the
     # per-call routing above. For when the API bill matters more than the

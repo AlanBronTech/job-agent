@@ -279,10 +279,10 @@ def test_the_letter_starts_unticked_on_the_ad_page(client, ids):
     assert '<input type="checkbox" name="cover" value="1">' in page
 
 
-def test_confirm_offers_both_checks_ticked_with_their_costs(client, ids, model):
+def test_confirm_offers_both_checks_with_their_costs_review_unticked(client, ids, model):
     body = confirm(client, ids["acme"]).text
     assert 'name="check_claims" value="1" checked' in body
-    assert 'name="review" value="1" checked' in body
+    assert 'name="review" value="1" >' in body or 'name="review" value="1">' in body  # off by default
     assert "Claim check" in body and "Independent review" in body and "not yet measured" in body
 
 
@@ -305,7 +305,7 @@ def test_a_clean_reviewed_run_is_ready(client, ws, ids, model, monkeypatch):
     monkeypatch.setattr(documents.checks, "review",
                         lambda *a, **k: checks.Review(blocking=[], suggestions=[
                             checks.Finding(document="resume", finding="Invented suggestion.")]))
-    start(client, ids["acme"])
+    start(client, ids["acme"], checks_shown="1", check_claims="1", review="1")
     page = flat(client.get(f"/ads/{ids['acme']}"))
     assert "ready No blockers" in page and "Invented suggestion." in page
 

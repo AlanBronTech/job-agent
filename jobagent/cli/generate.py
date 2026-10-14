@@ -80,10 +80,10 @@ def generate(
         "--no-check-claims",
         help="Skip the paid check of each letter or answer sentence against its evidence.",
     ),
-    no_review: bool = typer.Option(
-        False,
-        "--no-review",
-        help="Skip the paid independent review. The documents are then 'not reviewed'.",
+    review_flag: bool | None = typer.Option(
+        None,
+        "--review/--no-review",
+        help="Run the paid independent review (~$0.12), or skip it. Default: REVIEW in .env (off).",
     ),
 ) -> None:
     """Generate application documents for one job description."""
@@ -131,7 +131,7 @@ def generate(
     questions = _read_questions(answers) if answers else []
     overrule_if_asked(ws, jd_id, today, overrule_reapply)
     check_claims = config.check_claims and not no_check_claims
-    review = config.review and not no_review
+    review = config.review if review_flag is None else review_flag
 
     try:
         result = documents.generate(

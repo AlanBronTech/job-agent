@@ -102,7 +102,7 @@ def test_generate(config, monkeypatch, printed):
     jd_id = seed(config)
     runner.invoke(app, ["generate", str(jd_id), "--resume", "--cover"])
     assert printed == [("generate", {"resume": True, "cover": True, "answers": False,
-                                    "check_claims": True, "review": True, "jd_id": jd_id})]
+                                    "check_claims": True, "review": False, "jd_id": jd_id})]
 
 
 def test_prep(config, monkeypatch, printed):
