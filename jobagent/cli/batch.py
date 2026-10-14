@@ -3,6 +3,7 @@
     jobagent batch            free: the new files and what parsing them costs,
                               then the latest batch's table
     jobagent batch parse      parse the new files (or finish the last batch)
+    jobagent batch screen     ~half a cent an ad: a cheap first pass, score or skip
     jobagent batch skip 64 65 free: record not_applied for each
 
 Score several with `jobagent score 63 64 65`; generate stays per ad.
@@ -77,6 +78,33 @@ def parse() -> None:
     _render(ws, batch)
 
 
+@app.command("screen")
+def screen_batch(
+    force: bool = typer.Option(False, "--force", help="Screen again even if already screened."),
+) -> None:
+    """A cheap first pass over the batch's unscored ads: obvious skip, or worth scoring."""
+    config = get_config()
+    ws = Workspace.from_config(config)
+    batch = batches.latest(ws)
+    if batch is None:
+        console.print("[dim]No batch yet.[/]")
+        return
+    ids = [r.jd_id for r in batches.rows(ws, batch, date.today())
+           if r.jd_id is not None and r.overall_score is None and r.state == "parsed"]
+    if not ids:
+        console.print("[dim]Nothing in the batch is waiting to be scored.[/]")
+        _render(ws, batch)
+        return
+    from jobagent.cli.screen import run_screen
+
+    run_screen(ws, config, ids, force=force, show=False)
+    _render(ws, batch)
+    keep = [str(r.jd_id) for r in batches.rows(ws, batch, date.today())
+            if r.jd_id in ids and (_screen_of(ws, r.jd_id) or {}).get("decision") != "skip"]
+    if keep:
+        console.print(f"[dim]Worth scoring: `jobagent score {' '.join(keep)}`[/]")
+
+
 @app.command("skip")
 def skip(ids: list[int] = typer.Argument(..., help="JD ids to record as not applied.")) -> None:
     """Free: record each as not_applied."""
@@ -105,15 +133,16 @@ def _render(ws: Workspace, batch_id: int) -> None:
     rows = batches.rows(ws, batch_id, date.today())
     table = Table(title=f"Batch {batch_id}", box=None, pad_edge=False, title_justify="left")
     for name, style in [("#", "dim"), ("JD", "cyan"), ("company / role", ""), ("where", "dim"),
-                        ("filters", ""), ("seen", "dim"), ("verdict", ""), ("score", ""), ("state", "")]:
-        table.add_column(name, style=style or None)
+                        ("filters", ""), ("seen", "dim"), ("screen", ""), ("verdict", ""), ("score", ""),
+                        ("state", "")]:
+        table.add_column(name, style=style or None, min_width=18 if name == "company / role" else None)
     for r in rows:
         if r.refusal:
             table.add_row(str(r.number), "—", f"[red]{r.file_name}[/]\n[dim]{batches.describe(r.refusal, r.refusal_detail)}[/]",
-                          "", "", "", "", "", "[red]refused[/]")
+                          "", "", "", "", "", "", "[red]refused[/]")
             continue
         if r.jd_id is None:
-            table.add_row(str(r.number), "—", r.file_name, "", "", "", "", "", "[dim]not parsed yet[/]")
+            table.add_row(str(r.number), "—", r.file_name, "", "", "", "", "", "", "[dim]not parsed yet[/]")
             continue
         flags = []
         if r.reapply == "same":
@@ -128,10 +157,22 @@ def _render(ws: Workspace, batch_id: int) -> None:
         where = (r.arrangement or "") + (f"\n{r.salary}" if r.salary else "") + (f"\n{r.posting}" if r.posting else "")
         filters = " ".join(_MARK.get(state, state) for _, state in r.filters)
         score = f"{r.overall_score}/{r.recruiter_score}" if r.overall_score is not None else ""
+        screened = _screen_of(ws, r.jd_id)
+        screen_cell = ""
+        if screened:
+            mark = "[red]skip[/]" if screened["decision"] == "skip" else "[green]score[/]"
+            screen_cell = f"{mark}\n[dim]{screened['reason']}[/]"
         table.add_row(str(r.number), str(r.jd_id), who, where, filters,
-                      str(r.history_count) if r.history_count else "", (r.verdict or "").replace("_", " "),
-                      score, r.state.replace("_", " "))
+                      str(r.history_count) if r.history_count else "", screen_cell,
+                      (r.verdict or "").replace("_", " "), score, r.state.replace("_", " "))
     console.print(table)
     console.print("[dim]filters: hiring status, work type, location, salary — ✓ met ✗ breach ? not stated · note. "
                   "seen: earlier records at the company. Score several with `jobagent score ID ID …`; "
                   "skip with `jobagent batch skip ID …`.[/]")
+
+
+def _screen_of(ws: Workspace, jd_id: int) -> dict | None:
+    from jobagent.core import store
+
+    with store.open_store(ws.db_path) as conn:
+        return store.get_screen(conn, jd_id)

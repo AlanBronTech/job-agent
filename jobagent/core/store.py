@@ -38,7 +38,7 @@ from jobagent.core.models import (
     RoleClassification,
 )
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -73,6 +73,12 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("role_kind", "TEXT"),
         ("role_kind_secondary", "TEXT"),
         ("role_kind_reason", "TEXT"),
+        # v12 — the cheap first-pass screen: "score" or "skip", why, when,
+        # and on which model. Advisory; an amendment clears it.
+        ("screen_decision", "TEXT"),
+        ("screen_reason", "TEXT"),
+        ("screened_at", "TEXT"),
+        ("screen_model", "TEXT"),
     ],
 }
 
@@ -111,7 +117,11 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     source_file      TEXT,
     role_kind        TEXT,
     role_kind_secondary TEXT,
-    role_kind_reason TEXT
+    role_kind_reason TEXT,
+    screen_decision  TEXT,
+    screen_reason    TEXT,
+    screened_at      TEXT,
+    screen_model     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jd_company ON job_descriptions (company);
@@ -394,7 +404,8 @@ def update_jd(
                 requisition_id = COALESCE(?, requisition_id),
                 source_file = COALESCE(?, source_file),
                 role_kind = NULL, role_kind_secondary = NULL,
-                role_kind_reason = NULL
+                role_kind_reason = NULL, screen_decision = NULL,
+                screen_reason = NULL, screened_at = NULL, screen_model = NULL
             WHERE id = ?
             """,
             (
@@ -896,6 +907,43 @@ def set_role_kind(
         raise StoreError(f"Could not store the role kind of JD {jd_id}: {exc}") from exc
     if cursor.rowcount == 0:
         raise StoreError(f"No job description with id {jd_id}")
+
+
+# --------------------------------------------------------------------------- #
+# v12: the first-pass screen
+# --------------------------------------------------------------------------- #
+
+
+def get_screen(conn: sqlite3.Connection, jd_id: int) -> dict | None:
+    """{"decision", "reason", "screened_at", "model"} or None if never screened."""
+    row = conn.execute(
+        "SELECT screen_decision, screen_reason, screened_at, screen_model "
+        "FROM job_descriptions WHERE id = ?",
+        (jd_id,),
+    ).fetchone()
+    if row is None or row["screen_decision"] is None:
+        return None
+    return {
+        "decision": row["screen_decision"],
+        "reason": row["screen_reason"] or "",
+        "screened_at": row["screened_at"],
+        "model": row["screen_model"],
+    }
+
+
+def set_screen(
+    conn: sqlite3.Connection, jd_id: int, *, decision: str, reason: str, model: str,
+    at: datetime,
+) -> None:
+    try:
+        conn.execute(
+            "UPDATE job_descriptions SET screen_decision = ?, screen_reason = ?, "
+            "screened_at = ?, screen_model = ? WHERE id = ?",
+            (decision, reason, _to_iso(at), model, jd_id),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not store the screen of JD {jd_id}: {exc}") from exc
 
 
 def add_outside(conn: sqlite3.Connection, application: OutsideApplication) -> int:

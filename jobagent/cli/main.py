@@ -17,6 +17,7 @@ from jobagent.cli import outside as outside_cli
 from jobagent.cli import prep as prep_cli
 from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
+from jobagent.cli import screen as screen_cli
 from jobagent.cli import spend as spend_cli
 from jobagent.cli import ui as ui_cli
 from jobagent.config import get_config
@@ -79,6 +80,7 @@ app.add_typer(outside_cli.app, name="outside")
 app.add_typer(evals_cli.app, name="eval")
 # `score` is one command, not a group — mounted directly.
 app.command(name="score")(score_cli.score)
+app.command(name="screen")(screen_cli.screen)
 app.command(name="generate")(generate_cli.generate)
 app.command(name="prep")(prep_cli.prep)
 app.command(name="apply")(apply_cli.apply)

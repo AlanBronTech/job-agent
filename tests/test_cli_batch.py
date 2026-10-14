@@ -41,7 +41,9 @@ def config(tmp_path, monkeypatch):
     jds = tmp_path / "jds"
     jds.mkdir()
     cfg = Config(_env_file=None, db_path=tmp_path / "db", jd_dir=jds, output_dir=tmp_path / "out",
-                 profile_dir=EXAMPLE_PROFILE, llm_default="anthropic:claude-sonnet-5")
+                 profile_dir=EXAMPLE_PROFILE, llm_default="anthropic:claude-sonnet-5",
+                 runs_log_path=tmp_path / "runs.jsonl")
+    monkeypatch.setattr(batch_cli.console, "width", 160)  # the batch table is wide
     for module in (batch_cli, score_cli):
         monkeypatch.setattr(module, "get_config", lambda: cfg)
     with store.open_store(cfg.db_path) as conn:

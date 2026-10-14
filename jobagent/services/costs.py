@@ -23,6 +23,7 @@ _CALL_TYPE = {
     "generate": CallType.generate,
     "prep": CallType.prep,
     "classify": CallType.classify,
+    "screen": CallType.triage,
 }
 
 # Each prompt label runs on its own call type's route, which need not be the
@@ -36,6 +37,7 @@ _LABEL_CALL = {
     "generate_answers": CallType.generate,
     "interview_prep": CallType.prep,
     "classify_role": CallType.classify,
+    "screen_fit": CallType.triage,
     "check_claims": CallType.review,
     "review_documents": CallType.review,
 }
@@ -94,6 +96,8 @@ def labels_for(
         return ["interview_prep"]
     if action == "classify":
         return ["classify_role"]
+    if action == "screen":
+        return ["screen_fit"]
     if action == "generate":
         prose = cover or answers
         return (
