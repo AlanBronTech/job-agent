@@ -15,8 +15,8 @@
   <input type="hidden" name="csrf" value="{{ token }}">
   <input type="hidden" name="confirmed" value="1">
   {% if jd.thin %}
-  <div class="banner warn"><strong>Only {{ "{:,}".format(jd.raw_text | length) }} characters of ad text — too little to score.</strong>
-    This is usually a description collapsed when the page was saved. The scorer reads two sentences with the confidence it reads a whole ad.
+  <div class="banner warn"><strong>Only {{ "{:,}".format(jd.raw_text | length) }} characters of text — too little to score.</strong>
+    This is usually a description collapsed when the page was saved. The scorer reads two sentences with the confidence it reads a whole job description.
     <label><input type="checkbox" name="force" value="1" {% if force %}checked{% endif %}> Score it anyway.</label></div>
   {% endif %}
   <div class="panel"><strong>Cost:</strong> {{ estimate }}</div>

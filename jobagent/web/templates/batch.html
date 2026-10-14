@@ -8,7 +8,7 @@
 
 {% if new %}
 <div class="panel">
-  <strong>{{ new | length }} new saved ad(s)</strong>
+  <strong>{{ new | length }} new saved job(s)</strong>
   <ul>{% for name in new %}<li><code>{{ name }}</code></li>{% endfor %}</ul>
   <p><strong>Cost:</strong> {{ parse_cost }}</p>
   {% if missing_parse %}
@@ -18,7 +18,7 @@
     <input type="hidden" name="csrf" value="{{ token }}">
     <input type="hidden" name="confirmed" value="1">
     <button type="submit" class="primary">Confirm and parse all</button>
-    <span class="detail">Each is parsed as a single "Add an ad" would be. You can close this page.</span>
+    <span class="detail">Each is parsed as a single "Add a job" would be. You can close this page.</span>
   </form>
   {% endif %}
 </div>
@@ -28,12 +28,12 @@
     <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="confirmed" value="1">
     <button type="submit">Finish parsing</button></form></div>
 {% elif not rows %}
-<p class="empty">Nothing new saved since you last added an ad. Save ads into your saved-ads folder, then come back.</p>
+<p class="empty">Nothing new saved since you last added a job. Save job descriptions into your saved-ads folder, then come back.</p>
 {% endif %}
 
 {% if confirm %}
 <div class="panel">
-  <strong>Score {{ confirm.go | length }} ad(s)?</strong>
+  <strong>Score {{ confirm.go | length }} job(s)?</strong>
   <ul>{% for id, title in confirm.go %}<li>JD {{ id }} — {{ title }}</li>{% endfor %}</ul>
   {% if confirm.refused %}
   <p class="detail">Not included:</p>
@@ -99,7 +99,7 @@
 <p>
   <button type="submit" formaction="/batch/score/confirm">Score selected…</button>
   <button type="submit" formaction="/batch/skip">Mark selected not applied</button>
-  <span class="detail">Filters: hiring status, work type, location, salary — ✓ met, ✗ breach, ? not stated, · note. Generate from each ad's page.</span>
+  <span class="detail">Filters: hiring status, work type, location, salary — ✓ met, ✗ breach, ? not stated, · note. Generate from each job's page.</span>
 </p>
 </form>
 {% endif %}

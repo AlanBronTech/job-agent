@@ -209,7 +209,7 @@ def test_history_is_shown_on_the_new_ad(client, ws, ids, model):
 
 def test_paste_round_trip_and_double_submit(client, ws, model, monkeypatch):
     body = flat(client.post("/ads/new/confirm", data={"csrf": TOKEN, "mode": "paste", "text": AD}))
-    assert "Parse the pasted ad?" in body
+    assert "Parse the pasted text?" in body
 
     # A run already going for the same text: the second submit joins it.
     key = ads.input_key(ads.read_ad(text=AD.strip()))

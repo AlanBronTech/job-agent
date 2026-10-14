@@ -100,7 +100,7 @@ def test_list_by_score(client, ids):
 
 
 def test_empty_store(client):
-    assert "No ads yet" in client.get("/").text
+    assert "No jobs yet" in client.get("/").text
 
 
 # -- Scenario 2: a breach overrides; "not stated" is never met ----------------

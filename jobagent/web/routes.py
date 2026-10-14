@@ -56,7 +56,7 @@ def ad_page(request: Request, jd_id: int):
         return render(
             request,
             "error.html",
-            {"heading": "No such ad", "detail": f"There is no job description with id {jd_id}."},
+            {"heading": "No such job", "detail": f"There is no job description with id {jd_id}."},
             status_code=404,
         )
     ws = workspace(request)
@@ -193,7 +193,7 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     except NotScored:
         return _back_to_ad(request, jd_id, "Score this ad first: generation is shaped by the assessment.")
     except NoSuchAd:
-        return render(request, "error.html", {"heading": "No such ad",
+        return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
     estimate = costs.estimate(
         ws, config, "generate",
@@ -225,7 +225,7 @@ def _back_to_ad(request: Request, jd_id: int, problem: str):
     try:
         detail = listing.ad_detail(workspace(request), jd_id, today=request.app.state.today())
     except NoSuchAd:
-        return render(request, "error.html", {"heading": "No such ad",
+        return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
     return render(request, "detail.html", {"nav": "ads", "d": detail, "problem": problem,
                                            "run": None}, status_code=409)
@@ -428,7 +428,7 @@ def _score_confirm(request: Request, jd_id: int, force: bool, problem: str | Non
     try:
         jd, seen_before = scoring.load(ws, jd_id)
     except NoSuchAd:
-        return render(request, "error.html", {"heading": "No such ad",
+        return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
     return render(
         request,
@@ -500,7 +500,7 @@ async def reapply_decide(request: Request, jd_id: int):
         state = reapply.check(ws, jd_id, request.app.state.today())
         reapply.decide(ws, jd_id, decision, getattr(getattr(state, "match", None), "against", ""))
     except NoSuchAd:
-        return PlainTextResponse("No such ad.", 404)
+        return PlainTextResponse("No such job.", 404)
     back = str(form.get("next") or f"/ads/{jd_id}")
     if not back.startswith("/") or back.startswith("//"):
         back = f"/ads/{jd_id}"

@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Add an ad · job-agent{% endblock %}
+{% block title %}Add a job · job-agent{% endblock %}
 {% block main %}
-<h1>Add an ad</h1>
+<h1>Add a job</h1>
 {% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
 <p class="detail">Save the job page yourself first (print to PDF, or save as .mhtml or .txt), with the description expanded.
   Nothing here fetches a page. Each option shows the cost before anything is spent.</p>
 
 <div class="panel">
-  <h2 class="inline-h">Newest saved ad</h2>
+  <h2 class="inline-h">Newest saved job</h2>
   {% if newest %}
   <form method="post" action="/ads/new/confirm">
     <input type="hidden" name="csrf" value="{{ token }}">
@@ -38,7 +38,7 @@
   <form method="post" action="/ads/new/confirm">
     <input type="hidden" name="csrf" value="{{ token }}">
     <input type="hidden" name="mode" value="paste">
-    <textarea name="text" rows="10" placeholder="Paste the whole ad, or a recruiter's message"></textarea>
+    <textarea name="text" rows="10" placeholder="Paste the whole job description, or a recruiter's email or message"></textarea>
     <p><label>Source <input type="text" name="source" placeholder="recruiter email"></label>
       <button type="submit" class="primary">Review…</button></p>
   </form>

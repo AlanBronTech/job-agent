@@ -10,7 +10,7 @@
 {% set a = d.assessment %}
 {% block title %}{{ jd.title }} · {{ jd.company or "Unknown" }} · job-agent{% endblock %}
 {% block main %}
-<p class="muted"><a href="/">← Ads</a> · JD {{ jd.id }}</p>
+<p class="muted"><a href="/">← Jobs</a> · JD {{ jd.id }}</p>
 <h1>{{ jd.title }}</h1>
 <p class="muted">
   {{ jd.company or jd.posted_by or "Unknown company" }}
@@ -33,7 +33,7 @@
 {% if run %}{% include "_run.html" %}{% endif %}
 
 {% if d.stale %}
-<div class="banner warn"><strong>This assessment predates an amendment to the ad.</strong>
+<div class="banner warn"><strong>This assessment predates an amendment to the job description.</strong>
   It was scored against text that has since been replaced. Re-score it below.</div>
 {% endif %}
 
@@ -158,7 +158,7 @@
 <h2>Documents</h2>
 <div class="panel folders">
 {% if not d.folders.all %}
-  <p class="muted">Nothing generated for this ad yet.</p>
+  <p class="muted">Nothing generated for this job yet.</p>
 {% else %}
   {% for folder in d.folders.all %}
   <div class="folder">
@@ -205,7 +205,7 @@
 </div>
 
 <details>
-  <summary>Ad text as parsed ({{ jd.raw_text | length }} characters)</summary>
+  <summary>Job description as parsed ({{ jd.raw_text | length }} characters)</summary>
   <pre class="adtext">{{ jd.raw_text }}</pre>
 </details>
 {% endblock %}

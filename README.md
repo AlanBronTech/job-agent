@@ -24,7 +24,8 @@ including the `?t=…` part, or the buttons will be refused.
 
 **What it does today:**
 
-- **The shortlist.** Every ad with its verdict, both scores, where it is in the
+- **Jobs.** The main page: every job description — from an ad, a recruiter's
+  email or a message — with its verdict, both scores, where it is in the
   pipeline and whether documents exist. Sort by date or score.
 - **The assessment.** Click an ad for everything `score` would print — hard
   filters (a breach says so; an unstated one says "not stated", never met),
@@ -32,7 +33,7 @@ including the `?t=…` part, or the buttons will be refused.
   with the same company, and the ad text as parsed.
 - **Documents.** Every folder for that ad, current, superseded or from an
   earlier month, with **Open** (in Word) and **Reveal in Finder**.
-- **Add an ad.** *Add an ad* in the menu: the newest file in
+- **Add a job.** *Add a job* in the menu: the newest file in
   `~/job-agent-jds/`, a file you drop on the page (kept in that folder), or
   pasted text. You see how much text was read and the cost before it parses; a
   capture cut off at "…more" is refused, and a thin one is flagged.

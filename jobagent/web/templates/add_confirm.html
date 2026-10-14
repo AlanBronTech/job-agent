@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Add an ad · job-agent{% endblock %}
+{% block title %}Add a job · job-agent{% endblock %}
 {% block main %}
-<p class="muted"><a href="/ads/new">← Add an ad</a></p>
-<h1>Parse {{ name or "the pasted ad" }}?</h1>
+<p class="muted"><a href="/ads/new">← Add a job</a></p>
+<h1>Parse {{ name or "the pasted text" }}?</h1>
 {% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
 
 <div class="panel">
@@ -17,9 +17,9 @@
 
 {% if ad.truncated %}
 <div class="banner bad"><strong>The description ends at a '…more' toggle — this capture is incomplete.</strong>
-  Expand the description on the page, save it again, and add it again. Parsing half an ad gives a confident, wrong answer.</div>
+  Expand the description on the page, save it again, and add it again. Parsing half a job description gives a confident, wrong answer.</div>
 {% elif ad.thin_chars is not none %}
-<div class="banner warn"><strong>Only {{ "{:,}".format(ad.thin_chars) }} characters of ad text</strong> — more likely a collapsed description than a short advertisement.
+<div class="banner warn"><strong>Only {{ "{:,}".format(ad.thin_chars) }} characters of text</strong> — more likely a collapsed description than a short job description.
   If the page has a '…more' toggle, expand it and save again. You can still add it; scoring will refuse a stub unless you insist.</div>
 {% endif %}
 

@@ -117,7 +117,7 @@ def test_new_files_and_cost_shown_nothing_spent(client, ws, model):
     save(ws, "acme.txt", AD.format(co="Acme Logistics"))
     save(ws, "fabrikam.txt", AD.format(co="Fabrikam Medical"))
     body = flat(client.get("/batch"))
-    assert "2 new saved ad(s)" in body and "acme.txt" in body and "fabrikam.txt" in body
+    assert "2 new saved job(s)" in body and "acme.txt" in body and "fabrikam.txt" in body
     assert "Confirm and parse all" in body
     assert model.parsed == []
 
@@ -154,7 +154,7 @@ def test_score_selected_confirms_then_scores(client, ws, model):
     assert len(selected) == 2
 
     confirm = flat(client.post("/batch/score/confirm", data={"csrf": TOKEN, "jd": selected}))
-    assert "Score 2 ad(s)?" in confirm
+    assert "Score 2 job(s)?" in confirm
     assert "About $" in confirm or "No measurement" in confirm
     assert model.scored == []
 
@@ -183,7 +183,7 @@ def test_a_recent_application_is_left_out_of_score_selected(client, ws, model):
     assert "possibly the same job" in flat(page)
     selected = ids_in(page)
     confirm = flat(client.post("/batch/score/confirm", data={"csrf": TOKEN, "jd": selected}))
-    assert "Score 0 ad(s)?" in confirm and "a job you applied for recently" in confirm
+    assert "Score 0 job(s)?" in confirm and "a job you applied for recently" in confirm
     client.post("/batch/score", data={"csrf": TOKEN, "confirmed": "1", "jd": selected})
     assert model.scored == []
 

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% from "_macros.html" import verdict, status %}
-{% block title %}Ads · job-agent{% endblock %}
+{% block title %}Jobs · job-agent{% endblock %}
 {% block main %}
 <div class="heading-row">
-  <h1>Ads <span class="muted count">{{ rows | length }}</span></h1>
+  <h1>Jobs <span class="muted count">{{ rows | length }}</span></h1>
   <div class="sort">
     Sort:
     <a href="/?sort=date" {% if sort == "date" %}aria-current="true"{% endif %}>newest</a>
@@ -11,7 +11,7 @@
   </div>
 </div>
 {% if not rows %}
-  <p class="empty">No ads yet. Add one with <code>jobagent jd add --latest</code>.</p>
+  <p class="empty">No jobs yet. Add one with <code>jobagent jd add --latest</code>.</p>
 {% else %}
 <div class="table-wrap">
 <table class="ads">
