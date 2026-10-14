@@ -63,7 +63,10 @@ RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
 ANSWERS_PROMPT = "generate_answers"
 
-MAX_TOKENS = 8192
+# Letters and answers. Raised from 8,192 on 2026-10-14: with the cited-sentence
+# contract both real letters that day ran out on the model's reasoning, which
+# counts as output, before the JSON was finished.
+MAX_TOKENS = 32768
 
 # The resume selection gets its own, larger budget. A correct answer to that
 # contract is under a thousand tokens — references, eight keys, a tagline and
