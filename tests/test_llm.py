@@ -586,3 +586,53 @@ def test_a_bad_key_is_still_permanent(monkeypatch, no_sleep) -> None:
         client.complete(prompt="hi")
     assert not isinstance(caught.value, RetryableLLMError)
     assert no_sleep == []
+
+
+# --------------------------------------------------------------------------- #
+# Reasoning effort (2026-10-14)
+# --------------------------------------------------------------------------- #
+
+
+def test_effort_is_sent_to_a_model_that_takes_it(monkeypatch) -> None:
+    client, used = anthropic_client(monkeypatch, message=StubMessage("ok"))
+    client.effort = "low"
+    client.complete(prompt="hi")
+    assert used["stream"]["output_config"] == {"effort": "low"}
+
+
+def test_effort_is_not_sent_to_a_model_that_does_not(monkeypatch) -> None:
+    client, used = anthropic_client(monkeypatch, message=StubMessage("ok"))
+    client.model, client.effort = "claude-haiku-4-5-20251001", "low"
+    client.complete(prompt="hi")
+    assert "output_config" not in used["stream"]
+
+
+def test_efforts_resolve_per_call_type() -> None:
+    from jobagent.adapters.llm import parse_efforts, resolve_effort
+
+    assert parse_efforts("score=high, generate = medium, bogus, prep=extreme") == {
+        "score": "high", "generate": "medium"}
+    config = make_config(llm_effort="score=high,generate=default")
+    assert resolve_effort(config, CallType.score) == "high"
+    assert resolve_effort(config, CallType.generate) is None  # the model decides
+    assert resolve_effort(config, CallType.parse_jd) == "low"  # the default
+    assert get_client(CallType.parse_jd, make_config(llm_default="anthropic:claude-sonnet-5")).effort == "low"
+
+
+def test_gemini_thinking_is_billed_and_budgeted(monkeypatch) -> None:
+    from jobagent.adapters.llm import GeminiClient
+
+    seen = {}
+
+    class Models:
+        def generate_content(self, *, model, contents, config):
+            seen["config"] = config
+            usage = type("U", (), {"prompt_token_count": 100, "candidates_token_count": 50,
+                                   "thoughts_token_count": 400})()
+            return type("R", (), {"text": "{}", "usage_metadata": usage})()
+
+    client = GeminiClient(model="gemini-2.5-flash", api_key="k", effort="low")
+    client._sdk_client = type("SDK", (), {"models": Models()})()
+    response = client.complete(prompt="hi")
+    assert response.output_tokens == 450
+    assert seen["config"].thinking_config.thinking_budget == 0

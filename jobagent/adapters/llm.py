@@ -14,10 +14,12 @@ Design notes:
   identically across providers. Structured output is done the portable way —
   instruct JSON-only, parse defensively, retry once feeding the parse error back
   (per CLAUDE.md) — rather than a provider-specific structured-output API.
-* No `temperature` / thinking parameters are exposed. Models are selected from
-  config and vary across providers and generations; the newest Claude models
-  reject sampling params outright, and thinking config is model-specific. Keeping
-  the surface minimal means any configured model works without a 400.
+* No `temperature` is exposed: the newest Claude models reject sampling params
+  outright. Reasoning *effort* is exposed, per call type (2026-10-14), because
+  the hidden reasoning had become most of the bill: a resume selection wrote
+  15,000 output tokens for a 1,000-token answer. It is sent only to models
+  known to accept it (`_EFFORT_MODELS`) and mapped to a thinking budget on
+  Gemini, so any other configured model still works without a 400.
 * SDKs are imported lazily inside each client, so importing this module — and
   constructing a client — needs neither package installed nor a network call.
   That keeps unit tests fast and mock-friendly.
@@ -26,6 +28,7 @@ Design notes:
 from __future__ import annotations
 
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -118,6 +121,29 @@ class CallRoute:
     model: str
 
 
+# How hard each kind of call should think. Extraction is low; judgement and
+# writing are medium. Overridden per call type with LLM_EFFORT, e.g.
+# "score=high,generate=high"; "default" sends nothing and lets the model decide.
+EFFORT_LEVELS = ("low", "medium", "high")
+DEFAULT_EFFORT: dict[str, str] = {
+    "triage": "low",
+    "parse_jd": "low",
+    "classify": "low",
+    "score": "medium",
+    "generate": "medium",
+    "prep": "medium",
+    "review": "medium",
+}
+
+# Claude models that accept `output_config.effort`. Anything else gets no
+# effort parameter rather than a 400.
+_EFFORT_MODELS = re.compile(r"claude-(opus-4-[5-9]|opus-5|sonnet-5|fable-5)")
+
+# Gemini has no effort setting; it takes a thinking budget in tokens. Flash
+# models accept 0 (no thinking); Pro needs at least 128.
+_GEMINI_BUDGET = {"low": 0, "medium": 2048, "high": 8192}
+
+
 @dataclass
 class LLMResponse:
     text: str
@@ -167,8 +193,10 @@ class LLMClient(ABC):
         api_key: str | None = None,
         runs_log_path: Path | None = None,
         context: RunContext | None = None,
+        effort: str | None = None,
     ) -> None:
         self.model = model
+        self.effort = effort
         self._api_key = api_key
         self._runs_log_path = runs_log_path
         # Mutable: `eval run` walks several cases through one client and sets
@@ -442,9 +470,14 @@ class AnthropicClient(LLMClient):
         runs_log_path: Path | None = None,
         workspace_id: str | None = None,
         context: RunContext | None = None,
+        effort: str | None = None,
     ) -> None:
         super().__init__(
-            model, api_key=api_key, runs_log_path=runs_log_path, context=context
+            model,
+            api_key=api_key,
+            runs_log_path=runs_log_path,
+            context=context,
+            effort=effort,
         )
         # Identity-linked keys (the kind issued to a user rather than to a
         # workspace) are rejected without an anthropic-workspace-id header.
@@ -477,6 +510,8 @@ class AnthropicClient(LLMClient):
         }
         if system:
             kwargs["system"] = system
+        if self.effort and _EFFORT_MODELS.search(self.model):
+            kwargs["output_config"] = {"effort": self.effort}
         try:
             # Streamed, then reassembled. The answer is identical either way —
             # what changes is that the connection stays busy while the model
@@ -551,9 +586,16 @@ class GeminiClient(LLMClient):
         from google.genai import types
         from google.genai import errors as genai_errors
 
+        thinking = None
+        if self.effort in _GEMINI_BUDGET:
+            budget = _GEMINI_BUDGET[self.effort]
+            if "pro" in self.model:
+                budget = max(budget, 128)
+            thinking = types.ThinkingConfig(thinking_budget=budget)
         config = types.GenerateContentConfig(
             max_output_tokens=max_tokens,
             system_instruction=system or None,
+            thinking_config=thinking,
         )
         try:
             result = self._sdk().models.generate_content(
@@ -587,7 +629,10 @@ class GeminiClient(LLMClient):
             provider=self.provider,
             model=self.model,
             input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
-            output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+            # Thinking is billed as output, and Gemini reports it separately;
+            # leaving it out made every Gemini call look cheaper than it was.
+            output_tokens=(getattr(usage, "candidates_token_count", 0) or 0)
+            + (getattr(usage, "thoughts_token_count", 0) or 0),
         )
 
 
@@ -716,6 +761,7 @@ def get_client(
         config = get_config()
 
     route = resolve_route(config, call_type)
+    effort = resolve_effort(config, call_type)
     if route.provider is Provider.anthropic:
         return AnthropicClient(
             model=route.model,
@@ -723,10 +769,31 @@ def get_client(
             runs_log_path=config.runs_log_path,
             workspace_id=config.anthropic_workspace_id,
             context=context,
+            effort=effort,
         )
     return _CLIENTS[route.provider](
         model=route.model,
         api_key=config.gemini_api_key,
         runs_log_path=config.runs_log_path,
         context=context,
+        effort=effort,
     )
+
+
+def parse_efforts(raw: str | None) -> dict[str, str]:
+    """"score=high, generate=medium" -> {"score": "high", ...}. Bad pairs are dropped."""
+    out: dict[str, str] = {}
+    for part in (raw or "").split(","):
+        key, _, value = part.partition("=")
+        key, value = key.strip(), value.strip().lower()
+        if key and value in (*EFFORT_LEVELS, "default"):
+            out[key] = value
+    return out
+
+
+def resolve_effort(config: "Config", call_type: CallType) -> str | None:
+    """The effort for a call type: LLM_EFFORT's entry, else the default above."""
+    chosen = parse_efforts(getattr(config, "llm_effort", None)).get(
+        call_type.value, DEFAULT_EFFORT.get(call_type.value)
+    )
+    return None if chosen in (None, "default") else chosen
