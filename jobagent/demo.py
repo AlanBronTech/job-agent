@@ -297,9 +297,8 @@ def _documents(p, profile, jd, fit, today) -> None:
             date=f"{today:%-d %B %Y}",
             recipient=[jd.company],
             paragraphs=[
-                "You are hiring an Engineering Manager to coach and grow a team of eight, "
-                "and route planning for regional freight carriers is a problem I want to "
-                "work on.",
+                "Coaching and growing a team of eight is the work I do best, and route "
+                "planning for regional freight carriers is a problem I want to work on.",
                 "I led a 15-person team across three product lines, recruited and onboarded "
                 "9 of them, and ran their performance and career development.",
                 "Before that I recruited, trained and led a distributed team of 6 that "

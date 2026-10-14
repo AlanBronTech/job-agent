@@ -501,6 +501,8 @@ def build_cover_letter(
             role_kind=role_kind_block(kind),
             catalogue=_render_catalogue(profile, build_catalogue(profile, excluded), excluded),
             stories=_render_stories(profile, excluded),
+            must_have_gaps="\n".join(f"- {g}" for g in must_have_gaps(jd, assessment))
+            or "(none: write no gap sentence)",
             voice=profile.voice,
         )
     except PromptError as exc:
@@ -1462,3 +1464,49 @@ def check_company_sentences(
             )
         )
     return issues
+
+
+_WORD = re.compile(r"[a-z0-9+#.]+")
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
+
+
+def overlap(a: str, b: str) -> float:
+    """Share of the smaller text's words found in the other, 0..1."""
+    wa, wb = _words(a), _words(b)
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / min(len(wa), len(wb))
+
+
+def must_have_gaps(jd: JobDescription, assessment: FitAssessment) -> list[str]:
+    """Requirements marked `gap` that are one of the ad's must-haves.
+
+    The assessment's requirements mix must-haves with nice-to-haves, and a
+    letter once volunteered a Kubernetes gap the ad listed only as an "e.g.".
+    A requirement counts as a must-have when it shares most of its words with
+    one of `jd.must_haves` and is not a nice-to-have.
+    """
+    out = []
+    for row in assessment.requirements:
+        if row.status.value != "gap":
+            continue
+        if any(overlap(row.requirement, nice) >= 0.6 for nice in jd.nice_to_haves):
+            continue
+        if any(overlap(row.requirement, _firm_part(must)) >= 0.5 for must in jd.must_haves):
+            out.append(row.requirement)
+    return out
+
+
+# Words after which a must-have turns into examples or wishes. "Container
+# orchestration (e.g. Kubernetes)" asks for orchestration, not for Kubernetes.
+_SOFTENER = re.compile(
+    r"\(?\b(?:e\.g\.?|eg|such as|for example|ideally|preferably|a plus|nice to have|bonus)\b",
+    re.IGNORECASE,
+)
+
+
+def _firm_part(must_have: str) -> str:
+    return _SOFTENER.split(must_have, maxsplit=1)[0]

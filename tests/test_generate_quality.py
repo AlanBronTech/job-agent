@@ -233,3 +233,43 @@ def test_a_bare_entry_in_profile_and_a_highlight_is_not_reuse(profile):
     payload = selection(profile_refs=[["recent_manager"], []])
     built, _ = resume(profile, payload)
     assert not any(i.rule == "story reused" for i in built.issues)
+
+
+# -- 2026-10-15: gaps only from real must-haves, openers, chronology ------------------
+
+
+def test_only_a_real_must_have_gap_is_offered_to_the_letter():
+    from jobagent.core.generate import must_have_gaps
+    from jobagent.core.models import MatchStatus, RequirementMatch
+
+    jd = northwind()
+    jd.must_haves = ["Container orchestration experience (e.g. Kubernetes)",
+                     "Freight or logistics domain knowledge"]
+    jd.nice_to_haves = ["GraphQL"]
+    a = northwind_assessment()
+    a.requirements = [
+        RequirementMatch(requirement="Kubernetes", status=MatchStatus.gap, note="x"),
+        RequirementMatch(requirement="Freight or logistics domain knowledge", status=MatchStatus.gap, note="x"),
+        RequirementMatch(requirement="GraphQL", status=MatchStatus.gap, note="x"),
+    ]
+    assert must_have_gaps(jd, a) == ["Freight or logistics domain knowledge"]
+
+
+def test_the_letter_prompt_lists_only_must_have_gaps(profile):
+    client = RoutedClient({"generate_cover_letter": {"paragraphs": [[
+        {"text": "I recruited and onboarded nine people.", "cites": ["recent_manager.0"]}]]}})
+    build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
+    prompt = client.prompts["generate_cover_letter"][0]
+    gaps = prompt.split("<must_have_gaps>")[1].split("</must_have_gaps>")[0]
+    # Northwind's one gap (freight) is not among its must-haves: no gap to admit.
+    assert "(none: write no gap sentence)" in gaps
+
+
+def test_reading_the_ad_back_and_order_claims_block(profile):
+    from jobagent.core.validation import validate_prose
+
+    rules_found = {i.rule for i in validate_prose("You're hiring a manager to grow a team.", profile)}
+    assert "banned opening" in rules_found
+    found = validate_prose("Example Startup was my first engineering leadership role.", profile)
+    assert any(i.rule == "unverifiable chronology" for i in found)
+    assert not validate_prose("I led the first release of the platform.", profile)

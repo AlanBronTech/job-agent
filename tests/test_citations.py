@@ -30,7 +30,7 @@ def para(*sentences):
 def test_uncited_and_unknown_block_and_ad_framing_passes(profile):
     known = known_citations(profile)
     issues = check_citations([para(
-        ("You are hiring an Engineering Manager.", ["ad"]),
+        ("The role leads a team of eight.", ["ad"]),
         ("I recruited nine people.", ["recent_manager.0"]),
         ("I told the scope story.", ["scope_disagreement"]),
         ("I am a strong communicator.", []),

@@ -63,6 +63,24 @@ _AGE_SIGNAL_PATTERNS: tuple[tuple[str, str], ...] = (
 _BANNED_OPENERS = (
     "as a seasoned professional",
     "i am writing to apply for",
+    # The ad read back to its author. Both letters of 2026-10-14 opened this
+    # way, and a reviewer called it a template: it is one.
+    "you're hiring",
+    "you are hiring",
+    "you're looking for",
+    "you are looking for",
+    "you want someone",
+    "you need someone",
+)
+
+# Claims about order — "my first leadership role" — that no check can trace to
+# a citation and that the record can contradict: one letter called a role his
+# first in leadership while EARLIER CAREER listed three earlier team-lead roles.
+_CHRONOLOGY_PATTERNS = (
+    r"\b(?:my|his|the)\s+first\s+(?:\w+\s+){0,3}(?:role|job|position|leadership|management|team)\b",
+    r"\bfor the first time\b",
+    r"\bfirst time (?:i|he)\b",
+    r"\bnever (?:before|previously)\b",
 )
 
 _NUMBER_PATTERN = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -99,6 +117,7 @@ def validate_prose(
     issues += _check_numbers(text, profile)
     issues += _check_scorer_only_leakage(text, profile)
     issues += _check_contrast_phrasing(text, context)
+    issues += _check_chronology(text, context)
     if max_words is not None:
         issues += _check_length(text, max_words, context)
     return issues
@@ -343,6 +362,26 @@ def _check_contrast_phrasing(text: str, context: str) -> list[ValidationIssue]:
             excerpt=_excerpt(text, first.start(), first.end()),
         )
     ]
+
+
+def _check_chronology(text: str, context: str) -> list[ValidationIssue]:
+    issues = []
+    for pattern in _CHRONOLOGY_PATTERNS:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            issues.append(
+                ValidationIssue(
+                    rule="unverifiable chronology",
+                    severity=Severity.blocker,
+                    detail=(
+                        f"{context} makes a claim about order ('first', 'never "
+                        "before') that the evidence cannot back and the career "
+                        "record may contradict. State what was done, not where it "
+                        "sits in a sequence."
+                    ),
+                    excerpt=_excerpt(text, match.start(), match.end()),
+                )
+            )
+    return issues
 
 
 def _check_openers(text: str) -> list[ValidationIssue]:

@@ -69,12 +69,20 @@ from what you are shown. Do not refer to it from memory.
    employer cites `"ad"`. A sentence that cites nothing, or cites an id not
    shown above, is rejected — and a sentence must not say more than its
    cited evidence says: no merged people, no moved places, no added detail.
-   Every number you write must appear there. If the ad asks for something the evidence does not contain,
-   name it as the gap — do not imply it, do not approximate it, and do not
-   reach for an adjacent claim and hope.
-4. **The gap sentence is not optional and is not softened.** The assessment's
-   `requirements` marked `gap` and its `challenge_points` are where it comes
-   from. Naming it plainly is the point: it is what makes the rest credible.
+   Every number you write must appear there. Where the evidence does not
+   cover something, do not imply it, do not approximate it, and do not reach
+   for an adjacent claim and hope.
+4. **One honest gap sentence, about a real must-have only.** Name the biggest
+   gap from this list and what compensates for it, plainly:
+
+   <must_have_gaps>
+   {must_have_gaps}
+   </must_have_gaps>
+
+   These are the ad's must-haves the assessment marked as gaps. Never admit a
+   gap in something the ad lists as a nice-to-have, an example ("e.g."), or
+   "ideally" / "a plus": volunteering it to a screener costs more than it
+   buys. If the list is empty, write no gap sentence.
 5. **Where `stories.explanations` covers something — the employment gap, the
    stack mismatch, salary — use its wording.** Those are answers Alan has
    already agreed to give. Do not invent a different one.
@@ -88,7 +96,10 @@ from what you are shown. Do not refer to it from memory.
    sentence: never fill it from general knowledge.
 8. **Each story once.** A story (or a bullet linked to it) is told in one
    paragraph only; a second paragraph citing it is rejected.
-9. No enthusiasm as a substitute for evidence. No restating the ad back at the
+9. **Do not open by reading the ad back.** No sentence may begin "You're
+   hiring", "You are looking for", "You want someone" — rejected, and every
+   letter opened that way reads as a template. Open on the strongest evidence.
+10. No enthusiasm as a substitute for evidence. No restating the ad back at the
    reader. No flattering the company. See the banned lists in the voice above.
 
 ## Output
@@ -98,7 +109,7 @@ JSON only. Paragraphs in order, each a list of sentences:
 {
   "paragraphs": [
     [
-      {"text": "You are hiring an Engineering Manager to grow a team of eight.", "cites": ["ad"]},
+      {"text": "Growing a team of eight engineers is the work I have done most and want to keep doing.", "cites": ["ad", "recent_manager.0"]},
       {"text": "Route planning for regional carriers is a problem I would like to work on.", "cites": ["ad"], "quote": "route planning for regional freight carriers"},
       {"text": "I recruited and onboarded nine people into a 15-person team.", "cites": ["recent_manager.0"]}
     ],
