@@ -196,3 +196,28 @@ def test_nothing_is_printed_when_everything_was_used(monkeypatch, tmp_path):
     generate_cli._report(tmp_path, [], [], [])
 
     assert "Not used" not in buffer.getvalue()
+
+
+# -- REVIEW-2026-10-16 D10: content that reached the page counts as used ----------
+
+
+def test_an_entry_whose_wording_is_on_the_page_is_not_reported_unused(profile_factory):
+    """ai_credentials' one bullet is the certificate the Education section
+    prints; the panel listed it as unused on JD 85 because it matched by id."""
+    from jobagent.core.generate import unused_entries
+    from jobagent.core.profile import load_profile
+    from tests.conftest import edit_yaml
+
+    def mutate(path):
+        def change(data):
+            data["ai_capability"][2]["bullets"][0]["text"] = (
+                "Completed the Example AI Practitioner Certificate from Example Training Provider.")
+        edit_yaml(path / "roles.yaml", change)
+
+    profile = load_profile(profile_factory(mutate))
+    from jobagent.core.generate import _ResumeSelection
+    selection = _ResumeSelection(tagline="t", profile_paragraphs=[], highlights=[], roles=[])
+    on_page = ["Example AI Practitioner Certificate — Example Training Provider"]
+    by_id = {u.id for u in unused_entries(selection, profile)}
+    by_content = {u.id for u in unused_entries(selection, profile, on_page=on_page)}
+    assert "ai_credentials" in by_id and "ai_credentials" not in by_content

@@ -275,7 +275,7 @@ def _check_resume(
     return GeneratedResume(
         content=content,
         issues=issues + reference_issues + cover.issues(rows),
-        unused=unused_entries(selection, profile, excluded),
+        unused=unused_entries(selection, profile, excluded, on_page=_page_lines(content)),
         coverage=rows,
         on_page={
             **{f"highlight {n}": h.text for n, h in enumerate(selection.highlights, 1)},
@@ -1012,8 +1012,16 @@ def build_citable(profile: Profile, excluded: set[str] = frozenset()) -> set[str
     return citable
 
 
+# A bullet whose wording is this close to a line on the page reached the page,
+# whichever id it went by.
+CONTENT_MATCH = 0.6
+
+
 def unused_entries(
-    selection: "_ResumeSelection", profile: Profile, excluded: set[str] = frozenset()
+    selection: "_ResumeSelection",
+    profile: Profile,
+    excluded: set[str] = frozenset(),
+    on_page: list[str] | None = None,
 ) -> list[UnusedEntry]:
     """Entries offered to the model that reached none of the generated sections.
 
@@ -1048,6 +1056,11 @@ def unused_entries(
             if entry.visibility is Visibility.scorer_only:
                 continue
             if entry.id in used or entry.id in excluded:
+                continue
+            # REVIEW-2026-10-16 D10: the panel listed a certificate printed in
+            # EDUCATION, because it matched by id only. Wording on the page counts.
+            texts = [b.text for b in getattr(entry, "bullets", [])] or [getattr(entry, "summary", "")]
+            if on_page and any(overlap(t, line) >= CONTENT_MATCH for t in texts if t for line in on_page):
                 continue
             unused.append(
                 UnusedEntry(
@@ -1666,3 +1679,11 @@ def _repeats_resume(paragraphs, on_resume: dict[str, str]) -> list[ValidationIss
                     )
                     break
     return issues
+
+
+def _page_lines(content: ResumeContent) -> list[str]:
+    """Every line of prose the resume prints, for matching evidence by wording."""
+    lines = [*content.profile_paragraphs, *(text for _, text in content.highlights)]
+    lines += [b for role in content.roles for b in role.bullets]
+    lines += [*content.earlier_career, *content.education]
+    return lines

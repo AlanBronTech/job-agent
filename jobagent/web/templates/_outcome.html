@@ -62,7 +62,7 @@
     {% endif %}
   {% endfor %}
   {% if r.unused %}
-  <p><strong>Not used</strong> <span class="muted">{{ r.unused | length }} profile entr(ies)</span></p>
+  <p><strong>Not used</strong> <span class="muted">{{ r.unused | length }} profile entr(ies) neither cited on the resume nor matched by their wording; something said in other words is not detected</span></p>
   <ul class="checks">
   {% for u in r.unused | sort(attribute="highlight_only", reverse=true) %}
     <li><span class="mark muted">·</span><span><code>{{ u.id }}</code> {{ u.label }}

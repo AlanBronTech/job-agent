@@ -319,7 +319,10 @@ def _report_unused(unused: list[UnusedEntry]) -> None:
     if not unused:
         return
 
-    console.print(f"\n[bold]Not used[/] [dim]{len(unused)} profile entr(ies)[/]")
+    console.print(
+        f"\n[bold]Not used[/] [dim]{len(unused)} profile entr(ies) neither cited on the resume "
+        "nor matched by their wording; something said in other words is not detected[/]"
+    )
     table = Table(box=None, pad_edge=False, show_header=False)
     table.add_column(style="cyan", no_wrap=True)
     table.add_column()
