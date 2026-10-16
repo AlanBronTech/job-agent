@@ -210,8 +210,9 @@
     <div class="fields">
       <label>Status
         <select id="status" name="status">
+          <option value="" {% if not current and not pipeline_confirm %}selected{% endif %}>{{ "— choose —" if not current else "keep: " ~ pipeline.statuses[current] }}</option>
           {% for value, label in pipeline.statuses.items() %}
-          <option value="{{ value }}" {% if value == (current or "applied") %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ value }}" {% if pipeline_confirm and value == "applied" %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select></label>
       <label>Applied on
@@ -231,8 +232,13 @@
       <label>Why <input type="text" id="why" name="why" placeholder="one line, read in the eval report"></label>
     </div>
     <label>Note <input type="text" id="note" name="note" class="wide" placeholder="added to the notes, never replacing them"></label>
+    {% if pipeline_confirm %}
+    <div class="banner bad">These documents still have blockers: {{ pipeline_confirm | join(", ") }}.
+      <label><input type="checkbox" id="confirm_blockers" name="confirm_blockers" value="1">
+        I fixed them by hand, or I am sending them anyway: record Applied.</label></div>
+    {% endif %}
     <p><button type="submit" class="primary">Save</button>
-      <span class="detail">Free. Applied with no date gets today's.</span></p>
+      <span class="detail">Free. Nothing changes until you choose. Applied with no date gets today's.</span></p>
   </form>
 </div>
 

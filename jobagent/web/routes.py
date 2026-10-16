@@ -90,10 +90,15 @@ async def pipeline_save(request: Request, jd_id: int):
             why=str(form.get("why") or ""),
             note=str(form.get("note") or ""),
             today=request.app.state.today(),
+            confirm_blockers=form.get("confirm_blockers") == "1",
         )
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except pipeline.OpenBlockers as exc:
+        return _back_to_ad(request, jd_id, "Not saved: documents marked NOT-READY are in the "
+                           "folder. Tick the box under Pipeline to record Applied anyway.",
+                           extra={"pipeline_confirm": exc.files})
     except ValueError as exc:
         return _back_to_ad(request, jd_id, f"Not saved: {exc}")
     return RedirectResponse(f"/ads/{jd_id}?saved=1#pipeline", status_code=303)
@@ -247,14 +252,14 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     )
 
 
-def _back_to_ad(request: Request, jd_id: int, problem: str):
+def _back_to_ad(request: Request, jd_id: int, problem: str, extra: dict | None = None):
     try:
         detail = listing.ad_detail(workspace(request), jd_id, today=request.app.state.today())
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
     return render(request, "detail.html", {"nav": "ads", "d": detail, "problem": problem,
-                                           "run": None}, status_code=409)
+                                           "run": None, **(extra or {})}, status_code=409)
 
 
 @router.post("/ads/{jd_id}/generate/confirm")

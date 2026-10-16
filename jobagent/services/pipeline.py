@@ -108,6 +108,22 @@ WORTH_LABELS: dict[str, str] = {
 }
 
 
+class OpenBlockers(Exception):
+    """Recording Applied while documents marked NOT-READY sit in the folder."""
+
+    def __init__(self, files: list[str]) -> None:
+        super().__init__(", ".join(files))
+        self.files = files
+
+
+def not_ready_documents(ws: Workspace, jd: JobDescription, today: date) -> list[str]:
+    """Documents in this month's folder that a blocker survived in."""
+    current = ws.documents.list_for(jd, today).current
+    if current is None:
+        return []
+    return sorted(f.name for f in current.files if "_NOT-READY" in f.name)
+
+
 def update_from_form(
     ws: Workspace,
     jd_id: int,
@@ -120,17 +136,37 @@ def update_from_form(
     why: str = "",
     note: str = "",
     today: date,
+    confirm_blockers: bool = False,
 ) -> tuple[JobDescription, Application]:
     """The UI's pipeline form, validated, as one `save`.
+
+    Nothing is implicit (REVIEW-2026-10-16 D9): the status is whatever was
+    chosen, an empty choice keeps the current status, and with no application
+    yet an empty choice is refused rather than defaulted. Recording Applied
+    while a NOT-READY document is in the folder needs `confirm_blockers`.
 
     An application recorded as applied with no date gets today's, the way
     `jobagent apply` does. A channel is "recruiter — Jane Smith" when a detail
     is given, the convention the CLI's records already use.
     """
-    try:
-        new_status = ApplicationStatus(status)
-    except ValueError as exc:
-        raise ValueError(f"Unknown status {status!r}") from exc
+    with store.open_store(ws.db_path) as conn:
+        jd = store.get_jd(conn, jd_id)
+        existing = store.get_application(conn, jd_id)
+    if jd is None:
+        raise NoSuchAd(jd_id)
+    if not status:
+        if existing is None:
+            raise ValueError("Choose a status: nothing is recorded until you do.")
+        new_status = existing.status
+    else:
+        try:
+            new_status = ApplicationStatus(status)
+        except ValueError as exc:
+            raise ValueError(f"Unknown status {status!r}") from exc
+    if new_status is ApplicationStatus.applied and not confirm_blockers:
+        blocked = not_ready_documents(ws, jd, today)
+        if blocked and not (existing and existing.status is ApplicationStatus.applied):
+            raise OpenBlockers(blocked)
     day: date | None = None
     if applied_on:
         day = date.fromisoformat(applied_on)
@@ -143,8 +179,6 @@ def update_from_form(
         full_channel = chosen
     elif detail:
         full_channel = detail
-    with store.open_store(ws.db_path) as conn:
-        existing = store.get_application(conn, jd_id)
     if day is None and new_status is ApplicationStatus.applied and not (existing and existing.applied_on):
         day = today
     return save(

@@ -265,3 +265,31 @@ def test_a_bad_status_or_token_changes_nothing(client, ws, ids):
                        data={"csrf": "wrong", "status": "applied"}).status_code in (400, 403)
     with store.open_store(ws.db_path) as conn:
         assert store.get_application(conn, ids["contoso"]) is None
+
+
+# -- REVIEW-2026-10-16 D9: status is never set implicitly ---------------------------
+
+
+def test_the_status_has_no_default_and_saving_without_one_records_nothing(client, ws, ids):
+    page = client.get(f"/ads/{ids['contoso']}").text
+    form = page.split('name="status"')[1].split("</select>")[0]
+    assert 'value="" selected' in form and 'value="applied" selected' not in form
+    response = client.post(f"/ads/{ids['contoso']}/pipeline",
+                           data={"csrf": TOKEN, "status": "", "note": "Just a note."})
+    assert response.status_code == 409 and "Choose a status" in response.text
+    with store.open_store(ws.db_path) as conn:
+        assert store.get_application(conn, ids["contoso"]) is None
+
+
+def test_applied_with_a_not_ready_document_needs_an_explicit_confirmation(client, ws, ids):
+    with store.open_store(ws.db_path) as conn:
+        jd_row = store.get_jd(conn, ids["contoso"])
+    folder = ws.documents.path_for_write(jd_row, TODAY, "x").parent
+    (folder / "AlanBron_CoverLetter_ContosoHealth_202609_NOT-READY.docx").write_bytes(b"x")
+    refused = client.post(f"/ads/{ids['contoso']}/pipeline", data={"csrf": TOKEN, "status": "applied"})
+    assert refused.status_code == 409 and "NOT-READY" in refused.text and 'name="confirm_blockers"' in refused.text
+    with store.open_store(ws.db_path) as conn:
+        assert store.get_application(conn, ids["contoso"]) is None
+    ok = client.post(f"/ads/{ids['contoso']}/pipeline",
+                     data={"csrf": TOKEN, "status": "applied", "confirm_blockers": "1"})
+    assert ok.status_code == 303
