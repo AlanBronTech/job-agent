@@ -206,8 +206,8 @@ def check_citations(
 
 
 # Words that make a company name formal without making it a different company:
-# "Brightside Co" is called Brightside in a sentence, "Rockwell Information
-# Services" is called Rockwell.
+# "Example Platform Co" is called Example Platform in a sentence, "Example
+# Information Services" is called Example.
 _CORPORATE_TAIL = re.compile(
     r"(?:\s+(?:co|pty|ltd|limited|inc|group|bank|information services|services)\.?|\.io)$",
     re.IGNORECASE,

@@ -190,9 +190,9 @@ _YEARS_AT = re.compile(r"\byears\s+(?:at|with|in)\b(?P<rest>[^.;]*)", re.IGNOREC
 def duration_claims(text: str, profile: Profile, *, today: date | None = None) -> list[str]:
     """"Years at X" where the dates give X less than two years (D8).
 
-    A suggested interview answer said the work he is proudest of "took years at
-    Sentral and Easy Signs"; Easy Signs lasted seven months. Every employer
-    named after "years at" is checked.
+    A suggested interview answer said the work he is proudest of "took years
+    at" two employers, one of which he worked at for seven months. Every
+    employer named after "years at" is checked.
     """
     today = today or date.today()
     spans = roles_in_order(profile)
