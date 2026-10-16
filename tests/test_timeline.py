@@ -92,3 +92,31 @@ def test_a_wrong_order_in_the_assessment_is_reported(tmp_path, monkeypatch):
     result = scoring.score(ws, Config(_env_file=None), RunContext(command="score"), ids["contoso"],
                            client_factory=lambda: object())
     assert any("dates say otherwise" in w and "Example Bank" in w for w in result.warnings)
+
+
+# -- REVIEW-2026-10-16 D4: management tenure is cumulative ---------------------------
+
+
+def test_management_tenure_adds_up_across_roles(profile):
+    """Example EdTech 2018–2021, Example Startup 2023–24, Example Consultancy 2024–25,
+    Example Manufacturing 2025–26: no single role is 2+ years except the first,
+    and the total is what a "2+ years as an EM" requirement asks about."""
+    months = timeline.management_months(profile, today=__import__("datetime").date(2026, 10, 16))
+    assert months == 36 + 12 + 12 + 12
+    assert "Management tenure, all roles added up: 72 months (6 years)" in timeline.render(profile)
+
+
+def test_a_title_on_the_equivalent_list_or_the_flag_counts_as_management(profile):
+    sdm = profile.roles.roles[0]
+    assert sdm.title == "Software Development Manager" and timeline.is_management(sdm)
+    ic = next(r for r in profile.roles.roles if r.id == "pos_build")
+    assert not timeline.is_management(ic)
+    flagged = ic.model_copy(update={"people_management": True})
+    assert timeline.is_management(flagged)
+    narrow = timeline.is_management(sdm, titles=("engineering manager",))
+    assert narrow is False  # the list is configurable
+
+
+def test_the_scorer_is_told_tenure_requirements_are_cumulative():
+    prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
+    assert "cumulative" in prompt and "Management tenure" in prompt

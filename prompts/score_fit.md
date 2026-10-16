@@ -22,6 +22,12 @@ contributor. This is worked out in code from the start and end dates. Use it
 for any statement about order, sequence or tenure: what came before what,
 whether IC work preceded management. Do not work order out yourself.
 
+**Tenure requirements are cumulative.** "2+ years as an Engineering Manager"
+asks how long he has managed engineers in total, not whether one role lasted
+two years. Judge it against the **Management tenure** line, which adds up every
+management-tagged role; titles such as Software Development Manager count.
+Score the recruiter screen on the same basis: a screener adds up tenure too.
+
 <timeline>
 {timeline}
 </timeline>

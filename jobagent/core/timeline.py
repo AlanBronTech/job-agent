@@ -15,12 +15,24 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 
 from jobagent.core.models import Profile, Visibility
 from jobagent.core.validation import employer_aliases
 
-_MANAGEMENT_TITLE = re.compile(
-    r"manager|head of|\bcto\b|chief technology|director|team lead", re.IGNORECASE
+# Titles that count as managing engineers, for the timeline's tags and for
+# management tenure. Matched case-insensitively as substrings of the title.
+# Set `people_management` on a role whose title undersells it, rather than
+# widening this list.
+EM_TITLES: tuple[str, ...] = (
+    "engineering manager",
+    "software development manager",
+    "development manager",
+    "head of engineering",
+    "director of engineering",
+    "chief technology officer",
+    "cto",
+    "team lead",
 )
 
 
@@ -45,11 +57,32 @@ def _period(value: str | None) -> tuple[int, int] | None:
     return int(year), int(month or 1)
 
 
-def is_management(role) -> bool:
+def is_management(role, titles: tuple[str, ...] = EM_TITLES) -> bool:
     flag = getattr(role, "people_management", None)
     if flag is not None:
         return bool(flag)
-    return bool(_MANAGEMENT_TITLE.search(role.title))
+    title = role.title.lower()
+    return any(re.search(rf"\b{re.escape(t)}\b", title) for t in titles)
+
+
+def management_months(profile: Profile, *, today: date | None = None) -> int:
+    """Months spent in management roles, added up across roles, overlaps counted once.
+
+    REVIEW-2026-10-16 D4: "2+ years as an Engineering Manager" was marked
+    partial because no single role was two years long. The requirement is
+    cumulative, and adding is arithmetic, so it is done here and handed over.
+    """
+    today = today or date.today()
+    months: set[tuple[int, int]] = set()
+    for span in roles_in_order(profile):
+        if not span.management:
+            continue
+        end = span.end or (today.year, today.month)
+        y, m = span.start
+        while (y, m) < end:
+            months.add((y, m))
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return len(months)
 
 
 def roles_in_order(profile: Profile) -> list[Span]:
@@ -78,6 +111,12 @@ def render(profile: Profile) -> str:
     first = next((s for s in spans if s.management), None)
     if first:
         lines.append(f"First management role starts {_fmt(first.start)} ({first.company}).")
+        total = management_months(profile)
+        years, rest = divmod(total, 12)
+        lines.append(
+            f"Management tenure, all roles added up: {total} months ({years} years"
+            + (f" {rest} months" if rest else "") + ")."
+        )
     ics_after = [s.company for s in spans if not s.management and first and s.start > first.start]
     if ics_after:
         lines.append(
