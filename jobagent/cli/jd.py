@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from jobagent.timefmt import local
+
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -459,7 +461,7 @@ def delete(
         )
         for item in assessments:
             console.print(
-                f"    [dim]{item.scored_at:%Y-%m-%d}  {item.overall_score}/100  "
+                f"    [dim]{local(item.scored_at):%Y-%m-%d}  {item.overall_score}/100  "
                 f"{item.verdict.value}[/]"
             )
     if application is not None:

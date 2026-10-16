@@ -17,7 +17,7 @@
   {% if jd.location %} · {{ jd.location }}{% endif %}
   · {{ jd.work_type.value | replace("_", " ") }} · {{ jd.work_arrangement.value | replace("_", " ") }}
   {% if jd.salary_range and jd.salary_range.raw %} · {{ jd.salary_range.raw }}{% endif %}
-  · captured {{ jd.ingested_at.strftime("%-d %b %Y") }}
+  · captured {{ jd.ingested_at | local("%-d %b %Y") }}
   {% if jd.requisition_id %} · requisition <code>{{ jd.requisition_id }}</code>{% endif %}
 </p>
 {% if jd.source_url or jd.source_metadata %}
@@ -45,7 +45,7 @@
   {% for e in d.history.encounters %}
     <li><span class="mark muted">·</span>
       <span>{% if e.jd_id is not none %}<a href="/ads/{{ e.jd_id }}">JD {{ e.jd_id }} — {{ e.title }}</a>{% else %}{{ e.title }} <span class="pill muted">applied outside the tool</span>{% endif %}
-        <span class="muted">{{ e.ingested_at.strftime("%-d %b %Y") }}</span>
+        <span class="muted">{{ e.ingested_at | local("%-d %b %Y") }}</span>
         {% if e.same_posting %}<span class="pill warn">same posting</span>{% endif %}
         · {{ status(e.status) }}
         {% if e.worth_why %}<div class="detail">{{ e.worth_why }}</div>{% endif %}</span>
@@ -133,7 +133,7 @@
   <div class="panel"><ul>{% for g in a.profile_gaps %}<li class="muted">{{ g }}</li>{% endfor %}</ul></div>
   {% endif %}
 
-  <p class="detail">{{ a.model_used or "an unrecorded model" }} · scored {{ a.scored_at.strftime("%-d %b %Y %H:%M") }}</p>
+  <p class="detail">{{ a.model_used or "an unrecorded model" }} · scored {{ a.scored_at | local("%-d %b %Y %H:%M") }}</p>
   {{ score_button(jd, "Re-score…" ) }}
 {% endif %}
 
@@ -181,7 +181,7 @@
           <button type="submit">Open</button>
         </form>
         <span>{{ f.name }}</span>
-        <span class="muted">{{ f.modified.strftime("%-d %b %Y %H:%M") }}</span>
+        <span class="muted">{{ f.modified | local("%-d %b %Y %H:%M") }}</span>
       </li>
     {% endfor %}
     </ul>

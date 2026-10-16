@@ -35,6 +35,7 @@ from jobagent.core.models import (
 from jobagent.core.generate import kind_label
 from jobagent.core.scoring import ScoringError
 from jobagent.core.store import StoreError
+from jobagent.timefmt import local
 
 console = Console()
 err_console = Console(stderr=True)
@@ -293,7 +294,7 @@ def _render(
     _render_lines("Gaps in the profile itself", fit.profile_gaps, style="dim")
 
     if fit.model_used:
-        console.print(f"\n[dim]{fit.model_used} · {fit.scored_at:%Y-%m-%d %H:%M}[/]")
+        console.print(f"\n[dim]{fit.model_used} · {local(fit.scored_at):%Y-%m-%d %H:%M}[/]")
 
 
 def _render_constraints(fit: FitAssessment) -> None:

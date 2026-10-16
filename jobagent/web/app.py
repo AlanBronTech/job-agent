@@ -50,6 +50,7 @@ def create_app(
     app.state.today = today
     app.state.templates = Jinja2Templates(directory=HERE / "templates")
     app.state.templates.env.globals["csrf_field"] = "csrf"
+    _register_filters(app.state.templates.env)
 
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
@@ -133,4 +134,13 @@ def render(request: Request, name: str, context: dict, status_code: int = 200):
     }
     return request.app.state.templates.TemplateResponse(
         request, name, context, status_code=status_code
+    )
+
+
+def _register_filters(env) -> None:
+    """`{{ t | local("%H:%M") }}`: any time on any page, in Sydney time."""
+    from jobagent.timefmt import local
+
+    env.filters["local"] = lambda moment, fmt="%-d %b %Y %H:%M": (
+        local(moment).strftime(fmt) if moment else ""
     )

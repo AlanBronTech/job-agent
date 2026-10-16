@@ -42,7 +42,7 @@
   {% if plan.clashes %}
   <div class="banner warn">
     <strong>Already generated.</strong> <code>{{ plan.folder }}</code> holds documents this run would write:
-    <ul>{% for name, modified in plan.clashes %}<li>{{ name }} <span class="muted">{{ modified.strftime("%-d %b %Y %H:%M") }}</span></li>{% endfor %}</ul>
+    <ul>{% for name, modified in plan.clashes %}<li>{{ name }} <span class="muted">{{ modified | local("%-d %b %Y %H:%M") }}</span></li>{% endfor %}</ul>
     Nothing is overwritten. The existing folder will be moved aside under a dated name, next to the new one, including any edits made by hand.
     <label><input type="checkbox" name="supersede" value="1" {% if choice.supersede %}checked{% endif %}>
       Keep them under a dated name and write a fresh set.</label>
