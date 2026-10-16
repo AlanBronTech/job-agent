@@ -326,3 +326,14 @@ def test_the_first_highlight_must_cite_what_the_assessment_says_to_lead_with(pro
     assert "scope_disagreement" in prompts[0].split("<lead_with>")[1].split("</lead_with>")[0]
     assert len(prompts) == 2 and "lead not as assessed" in prompts[1]
     assert not any(i.rule.startswith("lead not") for i in built.issues)
+
+
+def test_the_letter_prompt_forbids_explaining_why_things_worked():
+    """The acceptance run for REVIEW-2026-10-16: four drafts, and each added a
+    cause the evidence does not state ("the review standard that made the
+    adoption stick", "which mattered more to delivery than being proven
+    right"), or stretched a duration. The rule has to be in the prompt."""
+    prompt = open("prompts/generate_cover_letter.md").read()
+    assert "Say what happened, not why it worked" in prompt
+    assert "made the rollout stick" in prompt  # the worked example, in invented words
+    assert "durations exactly as the evidence gives them" in prompt

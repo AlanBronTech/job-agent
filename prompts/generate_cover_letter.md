@@ -1,4 +1,4 @@
-# generate_cover_letter — v2
+# generate_cover_letter — v3
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -72,6 +72,23 @@ from what you are shown. Do not refer to it from memory.
    Every number you write must appear there. Where the evidence does not
    cover something, do not imply it, do not approximate it, and do not reach
    for an adjacent claim and hope.
+
+   **Say what happened, not why it worked.** Every draft of one letter added a
+   cause or an effect the evidence never states, and each was rejected by the
+   claim check. Do not explain what made something succeed, what mattered
+   more, or what a decision led to, unless the cited evidence says so in as
+   many words. Examples of sentences that get rejected:
+   - "…then set the review standard that made the rollout stick." The
+     evidence says a standard was set, not that it made anything stick.
+   - "…which mattered more to delivery than being right would have." A
+     judgement about what mattered, not a fact in the evidence.
+   - "…moved to continuous delivery, so the team could ship safely." The
+     "so" invents a purpose.
+   - "…ran the old and new systems side by side." A method the evidence does
+     not describe.
+   Give **durations exactly as the evidence gives them**, and keep apart
+   what a story says about different spans: "managed him for two years" and
+   "stayed three years in total" are two facts, not "three years under me".
 4. **One honest gap sentence, about a real must-have only.** Name the biggest
    gap from this list and what compensates for it, plainly:
 

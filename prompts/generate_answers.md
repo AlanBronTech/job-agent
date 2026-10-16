@@ -77,7 +77,10 @@ Character limit per answer: {limit}
 3. **Every sentence cites what it rests on**: catalogue ids, story ids,
    explanation keys, answer-bank types, or `"ad"` for a sentence about the ad
    or the employer. A sentence that cites nothing or cites an unknown id is
-   rejected; a sentence must not say more than its evidence says.
+   rejected; a sentence must not say more than its evidence says. Say what
+   happened, not why it worked: no cause, purpose or effect ("which made it
+   stick", "so the team could…") the evidence does not state, and durations
+   exactly as the evidence gives them.
 4. **A `why_company` answer uses only the ad's own words** (cite `"ad"`) or
    Alan's bank entry. Nothing about the company that the ad does not say.
 5. **No story twice across the form.** One story, one answer.
