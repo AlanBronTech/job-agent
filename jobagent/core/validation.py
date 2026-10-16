@@ -280,7 +280,8 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
                 licensed |= by_story.get(ref, set())
                 if ref in story_text:
                     licensed |= {a for a in all_aliases if _names(story_text[ref], a)}
-            for alias, entry_id in all_aliases.items():
+            # Longest name first, so the detail names the employer as written.
+            for alias, entry_id in sorted(all_aliases.items(), key=lambda kv: -len(kv[0])):
                 if _names(sentence.text, alias) and not (employers[entry_id] & licensed):
                     issues.append(
                         ValidationIssue(
