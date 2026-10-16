@@ -294,8 +294,8 @@ def _report_coverage(rows) -> None:
         return
     console.print("\n[bold]Coverage[/] [dim]must-haves on the resume[/]")
     table = Table(box=None, pad_edge=False, show_header=False)
-    table.add_column()
-    table.add_column(no_wrap=True)
+    table.add_column(ratio=1, min_width=24)
+    table.add_column(ratio=1)
     from jobagent.core.coverage import mark
 
     styles = {"✓": "green", "~": "yellow", "!": "yellow", "✗": "red", "·": "dim"}

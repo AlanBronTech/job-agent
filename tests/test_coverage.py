@@ -109,3 +109,22 @@ def test_the_ui_shows_the_verdict_beside_the_citations():
                           "verdict": "partial", "where": ["role.2"]}]}},
         token="t")
     assert "✓" not in html and "partial" in html and "role.2" in html
+
+
+def test_the_terminal_table_keeps_the_requirement_beside_its_mark(capsys):
+    """The acceptance run printed the marks with no requirement beside them: a
+    no_wrap second column squeezed the first to nothing at 80 columns."""
+    from jobagent.cli import generate as generate_cli
+    from rich.console import Console
+
+    row = coverage.CoverageRow("A strong understanding of distributed systems and data integrity.",
+                               "x", "covered", ["sentral_payments.2", "sentral_payments.4", "easy_signs.0"],
+                               verdict="partial")
+    original = generate_cli.console
+    generate_cli.console = Console(width=80, force_terminal=False)
+    try:
+        generate_cli._report_coverage([row])
+    finally:
+        generate_cli.console = original
+    out = " ".join(capsys.readouterr().out.split())
+    assert "A strong understanding of distributed" in out and "partial" in out
