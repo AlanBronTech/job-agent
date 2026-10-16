@@ -86,6 +86,8 @@ def score(
     except StoreError as exc:
         warnings.append(f"Scored, but could not save. {exc}")
 
+    warnings += _order_warnings(assessment, profile)
+
     kind = None
     try:
         kind = role_kind.ensure(ws, config, ctx, jd_id, client_factory=classify_factory)
@@ -107,3 +109,21 @@ def refuse_if_reapplying(ws: Workspace, jd_id: int, today: date) -> None:
         raise SameJobRecently(state.match)
     if isinstance(state, reapply.PossiblySame):
         raise PossiblySameJob(state.match)
+
+
+def _order_warnings(assessment, profile) -> list[str]:
+    """Statements about the order of roles that the dates contradict (D3).
+
+    Reported, not corrected: the assessment was paid for and is shown as
+    written, with the contradiction said out loud beside it.
+    """
+    from jobagent.core import timeline
+
+    texts = [assessment.rationale, assessment.target_role_note]
+    texts += [row.note for row in assessment.requirements]
+    texts += [f"{c.point} {c.response}" for c in assessment.challenge_points]
+    return [
+        f"The assessment gets the order of roles wrong: {problem}"
+        for text in texts
+        for problem in timeline.order_claims(text or "", profile)
+    ]

@@ -43,6 +43,7 @@ from jobagent.core.models import (
     WorkArrangement,
     WorkType,
 )
+from jobagent.core import timeline
 from jobagent.core.prompts import PromptError, load_prompt
 
 PROMPT_NAME = "score_fit"
@@ -92,6 +93,7 @@ def score_fit(
         prompt = load_prompt(
             PROMPT_NAME,
             profile_yaml=_profile_yaml(profile),
+            timeline=timeline.render(profile),
             jd_json=_jd_json(jd),
             constraints_json=_constraints_json(constraints),
         )

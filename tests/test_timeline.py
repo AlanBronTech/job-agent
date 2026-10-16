@@ -1,0 +1,94 @@
+"""REVIEW-2026-10-16 D3: chronology computed in code, and order claims checked.
+
+The fixture is profile.example, which has the same shape as the case that went
+wrong: a contract IC role (Example Bank, 2021–22) that comes *after* the first
+management role (Example EdTech, 2018–21). The assessment for JD 85 said the
+equivalent contract roles "precede and run alongside his management roles".
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from jobagent.core import timeline
+from jobagent.core.profile import load_profile
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "profile.example"
+
+
+@pytest.fixture
+def profile():
+    return load_profile(EXAMPLE)
+
+
+def test_roles_come_in_date_order_with_a_management_tag(profile):
+    spans = timeline.roles_in_order(profile)
+    assert [s.id for s in spans] == ["pos_build", "payments_lead", "bank_contracts",
+                                     "startup_em", "consultancy_lead", "recent_manager"]
+    tags = {s.id: s.management for s in spans}
+    assert tags["pos_build"] is False and tags["bank_contracts"] is False
+    assert tags["payments_lead"] is True and tags["recent_manager"] is True
+
+
+def test_the_scorer_is_given_the_timeline(profile):
+    block = timeline.render(profile)
+    assert block.index("Example Hospitality Group") < block.index("Example EdTech") < block.index("Example Bank")
+    assert "[management]" in block and "[individual contributor]" in block
+    assert "First management role starts 2018" in block
+
+
+def test_a_false_precedes_claim_is_caught(profile):
+    claim = ("Senior IC contract roles (Example Bank & Example Platform Co) precede and run "
+             "alongside his management roles.")
+    issues = timeline.order_claims(claim, profile)
+    assert len(issues) == 1 and "Example Bank" in issues[0]
+
+
+def test_true_order_claims_pass(profile):
+    assert timeline.order_claims("Example Hospitality Group came before his management roles.", profile) == []
+    assert timeline.order_claims("Example Bank followed Example EdTech.", profile) == []
+    assert timeline.order_claims("Example EdTech preceded Example Startup.", profile) == []
+
+
+def test_a_false_after_claim_is_caught(profile):
+    assert timeline.order_claims("Example EdTech came after Example Startup.", profile)
+
+
+def test_the_scoring_prompt_carries_the_timeline(profile):
+    from jobagent.core.scoring import score_fit
+    from tests.quality_seed import RoutedClient, northwind
+
+    client = RoutedClient({"score_fit": {"verdict": "skip", "overall_score": 10,
+                                         "recruiter_screen_score": 10, "rationale": "x",
+                                         "target_role_match": False, "target_role_note": "x"}})
+    score_fit(northwind(), profile, client=client)
+    prompt = client.prompts["score_fit"][0]
+    assert "<timeline>" in prompt and "First management role starts 2018" in prompt
+
+
+def test_a_wrong_order_in_the_assessment_is_reported(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from jobagent.adapters.llm import RunContext
+    from jobagent.config import Config
+    from jobagent.core.models import FitAssessment, MatchStatus, RequirementMatch, Verdict
+    from jobagent.services import scoring
+    from jobagent.services.workspace import Workspace
+    from tests.ui_seed import seed, workspace
+
+    ws = Workspace(**{**workspace(tmp_path).__dict__, "profile_dir": EXAMPLE})
+    ids = seed(ws)
+    monkeypatch.setattr(scoring.role_kind, "ensure", lambda *a, **k: None)
+    monkeypatch.setattr(scoring, "score_fit", lambda jd, profile, *, client: FitAssessment(
+        jd_id=jd.id, overall_score=56, recruiter_screen_score=40, verdict=Verdict.apply_with_caveats,
+        rationale="On target.", target_role_match=True, target_role_note="EM.",
+        requirements=[RequirementMatch(
+            requirement="A background as a Senior IC before moving into management.",
+            status=MatchStatus.met, evidence_ref="bank_contracts",
+            note="Senior IC contract roles (Example Bank) precede and run alongside his management roles.")],
+        scored_at=datetime.now(timezone.utc)))
+    result = scoring.score(ws, Config(_env_file=None), RunContext(command="score"), ids["contoso"],
+                           client_factory=lambda: object())
+    assert any("dates say otherwise" in w and "Example Bank" in w for w in result.warnings)

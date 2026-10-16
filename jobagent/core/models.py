@@ -210,6 +210,10 @@ class Role(_Base):
     anchor_story: bool = False
     bullets: list[Bullet]
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Whether the role managed people. When unset, the title decides (see
+    # core/timeline.py); set it where the title undersells the job — a
+    # "Technical Team Lead / Project Manager" who led two squads.
+    people_management: bool | None = None
 
 
 class EarlierRole(_Base):
