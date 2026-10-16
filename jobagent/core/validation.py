@@ -205,6 +205,103 @@ def check_citations(
     return issues
 
 
+# Words that make a company name formal without making it a different company:
+# "Brightside Co" is called Brightside in a sentence, "Rockwell Information
+# Services" is called Rockwell.
+_CORPORATE_TAIL = re.compile(
+    r"(?:\s+(?:co|pty|ltd|limited|inc|group|bank|information services|services)\.?|\.io)$",
+    re.IGNORECASE,
+)
+
+
+def employer_aliases(company: str) -> set[str]:
+    """The ways a sentence may name one employer."""
+    names = {company.strip()}
+    if "(" in company:
+        names.add(company.split("(", 1)[0].strip())
+        names.add(company.split("(", 1)[1].rstrip(")").strip())
+    for name in list(names):
+        shorter = name
+        while True:
+            trimmed = _CORPORATE_TAIL.sub("", shorter).strip()
+            if trimmed == shorter or not trimmed:
+                break
+            shorter = trimmed
+            names.add(shorter)
+    for name in list(names):
+        for part in re.split(r"\s*(?:&|/)\s*", name):
+            if part != name:
+                names.add(part.strip())
+    return {n for n in names if len(n) >= 3}
+
+
+def _employers(profile: Profile) -> dict[str, set[str]]:
+    """Entry id -> the aliases of its employer, for every entry that has one."""
+    out: dict[str, set[str]] = {}
+    r = profile.roles
+    for group in (r.roles, r.founder_track_record, r.earlier_career):
+        for entry in group:
+            company = getattr(entry, "company", None)
+            if company:
+                out[entry.id] = employer_aliases(company)
+    return out
+
+
+def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
+    """A sentence may name an employer only if its cited evidence comes from there.
+
+    On JD 85 a letter attached one employer's incident management to another
+    employer's offshore team: true facts, from two roles, merged into a claim
+    that is false. The paid claim check caught it; this catches it for free and
+    every time. A story licenses the employers whose bullets tell it and any
+    employer its own text names.
+    """
+    employers = _employers(profile)
+    by_story: dict[str, set[str]] = {}
+    r = profile.roles
+    for group in (r.roles, r.founder_track_record, r.ai_capability):
+        for entry in group:
+            for bullet in entry.bullets:
+                if bullet.linked_story and entry.id in employers:
+                    by_story.setdefault(bullet.linked_story, set()).update(employers[entry.id])
+    all_aliases = {alias: entry_id for entry_id, names in employers.items() for alias in names}
+    story_text = {
+        s.id: f"{s.label} {s.situation} {s.task} {s.action} {s.result}"
+        for s in profile.stories.stories
+    }
+
+    issues = []
+    for paragraph in paragraphs:
+        for sentence in paragraph:
+            licensed: set[str] = set()
+            for ref in sentence.cites:
+                entry_id = ref.split(".", 1)[0]
+                licensed |= employers.get(entry_id, set())
+                licensed |= by_story.get(ref, set())
+                if ref in story_text:
+                    licensed |= {a for a in all_aliases if _names(story_text[ref], a)}
+            for alias, entry_id in all_aliases.items():
+                if _names(sentence.text, alias) and not (employers[entry_id] & licensed):
+                    issues.append(
+                        ValidationIssue(
+                            rule="employer not in cited evidence",
+                            severity=Severity.blocker,
+                            detail=(
+                                f"The sentence names {alias}, but none of the evidence it "
+                                f"cites ({', '.join(sentence.cites) or 'nothing'}) is from "
+                                "there. Facts from two roles may have been merged into one claim."
+                            ),
+                            excerpt=sentence.text[:160],
+                        )
+                    )
+                    break
+    return issues
+
+
+def _names(text: str, alias: str) -> bool:
+    return re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", text) is not None
+
+
 def story_of(ref: str, profile: Profile) -> str | None:
     """The story a cited id tells: the story itself, or a bullet's linked story."""
     if any(story.id == ref for story in profile.stories.stories):

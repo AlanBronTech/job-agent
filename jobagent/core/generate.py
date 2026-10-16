@@ -52,6 +52,7 @@ from jobagent.core.validation import (
     Severity,
     ValidationIssue,
     check_citations,
+    check_employers,
     check_resume_reuse,
     check_story_reuse,
     story_uses,
@@ -705,6 +706,7 @@ def _check_answers(
                 continue
             issues += validate_prose(text, profile, context=f"{context} ({variant})")
             issues += check_citations([sentences], known, context=f"{context} ({variant})")
+            issues += check_employers([sentences], profile)
             if limit and len(text) > limit:
                 issues.append(
                     ValidationIssue(
@@ -845,6 +847,7 @@ def _write_cited(
             raise GenerateError("The model returned nothing.")
         issues = validate_prose(text, profile, max_words=max_words, context=context)
         issues += check_citations(paragraphs, known, context=context)
+        issues += check_employers(paragraphs, profile)
         issues += check_story_reuse(
             story_uses(
                 [

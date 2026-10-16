@@ -137,3 +137,40 @@ def test_a_letter_sentence_with_no_citation_is_still_a_blocker(profile):
     """D1's first requirement was already in force (spec 003); kept as a regression."""
     issues = check_citations([para(("I ran both stacks side by side.", []))], known_citations(profile))
     assert [(i.rule, i.severity.value) for i in issues] == [("uncited claim", "blocker")]
+
+
+# -- REVIEW-2026-10-16 D2: one sentence, two roles' facts ----------------------------
+
+
+def test_a_sentence_naming_an_employer_its_evidence_is_not_from_blocks(profile):
+    """Attributes from entry A (an incident-management bullet at one employer)
+    attached to the employer of entry B. The paid check caught it on JD 85; this
+    makes it a code check that cannot miss."""
+    from jobagent.core.validation import check_employers
+
+    merged = Sentence(text="At Example Manufacturing Co I owned incident management for the offshore team.",
+                      cites=["startup_em.0"])
+    issues = check_employers([[merged]], profile)
+    assert [(i.rule, i.severity.value) for i in issues] == [("employer not in cited evidence", "blocker")]
+    assert "Example Manufacturing Co" in issues[0].detail
+
+
+def test_naming_the_employer_of_the_cited_evidence_passes(profile):
+    from jobagent.core.validation import check_employers
+
+    fine = Sentence(text="At Example Startup I recruited and led a team of 6.", cites=["startup_em.0"])
+    story = Sentence(text="At Example Startup I argued for a narrower scope.", cites=["scope_disagreement"])
+    framing = Sentence(text="Example Manufacturing Co is where I learned the most.", cites=["ad"])
+    assert check_employers([[fine, story]], profile) == []
+    assert check_employers([[framing]], profile)  # "ad" licenses no employer of Alan's
+
+
+def test_the_letter_is_rewritten_when_it_merges_two_employers(profile):
+    merged = {"paragraphs": [[{"text": "At Example Manufacturing Co I owned the offshore team's incidents.",
+                               "cites": ["startup_em.0"]}]]}
+    fixed = {"paragraphs": [[{"text": "At Example Startup I recruited and led a team of 6.",
+                              "cites": ["startup_em.0"]}]]}
+    client = RoutedClient({"generate_cover_letter": [merged, fixed]})
+    built = build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
+    assert "employer not in cited evidence" in client.prompts["generate_cover_letter"][1]
+    assert built.issues == []
