@@ -55,6 +55,7 @@ from jobagent.core.validation import (
     check_employers,
     check_resume_reuse,
     check_story_reuse,
+    story_of,
     story_uses,
     validate_prose,
     validate_rendered,
@@ -249,7 +250,7 @@ def _check_resume(
             issues.append(_excluded(highlight.source_ref, kind))
         else:
             issues += _check_citation(highlight.source_ref, citable)
-    issues += _lead_issues(selection, profile, kind)
+    issues += _lead_issues(selection, profile, kind, assessment)
     issues += check_resume_reuse(story_uses(_resume_places(selection), profile))
     issues += _highlight_repeats(selection, catalogue)
 
@@ -336,6 +337,8 @@ def _ask_for_selection(
             jd_json=_jd_summary(jd),
             assessment_json=_assessment_summary(assessment),
             role_kind=role_kind_block(kind),
+            lead_with="\n".join(f"{n}. {item}" for n, item in enumerate(assessment.emphasise, 1))
+            or "(the assessment names no order)",
             must_cover=_must_cover_block(assessment, excluded),
             catalogue=_render_catalogue(profile, catalogue, excluded),
             skills=", ".join(profile.roles.skills),
@@ -1393,30 +1396,73 @@ def role_kind_block(kind: RoleClassification | None) -> str:
 
 
 def _lead_issues(
-    selection: _ResumeSelection, profile: Profile, kind: RoleClassification | None
+    selection: _ResumeSelection,
+    profile: Profile,
+    kind: RoleClassification | None,
+    assessment: FitAssessment | None = None,
 ) -> list[ValidationIssue]:
-    """A warning when the first highlight is not of the ad's kind.
+    """The first highlight is what a reader meets first; both of these block.
 
-    Warning, not blocker: tags are coarse, and the model may be right that a
-    different piece of evidence answers this particular ad best.
+    REVIEW-2026-10-16 D6. When the assessment names what to lead with and the
+    first item is evidence in the profile, the first highlight must cite it:
+    the scorer read the ad against the whole profile, and the writer led JD 85
+    on five things it never mentioned. Otherwise the highlight must be of the
+    ad's kind. The assessment wins where the two disagree, because it is about
+    this ad and the kind is about ads like it.
     """
-    if kind is None or not selection.highlights:
+    if not selection.highlights:
         return []
     ref = selection.highlights[0].source_ref
-    if kinds.lead_is_on_kind(ref, profile, kind.primary):
+    lead = lead_ref(assessment, profile) if assessment else None
+    if lead is not None:
+        if _answers_ref(lead, ref, profile):
+            return []
+        return [
+            ValidationIssue(
+                rule="lead not as assessed",
+                severity=Severity.blocker,
+                detail=(
+                    f"The assessment says to lead with {lead!r}; the first CAREER "
+                    f"HIGHLIGHT cites {ref!r}. Open on {lead!r}: that id, its entry, "
+                    "a bullet within it, or a bullet that tells that story."
+                ),
+                excerpt=ref,
+            )
+        ]
+    if kind is None or kinds.lead_is_on_kind(ref, profile, kind.primary):
         return []
     return [
         ValidationIssue(
             rule="lead not on-kind",
-            severity=Severity.warning,
+            severity=Severity.blocker,
             detail=(
                 f"This is a {kind_label(kind.primary)} ad, and the first CAREER "
                 f"HIGHLIGHT cites {ref!r}, which is not tagged as that kind of "
-                "evidence. Check what a reader meets first."
+                "evidence. Open on evidence of the kind the ad hires for."
             ),
             excerpt=ref,
         )
     ]
+
+
+_ID_TOKEN = re.compile(r"[a-z0-9_]+(?:\.\d+)?")
+
+
+def lead_ref(assessment: FitAssessment, profile: Profile) -> str | None:
+    """The profile id the assessment's first `emphasise` item names, if any."""
+    if not assessment.emphasise:
+        return None
+    known = build_citable(profile) | {s.id for s in profile.stories.stories}
+    for token in _ID_TOKEN.findall(assessment.emphasise[0].lower()):
+        if token in known:
+            return token
+    return None
+
+
+def _answers_ref(wanted: str, cited: str, profile: Profile) -> bool:
+    if cited == wanted or cited.split(".", 1)[0] == wanted or wanted.split(".", 1)[0] == cited:
+        return True
+    return story_of(cited, profile) == wanted
 
 
 def _excluded(ref: str, kind: RoleClassification | None) -> ValidationIssue:

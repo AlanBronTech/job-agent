@@ -48,6 +48,17 @@ to answer the met requirements and to blunt the challenge points.
 {assessment_json}
 </assessment>
 
+## Lead with
+
+The assessment's order of what to lead with, for this ad. **The first CAREER
+HIGHLIGHT must cite the first item** — its id, its entry, a bullet within it,
+or a bullet that tells that story. Use the rest, in order, for the highlights
+that follow where they fit. This is checked and rejected.
+
+<lead_with>
+{lead_with}
+</lead_with>
+
 ## Must cover
 
 Each requirement below is evidenced in the profile. The resume must answer

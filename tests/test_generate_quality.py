@@ -93,9 +93,9 @@ def test_an_ai_highlight_first_is_flagged_for_a_people_focused_ad(profile):
         {"label": "AI in production", "text": "Introduced agentic coding tooling.",
          "source_ref": "recent_manager.1"}])
     built, _ = resume(profile, payload)
-    assert ("lead not on-kind", Severity.warning) in rules(built)
+    assert ("lead not on-kind", Severity.blocker) in rules(built)  # a blocker since D6
     clean, _ = resume(profile, selection())
-    assert ("lead not on-kind", Severity.warning) not in rules(clean)
+    assert not any(r == "lead not on-kind" for r, _ in rules(clean))
 
 
 def test_the_unused_list_does_not_report_excluded_evidence(profile):
@@ -300,3 +300,29 @@ def test_the_letter_is_told_what_the_resume_says_and_may_not_copy_it(profile):
     assert "[recent_manager.0]" in prompts[0]
     assert len(prompts) == 2 and "letter repeats the resume" in prompts[1]
     assert not any(i.rule == "letter repeats the resume" for i in built.issues)
+
+
+
+# -- REVIEW-2026-10-16 D6: the assessment's lead order binds the first highlight ------
+
+
+def _with_lead(*items):
+    a = northwind_assessment()
+    a.emphasise = list(items)
+    return a
+
+
+def test_the_first_highlight_must_cite_what_the_assessment_says_to_lead_with(profile):
+    """The fixture: the assessment says lead with the scope story; a resume that
+    opens on something else blocks, and the resume prompt is told the order."""
+    lead = _with_lead("scope_disagreement (advised against over-scoping, then delivered)",
+                      "recent_manager hiring")
+    off = selection()  # opens on recent_manager.0
+    on = selection(highlights=[{"label": "Scope", "text": "Argued for a smaller release.",
+                                "source_ref": "startup_em.1"}])  # a bullet telling that story
+    client = RoutedClient({"generate_resume": [off, on]})
+    built = build_resume(northwind(), profile, lead, client=client, today=TODAY, kind=PEOPLE)
+    prompts = client.prompts["generate_resume"]
+    assert "scope_disagreement" in prompts[0].split("<lead_with>")[1].split("</lead_with>")[0]
+    assert len(prompts) == 2 and "lead not as assessed" in prompts[1]
+    assert not any(i.rule.startswith("lead not") for i in built.issues)
