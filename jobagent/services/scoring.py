@@ -126,4 +126,8 @@ def _order_warnings(assessment, profile) -> list[str]:
         f"The assessment gets the order of roles wrong: {problem}"
         for text in texts
         for problem in timeline.order_claims(text or "", profile)
+    ] + [
+        f"The assessment overstates how long a role lasted: {problem}"
+        for text in texts
+        for problem in timeline.duration_claims(text or "", profile)
     ]

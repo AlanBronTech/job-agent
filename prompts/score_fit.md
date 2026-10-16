@@ -113,6 +113,12 @@ would conclude. They are different readers and the first one decides first.
    The response must come from the profile — `stories.explanations` exists for
    exactly this and holds his agreed answers on the employment gap, the stack
    mismatch and salary. Do not invent a response he has not agreed to.
+   Anything a response says about where or how long rests on the timeline:
+   "years at X" only for a role the timeline shows lasting years. **For a
+   permanent role, do not lead with the contracting pattern** — short contract
+   terms are a reason a screener hesitates, not an answer. Answer a tenure
+   question with the Management tenure total, and mention contracts only if
+   the question is about them.
 9. **`profile_gaps` is about the profile, not the candidate.** Things the
    profile fails to evidence that would have helped here, so he can fix the
    file. Not things he should go and learn.

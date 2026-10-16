@@ -182,3 +182,32 @@ def _mentions(fragment: str, aliases, spans) -> set[Span]:
     if _IC_CATEGORY.search(fragment):
         found |= {s for s in spans if not s.management}
     return found
+
+
+_YEARS_AT = re.compile(r"\byears\s+(?:at|with|in)\b(?P<rest>[^.;]*)", re.IGNORECASE)
+
+
+def duration_claims(text: str, profile: Profile, *, today: date | None = None) -> list[str]:
+    """"Years at X" where the dates give X less than two years (D8).
+
+    A suggested interview answer said the work he is proudest of "took years at
+    Sentral and Easy Signs"; Easy Signs lasted seven months. Every employer
+    named after "years at" is checked.
+    """
+    today = today or date.today()
+    spans = roles_in_order(profile)
+    problems = []
+    for match in _YEARS_AT.finditer(text):
+        rest = match.group("rest")
+        for span in spans:
+            if not any(re.search(rf"(?<![\w-]){re.escape(a)}(?![\w-])", rest)
+                       for a in employer_aliases(span.company)):
+                continue
+            end = span.end or (today.year, today.month)
+            months = (end[0] - span.start[0]) * 12 + end[1] - span.start[1]
+            if months < 24:
+                problems.append(
+                    f"\"{match.group(0).strip()}\" — {span.company} lasted {months} months "
+                    f"({_fmt(span.start)} to {_fmt(span.end)}), not years."
+                )
+    return problems

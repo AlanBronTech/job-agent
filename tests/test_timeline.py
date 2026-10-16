@@ -120,3 +120,18 @@ def test_a_title_on_the_equivalent_list_or_the_flag_counts_as_management(profile
 def test_the_scorer_is_told_tenure_requirements_are_cumulative():
     prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
     assert "cumulative" in prompt and "Management tenure" in prompt
+
+
+# -- REVIEW-2026-10-16 D8: push-on answers grounded in dates, and framed for the ad --
+
+
+def test_a_years_at_claim_the_dates_do_not_support_is_caught(profile):
+    text = "The work he's proudest of took years at Example EdTech and Example Manufacturing Co."
+    problems = timeline.duration_claims(text, profile)
+    assert len(problems) == 1 and "Example Manufacturing Co" in problems[0] and "12 months" in problems[0]
+    assert timeline.duration_claims("He spent years at Example EdTech.", profile) == []
+
+
+def test_the_scorer_is_told_not_to_lead_with_contracting_for_a_permanent_role():
+    prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
+    assert "permanent" in prompt and "contracting pattern" in prompt
