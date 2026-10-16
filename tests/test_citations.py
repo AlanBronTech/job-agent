@@ -100,3 +100,40 @@ def test_nothing_cited_means_nothing_to_pay_for(profile):
         raise AssertionError("no claim to check, so no call")
     assert checks.check_claims(CONFIG, CTX, [Sentence(text="You build things.", cites=["ad"])],
                                profile, client_factory=refuse) == []
+
+
+# -- REVIEW-2026-10-16 D1: invented mechanism, sequence and cause --------------------
+
+REPLATFORM = ("Re-platformed the product incrementally over two years, no big-bang cutover, "
+              "introducing CI/CD and automated testing while migrating.")
+MECHANISM = ("I ran the legacy and new stacks side by side and migrated incrementally, keeping "
+             "any single step reversible, and put CI/CD in place before the migration started.")
+
+
+def test_the_claim_check_is_told_to_judge_mechanism_sequence_and_cause(profile):
+    """The fixture: re-platform evidence that says *while*, a sentence that says
+    *before* and adds two mechanisms. The prompt must name all three as
+    mismatches and carry the worked example; the model's verdict must block."""
+    from jobagent.services.documents import claim_issues
+
+    sentence = Sentence(text=MECHANISM, cites=["payments_lead.1"])
+    client = RoutedClient({"check_claims": {"mismatches": [
+        {"sentence": MECHANISM, "problem": "invented sequence: evidence says while migrating, not before"}]}})
+    original = checks.evidence_text
+    try:
+        checks.evidence_text = lambda p, ref: REPLATFORM  # the fixture's evidence
+        result = checks.check_claims(CONFIG, CTX, [sentence], profile, client_factory=lambda: client)
+    finally:
+        checks.evidence_text = original
+    prompt = client.prompts["check_claims"][0]
+    assert "mechanism, sequence or cause" in prompt.lower()
+    assert "side by side" in prompt and "before contradicts *while*" in prompt.replace("*before*", "before")
+    assert REPLATFORM in prompt and MECHANISM in prompt
+    blockers = claim_issues(result)
+    assert [(b.rule, b.severity.value) for b in blockers] == [("claim mismatch", "blocker")]
+
+
+def test_a_letter_sentence_with_no_citation_is_still_a_blocker(profile):
+    """D1's first requirement was already in force (spec 003); kept as a regression."""
+    issues = check_citations([para(("I ran both stacks side by side.", []))], known_citations(profile))
+    assert [(i.rule, i.severity.value) for i in issues] == [("uncited claim", "blocker")]

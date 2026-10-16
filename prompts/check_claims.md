@@ -1,4 +1,4 @@
-# check_claims — v1
+# check_claims — v2
 
 You are checking a job-application document against the evidence it cites.
 You did not write it. Your only job is to find sentences that say more than,
@@ -21,9 +21,24 @@ or something different from, the evidence they cite.
   product, time or team than the evidence does.
 - **Unsupported detail**: the sentence adds a fact — an event, an outcome, an
   acquisition, a technology — that none of its cited evidence contains.
+- **Invented mechanism, sequence or cause**: the sentence says *how* something
+  was done, *in what order*, or *why*, and the cited evidence does not say it.
+  A process ("ran both systems side by side", "kept every step reversible"),
+  an order ("before the migration started" where the evidence says *while*
+  migrating), or a cause ("so that…", "which meant…", "because…") is a claim
+  like any other. Nouns and numbers being right does not make it faithful.
 
-Not a mismatch: paraphrase, compression, a different order, leaving detail
-out, or a sentence about the ad (those are marked `ad` and are not listed).
+  Example. Evidence: "Re-platformed the product incrementally over two years,
+  no big-bang cutover, introducing CI/CD and automated testing while
+  migrating." Sentence: "I ran the old and new stacks side by side, kept each
+  step reversible, and had CI/CD in place before the migration began." That is
+  a mismatch three times: *side by side* and *reversible* are mechanisms the
+  evidence does not state, and *before* contradicts *while*.
+
+Not a mismatch: paraphrase, compression, mentioning the facts in a different
+order within the sentence (as opposed to claiming a different order of
+events), leaving detail out, or a sentence about the ad (those are marked `ad`
+and are not listed).
 
 ## Output
 
