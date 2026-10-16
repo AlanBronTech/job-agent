@@ -286,7 +286,6 @@ def _report_readiness(result) -> None:
         console.print("\n[bold red]Not ready[/] [dim]fix the blockers above before sending.[/]")
 
 
-_COVERAGE_STYLE = {"covered": "green", "weak": "yellow", "missing": "red", "gap": "dim"}
 
 
 def _report_coverage(rows) -> None:
@@ -297,10 +296,13 @@ def _report_coverage(rows) -> None:
     table = Table(box=None, pad_edge=False, show_header=False)
     table.add_column()
     table.add_column(no_wrap=True)
+    from jobagent.core.coverage import mark
+
+    styles = {"✓": "green", "~": "yellow", "!": "yellow", "✗": "red", "·": "dim"}
     for row in rows:
-        style = _COVERAGE_STYLE.get(row.status, "dim")
-        where = ", ".join(row.where) if row.where else row.status
-        table.add_row(row.requirement, f"[{style}]{where}[/]")
+        symbol, words = mark(row)
+        where = f" — {', '.join(row.where)}" if row.where else ""
+        table.add_row(row.requirement, f"[{styles[symbol]}]{symbol} {words}[/]{where}")
     console.print(table)
 
 

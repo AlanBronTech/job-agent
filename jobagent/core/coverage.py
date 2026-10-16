@@ -35,6 +35,29 @@ class CoverageRow:
     evidence_ref: str | None
     status: str
     where: list[str] = field(default_factory=list)
+    # The assessment's own verdict on the requirement: met, partial or gap.
+    # `status` says whether the resume cites the evidence; this says whether
+    # the evidence answers the requirement. A row shows both.
+    verdict: str = ""
+
+
+def mark(row: CoverageRow) -> tuple[str, str]:
+    """(symbol, words) for one row, the same in the terminal, the UI and assessment.md.
+
+    REVIEW-2026-10-16 D5: five green ticks sat above "3 of 5 met", because a
+    tick meant only "a bullet was cited". A tick now means cited *and* met.
+    """
+    if row.status == MISSING:
+        return "✗", "evidence exists but the resume does not cite it"
+    if row.status == GAP:
+        return "✗", "gap"
+    if row.status == UNCHECKED:
+        return "·", "not checkable"
+    if row.status == WEAK:
+        return "!", f"{row.verdict or 'met'}, but only a skills keyword on the resume"
+    if row.verdict == "met":
+        return "✓", "met"
+    return "~", f"{row.verdict or 'partial'}: cited, but the evidence only partly answers it"
 
 
 def must_cover(
@@ -65,20 +88,20 @@ def coverage(
     for row in assessment.requirements:
         ref = row.evidence_ref
         if row.status is MatchStatus.gap or not ref:
-            rows.append(CoverageRow(row.requirement, ref, GAP))
+            rows.append(CoverageRow(row.requirement, ref, GAP, verdict="gap"))
             continue
         if kinds.is_excluded(ref, excluded):
             continue
         if ref not in resolvable and ref.split(".", 1)[0] not in resolvable:
-            rows.append(CoverageRow(row.requirement, ref, UNCHECKED))
+            rows.append(CoverageRow(row.requirement, ref, UNCHECKED, verdict=row.status.value))
             continue
         where = list(dict.fromkeys(c for c in cited if _answers(ref, c, linked)))
         if where:
-            rows.append(CoverageRow(row.requirement, ref, COVERED, where))
+            rows.append(CoverageRow(row.requirement, ref, COVERED, where, verdict=row.status.value))
         elif _in_skills(row.requirement, skills_text):
-            rows.append(CoverageRow(row.requirement, ref, WEAK))
+            rows.append(CoverageRow(row.requirement, ref, WEAK, verdict=row.status.value))
         else:
-            rows.append(CoverageRow(row.requirement, ref, MISSING))
+            rows.append(CoverageRow(row.requirement, ref, MISSING, verdict=row.status.value))
     return rows
 
 

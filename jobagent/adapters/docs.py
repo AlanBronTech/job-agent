@@ -214,9 +214,12 @@ def assessment_markdown(
 
     if coverage:
         lines += ["", "## Coverage on the resume", ""]
+        from jobagent.core.coverage import mark
+
         for row in coverage:
-            where = ", ".join(row.where) if row.where else row.status
-            lines.append(f"- {row.requirement}: {where}")
+            symbol, words = mark(row)
+            where = f" — {', '.join(row.where)}" if row.where else ""
+            lines.append(f"- {symbol} {row.requirement}: {words}{where}")
 
     lines += ["", "## Requirements", ""]
     for match in assessment.requirements:

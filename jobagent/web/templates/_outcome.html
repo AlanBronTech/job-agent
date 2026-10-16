@@ -33,11 +33,17 @@
   {% endfor %}
   </ul>
   {% if r.coverage %}
-  <p><strong>Coverage</strong> <span class="muted">must-haves on the resume</span></p>
+  <p><strong>Coverage</strong> <span class="muted">must-haves on the resume, with the assessment's verdict</span></p>
   <ul class="checks">
   {% for c in r.coverage %}
-    <li><span class="mark {{ {'covered': 'ok', 'missing': 'breach', 'weak': 'unknown'}.get(c.status, 'muted') }}">{{ {'covered': '✓', 'missing': '✗', 'weak': '!'}.get(c.status, '·') }}</span>
-      <span>{{ c.requirement }} <span class="detail">{{ c.where | join(", ") if c.where else c.status }}</span></span></li>
+    {% set v = c.verdict or "" %}
+    {% if c.status == "covered" and v == "met" %}{% set sym, cls, words = "✓", "ok", "met" %}
+    {% elif c.status == "covered" %}{% set sym, cls, words = "~", "unknown", (v or "partial") ~ ": cited, but the evidence only partly answers it" %}
+    {% elif c.status == "weak" %}{% set sym, cls, words = "!", "unknown", "only a skills keyword on the resume" %}
+    {% elif c.status in ("missing", "gap") %}{% set sym, cls, words = "✗", "breach", ("gap" if c.status == "gap" else "not cited on the resume") %}
+    {% else %}{% set sym, cls, words = "·", "muted", c.status %}{% endif %}
+    <li><span class="mark {{ cls }}">{{ sym }}</span>
+      <span>{{ c.requirement }} <span class="detail">{{ words }}{% if c.where %} — {{ c.where | join(", ") }}{% endif %}</span></span></li>
   {% endfor %}
   </ul>
   {% endif %}

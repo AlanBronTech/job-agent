@@ -83,3 +83,29 @@ def test_the_resume_prompt_lists_what_must_be_covered_and_the_result_reports_it(
     assert "Hiring and building a healthy team culture  ->  cite startup_em.0" in prompt
     assert statuses(built.coverage)["Hiring"] == "missing"
     assert "must-have missing" in {i.rule for i in built.issues}
+
+
+# -- REVIEW-2026-10-16 D5: a tick never contradicts the verdict ---------------------
+
+
+def test_a_partial_requirement_never_renders_a_tick(profile):
+    rows = coverage.coverage(northwind_assessment(), profile,
+                             ["recent_manager.0", "startup_em.0", "consultancy_lead.1"])
+    partner = next(r for r in rows if r.requirement.startswith("Partnering"))
+    assert partner.status == "covered" and partner.verdict == "partial"
+    assert coverage.mark(partner)[0] != "✓"
+    coach = next(r for r in rows if r.requirement.startswith("Coaching"))
+    assert coverage.mark(coach)[0] == "✓"
+
+
+def test_the_ui_shows_the_verdict_beside_the_citations():
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader("jobagent/web/templates"))
+    html = env.get_template("_outcome.html").render(
+        run={"kind": "generate", "jd_id": 1, "result": {
+            "written": [], "issues": [], "unused": [], "warnings": [], "folder": "f",
+            "coverage": [{"requirement": "Distributed systems", "status": "covered",
+                          "verdict": "partial", "where": ["role.2"]}]}},
+        token="t")
+    assert "✓" not in html and "partial" in html and "role.2" in html

@@ -74,7 +74,8 @@ def generate(
                 for u in result.unused
             ],
             "coverage": [
-                {"requirement": c.requirement, "status": c.status, "where": c.where}
+                {"requirement": c.requirement, "status": c.status, "where": c.where,
+                 "verdict": c.verdict}
                 for c in result.coverage
             ],
             "ready": result.ready,
