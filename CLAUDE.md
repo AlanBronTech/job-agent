@@ -206,27 +206,34 @@ on a tab stop at **16.93cm**.
   `get_config()` and by the UI on every request, so the CLI and the browser
   agree and a change needs no restart.
 
-## Where the project is — 2026-10-15
+## Where the project is — 2026-10-17
 
-**Built and working. Phases 0-5 and 7 are done; Phase 8 (a local UI) is under
-way on branch `001-local-ui`, not yet merged.** Its spec, plan and task list
-are in `specs/001-local-ui/` (Spec Kit). The MVP is built: `jobagent ui` shows
-the shortlist and full assessments, opens documents, and generates from a
-button behind a cost confirmation; User Story 3 adds and scores ads from the
-browser too. The pipeline board and prep (001 User Stories 4-5) are still to
-do. Spec 002 (`specs/002-reapplication-batch/`, branch
-`002-reapplication-batch` off `001-local-ui`) adds the six-month same-job
-rule, applications recorded outside the tool, requisition numbers, and batch
-review in the CLI and the UI. Phase 6 (Gmail triage) and the Drive upload were
-dropped — see `BUILD_PLAN.md` for the reasoning, which matters more than the
-decisions.
+**Built, working and merged on `main`.** Phases 0-5 and 7 are done, and so are
+three Spec Kit specs, each in `specs/`: 001 local UI (`jobagent ui`: jobs
+list, assessments, documents, add/score/generate behind cost confirmations,
+batch, the pipeline form with status dropdowns), 002 reapplication and batch
+review (six-month same-job rule, outside applications, requisition numbers),
+003 generation quality (role kind, exclusions, coverage, cited letter and
+answer sentences, claim check, independent review, answer bank). Phase 6
+(Gmail triage) and the Drive upload were dropped — see `BUILD_PLAN.md`.
 
-Spec 003 (generation quality) is merged. Since then, on `main`: the demo
-(`jobagent ui --demo`), the Settings page, cheap-model defaults, per-step
-reasoning effort, the first-pass screen, and the fixes from an outside review
-of two real applications (see the invariants on blockers and repeats).
+Since 003, also on `main`: the demo (`jobagent ui --demo`), the Settings page,
+cheap-model defaults, per-step reasoning effort, the first-pass screen, the
+fixes from two outside reviews of real applications (blockers that stop and
+`_NOT-READY` files, no repeats, must-have-only gaps, order claims), and from
+REVIEW-2026-10-16: a computed career timeline and cumulative management
+tenure handed to the scorer, order and "years at X" claims checked against
+dates, employer-attribution check on letter sentences, coverage marks that
+show the verdict, the lead-with order binding the first highlight, Sydney
+time everywhere, letter prompt v3 ("say what happened, not why it worked").
+Still not built: 001's pipeline board and prep in the UI, contact tracking
+(REVIEW-2026-09-07 6a), the write-up (6b), run-log rotation.
 
-930 tests pass as of 2026-10-15 on `main`, none touching the network; the test suite strips provider API keys from the
+**Standing decisions not to re-open:** founder years stay on the resume
+(2026-10-04, re-confirmed 2026-10-16); the review is off by default, the claim
+check on; the UI says "Jobs", not "Ads".
+
+962 tests pass as of 2026-10-17 on `main`, none touching the network; the test suite strips provider API keys from the
 environment so a forgotten fake fails instead of billing. `main` is pushed
 to a **public** GitHub repo; `.env`, `profile/`, the database, `runs.jsonl`,
 `evals/cases.yaml` and `REVIEW-*.md` are gitignored and must stay that way.
