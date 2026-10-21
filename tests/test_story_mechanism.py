@@ -25,8 +25,8 @@ def with_mechanism(profile_factory):
 
 def test_the_writer_sees_the_order_the_causes_and_what_is_false(profile_factory):
     rendered = _render_stories(with_mechanism(profile_factory))
-    assert "1. Set up the new hosting and the release pipeline." in rendered
-    assert "2. Ported the code." in rendered
+    assert rendered.index("Set up the new hosting") < rendered.index("Ported the code.")
+    assert "cite the story id, not a step" in rendered
     assert "the only ones a sentence may claim" in rendered
     assert "NOT TRUE — never state or imply" in rendered
     assert "ran side by side" in rendered

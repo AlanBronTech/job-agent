@@ -174,3 +174,15 @@ def test_the_letter_is_rewritten_when_it_merges_two_employers(profile):
     built = build_cover_letter(northwind(), profile, northwind_assessment(), client=client, kind=PEOPLE)
     assert "employer not in cited evidence" in client.prompts["generate_cover_letter"][1]
     assert built.issues == []
+
+
+def test_a_story_cited_by_a_step_counts_as_the_story(profile_factory) -> None:
+    """`story_id.0` is a sequence step of a story, not an unknown id (2026-10-22)."""
+    from jobagent.core.generate import Sentence, _story_cites, known_citations
+    from jobagent.core.profile import load_profile
+
+    profile = load_profile(profile_factory())
+    story = profile.stories.stories[0].id
+    known = known_citations(profile)
+    fixed = _story_cites([[Sentence(text="x", cites=[f"{story}.0", "ad", "made_up.1"])]], profile, known)
+    assert fixed[0][0].cites == [story, "ad", "made_up.1"]

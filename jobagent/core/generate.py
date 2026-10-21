@@ -866,7 +866,7 @@ def _write_cited(
             raise GenerateError(
                 f"The model's sentences did not match the contract.\n{exc}"
             ) from exc
-        paragraphs = _drop_furniture(letter.paragraphs, name)
+        paragraphs = _story_cites(_drop_furniture(letter.paragraphs, name), profile, known)
         text = paragraphs_text(paragraphs)
         if not text:
             raise GenerateError("The model returned nothing.")
@@ -899,6 +899,30 @@ def paragraphs_text(paragraphs: list[list[Sentence]]) -> str:
     return "\n\n".join(
         " ".join(sentence.text.strip() for sentence in paragraph) for paragraph in paragraphs
     )
+
+
+def _story_cites(
+    paragraphs: list[list[Sentence]], profile: Profile, known: set[str]
+) -> list[list[Sentence]]:
+    """`story_id.2` is the story, cited by a step of its sequence.
+
+    Stories are not indexed the way role bullets are, but the first letter
+    written after stories gained an ordered `sequence` cited
+    `ai_tooling_rollout.0`. Read as an unknown id it failed four checks at
+    once — unknown citation, wrong employer, no evidence, story reuse — for
+    a sentence that was faithful to the story. Only a story id the writer was
+    shown is accepted this way; anything else stays as written and fails.
+    """
+    stories = {story.id for story in profile.stories.stories} & known
+
+    def fix(ref: str) -> str:
+        head, _, index = ref.partition(".")
+        return head if ref not in known and index.isdigit() and head in stories else ref
+
+    return [
+        [s.model_copy(update={"cites": list(dict.fromkeys(fix(r) for r in s.cites))}) for s in p]
+        for p in paragraphs
+    ]
 
 
 def _drop_furniture(paragraphs: list[list[Sentence]], name: str) -> list[list[Sentence]]:
@@ -1296,8 +1320,10 @@ def _mechanism_lines(story, indent: str) -> list[str]:
     """A story's order, mechanism and causes, and what is false about it."""
     lines = []
     if story.sequence:
-        lines.append(f"{indent}sequence, in this order:")
-        lines += [f"{indent}  {n}. {step}" for n, step in enumerate(story.sequence, 1)]
+        # Not numbered: a numbered step was cited as `story_id.0`, as though
+        # it were a bullet. Cite the story itself.
+        lines.append(f"{indent}sequence, in this order (cite the story id, not a step):")
+        lines += [f"{indent}  - {step}" for step in story.sequence]
     if story.how_it_worked:
         lines.append(f"{indent}how it worked: {story.how_it_worked}")
     if story.why_this_way:
