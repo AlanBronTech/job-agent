@@ -109,7 +109,8 @@ individual-contributor role, managing managers. It is advice, never a filter,
 and it lets anything arguable through. Measured on 65 past ads it skipped none
 you judged worth applying to and caught 9 of the 40 the full scorer skipped.
 `jobagent screen ID …` does the same for chosen ads; `jobagent eval screen`
-re-measures it.
+re-measures it. In the UI, tick jobs on the Batch page and press **Screen
+selected…**: it shows the cost, then a Screen column with each answer and why.
 
 "New" means saved after you last added an ad, so the folder's older files are
 never offered at once. Every file gets a row, including one that was cut off at

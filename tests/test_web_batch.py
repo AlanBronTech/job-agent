@@ -237,3 +237,57 @@ def test_scoring_from_a_batch_matches_scoring_singly(client, ws, model):
         b = store.latest_assessment(conn, single).model_dump(exclude={"id", "jd_id", "scored_at"})
     assert a == b
     assert [(c, s) for c, s, _ in model.contexts] == [("score", "ui"), ("score", "ui")]
+
+
+# -- the first-pass screen, from the page ----------------------------------------
+
+
+@pytest.fixture
+def screener(monkeypatch):
+    from jobagent.services import screening
+
+    seen = []
+
+    def screen(jd_, profile, *, client):
+        seen.append(jd_.id)
+        decision = "skip" if "Fabrikam" in (jd_.company or "") else "score"
+        return SimpleNamespace(decision=decision, reason=f"Invented reason for {jd_.company}.")
+
+    monkeypatch.setattr(screening, "screen", screen)
+    monkeypatch.setattr(screening, "get_client", lambda *a, **k: SimpleNamespace(model="fake-haiku"))
+    return seen
+
+
+def test_screen_selected_confirms_then_screens_and_shows_the_answer(client, ws, model, screener):
+    save(ws, "acme.txt", AD.format(co="Acme Logistics"))
+    save(ws, "fabrikam.txt", AD.format(co="Fabrikam Medical"))
+    client.post("/batch/parse", data={"csrf": TOKEN, "confirmed": "1"})
+    page = client.get("/batch")
+    assert 'formaction="/batch/screen/confirm"' in page.text
+    selected = ids_in(page)
+
+    confirm = flat(client.post("/batch/screen/confirm", data={"csrf": TOKEN, "jd": selected}))
+    assert "Screen 2 job(s)?" in confirm and screener == []
+
+    assert client.post("/batch/screen", data={"csrf": TOKEN, "jd": selected}).status_code == 409
+    assert screener == []
+
+    done = client.post("/batch/screen", data={"csrf": TOKEN, "confirmed": "1", "jd": selected})
+    assert done.status_code == 303 and sorted(screener) == sorted(selected)
+    body = flat(client.get("/batch"))
+    assert "Invented reason for Fabrikam Medical." in body and " skip " in f" {body} "
+    assert model.scored == []  # advice only: nothing was scored or skipped for him
+
+
+def test_a_job_already_screened_is_not_screened_again(client, ws, model, screener):
+    save(ws, "acme.txt", AD.format(co="Acme Logistics"))
+    client.post("/batch/parse", data={"csrf": TOKEN, "confirmed": "1"})
+    selected = ids_in(client.get("/batch"))
+    for _ in range(2):
+        client.post("/batch/screen", data={"csrf": TOKEN, "confirmed": "1", "jd": selected})
+    assert screener == selected
+
+
+def test_screen_with_nothing_selected_is_refused(client, ws, model, screener):
+    response = client.post("/batch/screen/confirm", data={"csrf": TOKEN})
+    assert response.status_code == 409 and "Select at least one ad to screen" in response.text

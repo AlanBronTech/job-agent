@@ -27,15 +27,19 @@ from jobagent.services import (
     revise,
     runs,
     scoring,
+    screening,
     sent,
 )
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
     NoGeneratedCopy,
+    NoModel,
     NoSuchAd,
     NothingSelected,
     NotScored,
+    ProfileInvalid,
+    ProfileMissing,
     RunInProgress,
     SentFileUnusable,
     UnreadableAd,
@@ -702,7 +706,10 @@ async def reapply_decide(request: Request, jd_id: int):
 # --------------------------------------------------------------------------- #
 
 
-def _batch_page(request: Request, problem: str | None = None, confirm: dict | None = None):
+def _batch_page(
+    request: Request, problem: str | None = None, confirm: dict | None = None,
+    screen_confirm: dict | None = None,
+):
     ws = workspace(request)
     config = config_of(request)
     today = request.app.state.today()
@@ -727,6 +734,7 @@ def _batch_page(request: Request, problem: str | None = None, confirm: dict | No
             "run": parse_run,
             "problem": problem,
             "confirm": confirm,
+            "screen_confirm": screen_confirm,
             "missing_parse": readiness.missing(ws, config, "add_ad"),
         },
         status_code=409 if problem else 200,
@@ -821,6 +829,49 @@ async def batch_score(request: Request):
             )
         except RunInProgress:
             continue
+    return RedirectResponse("/batch", status_code=303)
+
+
+@router.post("/batch/screen/confirm")
+async def batch_screen_confirm(request: Request):
+    """The cost of a first-pass screen over the selected ads. Spends nothing."""
+    form = await checked_form(request)
+    ids = _selected(form)
+    if not ids:
+        return _batch_page(request, "Select at least one ad to screen.")
+    ws = workspace(request)
+    config = config_of(request)
+    return _batch_page(request, screen_confirm={
+        "ids": ids,
+        "cost": _times(costs.estimate(ws, config, "screen"), len(ids)),
+        "missing": readiness.missing(ws, config, "screen"),
+    })
+
+
+@router.post("/batch/screen")
+async def batch_screen(request: Request):
+    """Screen the selected ads, as `jobagent screen` does. A few seconds an ad.
+
+    Run in the request rather than in the background: it is cheap and quick,
+    and the answer is what the next click depends on.
+    """
+    form = await checked_form(request)
+    ids = _selected(form)
+    if form.get("confirmed") != "1":
+        return _batch_page(request, "Nothing was started: confirm the cost first.")
+    ws = workspace(request)
+    config = config_of(request)
+    missing = readiness.missing(ws, config, "screen")
+    if missing:
+        return _batch_page(request, "Nothing was started: " + " ".join(missing))
+    try:
+        results = screening.screen_ads(ws, config, ids, source="ui")
+    except (ProfileMissing, ProfileInvalid, NoModel) as exc:
+        return _batch_page(request, f"Not screened: {exc}")
+    failed = [r for r in results if r.decision is None]
+    if failed:
+        return _batch_page(request, "Screened, except: " + "; ".join(
+            f"JD {r.jd_id}: {r.reason}" for r in failed))
     return RedirectResponse("/batch", status_code=303)
 
 

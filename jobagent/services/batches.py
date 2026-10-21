@@ -78,6 +78,9 @@ class BatchRow:
     recruiter_score: int | None = None
     has_documents: bool = False
     status: str | None = None
+    # The first-pass screen, when it has run: "score" or "skip", and why.
+    screen_decision: str | None = None
+    screen_reason: str | None = None
 
 
 def describe(code: str, detail: str | None) -> str:
@@ -277,6 +280,9 @@ def _fill(conn, ws, row: BatchRow, jd, profile, today: date) -> None:
         ]
     row.history_count = len(history.company_history(conn, jd).encounters)
     row.reapply = reapply.check(ws, jd.id, today).kind
+    screened = store.get_screen(conn, jd.id)
+    if screened:
+        row.screen_decision, row.screen_reason = screened["decision"], screened["reason"]
     assessment = store.latest_assessment(conn, jd.id)
     if assessment is not None:
         row.state = "scored"

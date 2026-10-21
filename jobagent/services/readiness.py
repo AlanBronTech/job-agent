@@ -18,10 +18,11 @@ _CALL_TYPE = {
     "score": CallType.score,
     "generate": CallType.generate,
     "prep": CallType.prep,
+    "screen": CallType.triage,
 }
 
 # Actions that read the profile. Parsing an ad does not.
-_NEEDS_PROFILE = {"score", "generate", "prep"}
+_NEEDS_PROFILE = {"score", "generate", "prep", "screen"}
 
 
 def missing(ws: Workspace, config, action: str) -> list[str]:

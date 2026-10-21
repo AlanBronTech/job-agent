@@ -31,6 +31,24 @@
 <p class="empty">Nothing new saved since you last added a job. Save job descriptions into your saved-ads folder, then come back.</p>
 {% endif %}
 
+{% if screen_confirm %}
+<div class="panel">
+  <strong>Screen {{ screen_confirm.ids | length }} job(s)?</strong>
+  <p class="detail">A cheap first pass: worth scoring, or an obvious skip. Advice only — nothing is skipped for you. A job already screened keeps its earlier answer and costs nothing.</p>
+  <p><strong>Cost:</strong> {{ screen_confirm.cost }}</p>
+  {% if screen_confirm.missing %}
+  <div class="banner bad"><strong>Cannot run yet.</strong><ul>{% for m in screen_confirm.missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <form method="post" action="/batch/screen">
+    <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="confirmed" value="1">
+    {% for id in screen_confirm.ids %}<input type="hidden" name="jd" value="{{ id }}">{% endfor %}
+    <button type="submit" class="primary">Confirm and screen</button> <a href="/batch">Cancel</a>
+    <span class="detail">Takes a few seconds a job; the page waits.</span>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if confirm %}
 <div class="panel">
   <strong>Score {{ confirm.go | length }} job(s)?</strong>
@@ -62,18 +80,18 @@
 <table class="ads">
   <thead><tr>
     <th></th><th class="num">#</th><th>Company / role</th><th>Where</th><th>Filters</th>
-    <th>Seen</th><th>Verdict</th><th class="num">Score</th><th>State</th>
+    <th>Seen</th><th>Screen</th><th>Verdict</th><th class="num">Score</th><th>State</th>
   </tr></thead>
   <tbody>
   {% for r in rows %}
     {% if r.refusal %}
     <tr>
       <td></td><td class="num muted">{{ r.number }}</td>
-      <td colspan="6"><code>{{ r.file_name }}</code><div class="detail">{{ describe(r.refusal, r.refusal_detail) }}</div></td>
+      <td colspan="7"><code>{{ r.file_name }}</code><div class="detail">{{ describe(r.refusal, r.refusal_detail) }}</div></td>
       <td><span class="pill verdict-skip">refused</span></td>
     </tr>
     {% elif r.jd_id is none %}
-    <tr><td></td><td class="num muted">{{ r.number }}</td><td colspan="6"><code>{{ r.file_name }}</code></td><td class="muted">not parsed yet</td></tr>
+    <tr><td></td><td class="num muted">{{ r.number }}</td><td colspan="7"><code>{{ r.file_name }}</code></td><td class="muted">not parsed yet</td></tr>
     {% else %}
     <tr>
       <td><input type="checkbox" name="jd" value="{{ r.jd_id }}" aria-label="Select JD {{ r.jd_id }}"></td>
@@ -87,6 +105,8 @@
       <td class="detail">{{ r.arrangement }}{% if r.salary %}<br>{{ r.salary }}{% endif %}{% if r.posting %}<br>{{ r.posting }}{% endif %}</td>
       <td class="nowrap">{% for name, state in r.filters %}<span class="mark {{ {'ok': 'ok', 'breach': 'breach', 'unknown': 'unknown', 'note': 'muted'}[state] }}" title="{{ name }}: {{ state }}">{{ {'ok': '✓', 'breach': '✗', 'unknown': '?', 'note': '·'}[state] }}</span>{% endfor %}</td>
       <td class="muted">{{ r.history_count or "" }}</td>
+      <td>{% if r.screen_decision %}<span class="pill {{ 'verdict-skip' if r.screen_decision == 'skip' else 'verdict-apply' }}" title="{{ r.screen_reason }}">{{ r.screen_decision }}</span>
+        <div class="detail">{{ r.screen_reason }}</div>{% endif %}</td>
       <td>{% if r.verdict %}<span class="pill verdict-{{ r.verdict }}">{{ r.verdict | replace("_", " ") }}</span>{% endif %}</td>
       <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% endif %}</td>
       <td>{{ r.state | replace("_", " ") }}</td>
@@ -97,6 +117,7 @@
 </table>
 </div>
 <p>
+  <button type="submit" formaction="/batch/screen/confirm">Screen selected…</button>
   <button type="submit" formaction="/batch/score/confirm">Score selected…</button>
   <button type="submit" formaction="/batch/skip">Mark selected not applied</button>
   <span class="detail">Filters: hiring status, work type, location, salary — ✓ met, ✗ breach, ? not stated, · note. Generate from each job's page.</span>
