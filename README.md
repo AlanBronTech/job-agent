@@ -77,6 +77,9 @@ first.
   channel, and whether it was worth applying, plus the date, who or where, a
   one-line why and a note. It writes what `apply` and `outcome` write; applied
   with no date gets today's, and a note is added, never replacing earlier ones.
+  Choose the resume and letter you sent (or tick *sent unedited*) and they are
+  kept under `sent/`, as `apply --sent-*` does; the page then shows how much of
+  each generated document survived, and *every change* lists the sentences.
 
 **Still in the terminal for now:** `prep`, and anything under `jd amend`,
 `jd delete`, `eval` and `spend`.

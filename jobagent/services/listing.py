@@ -8,7 +8,7 @@ to be trusted without thinking, so it has to say so.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from jobagent.adapters.document_store import OutputFolders
@@ -22,7 +22,7 @@ from jobagent.core.models import (
     RoleClassification,
     Verdict,
 )
-from jobagent.services import outputs
+from jobagent.services import outputs, sent
 from jobagent.services.refusals import NoSuchAd
 from jobagent.services.workspace import Workspace
 
@@ -51,6 +51,8 @@ class AdDetail:
     folders: OutputFolders
     application: Application | None
     role_kind: RoleClassification | None = None
+    # What was sent, each against its generated copy (services.sent.Comparison).
+    sent: list = field(default_factory=list)
 
 
 def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
@@ -109,4 +111,5 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         folders=outputs.documents_for(ws, jd, today),
         application=application,
         role_kind=kind,
+        sent=sent.summary(ws, jd_id, today),
     )

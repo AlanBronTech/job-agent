@@ -137,13 +137,18 @@ def update_from_form(
     note: str = "",
     today: date,
     confirm_blockers: bool = False,
-) -> tuple[JobDescription, Application]:
+    sent_files: bool = False,
+) -> tuple[JobDescription, Application | None]:
     """The UI's pipeline form, validated, as one `save`.
 
     Nothing is implicit (REVIEW-2026-10-16 D9): the status is whatever was
     chosen, an empty choice keeps the current status, and with no application
     yet an empty choice is refused rather than defaulted. Recording Applied
     while a NOT-READY document is in the folder needs `confirm_blockers`.
+
+    With `sent_files`, the form also carries documents to record as sent, and
+    an empty status with no application saves nothing here rather than being
+    refused: recording what was sent does not imply Applied.
 
     An application recorded as applied with no date gets today's, the way
     `jobagent apply` does. A channel is "recruiter — Jane Smith" when a detail
@@ -155,6 +160,8 @@ def update_from_form(
     if jd is None:
         raise NoSuchAd(jd_id)
     if not status:
+        if existing is None and sent_files:
+            return jd, None
         if existing is None:
             raise ValueError("Choose a status: nothing is recorded until you do.")
         new_status = existing.status

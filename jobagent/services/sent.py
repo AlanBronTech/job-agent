@@ -16,6 +16,7 @@ thing the edit could have been measured against.
 from __future__ import annotations
 
 import hashlib
+import tempfile
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ from jobagent.services.refusals import (
 from jobagent.services.workspace import Workspace
 
 SENT_SUFFIXES = (".docx", ".pdf")
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
 @dataclass
@@ -44,7 +46,29 @@ class Comparison:
     problem: str | None = None
 
 
-def record(
+@dataclass
+class Prepared:
+    """Everything `commit` will copy and record, checked; nothing touched yet.
+
+    Split from `commit` so the UI can run its other refusals — the pipeline
+    form's — between the two: a guard that moves things runs after every
+    refusal. `uploads` holds the browser's files until `commit` copies them.
+    """
+
+    jd: JobDescription
+    folder: str | None
+    # (kind, sent file or None for the kept copy, generated original to record, kept copy)
+    plans: list[tuple[DocumentKind, Path | None, Path | None, str | None]]
+    as_generated: bool
+    uploads: tempfile.TemporaryDirectory | None = None
+
+
+def record(ws: Workspace, jd_id: int, *, sent_on: date, today: date, now: datetime, **files) -> list[SentDocument]:
+    """Record what went to the employer for one ad: `prepare`, then `commit`."""
+    return commit(ws, prepare(ws, jd_id, today=today, **files), sent_on=sent_on, today=today, now=now)
+
+
+def prepare(
     ws: Workspace,
     jd_id: int,
     *,
@@ -53,19 +77,14 @@ def record(
     as_generated: bool = False,
     generated_resume: Path | None = None,
     generated_letter: Path | None = None,
-    sent_on: date,
     today: date,
-    now: datetime,
-) -> list[SentDocument]:
-    """Record what went to the employer for one ad. Returns the rows, new or existing.
+) -> Prepared:
+    """Every refusal for a record, and nothing on disk touched.
 
     `as_generated` says the generated documents went unedited, and records
     the newest kept copy of each. Otherwise `resume` and `letter` name the
     files that were sent. `generated_resume` and `generated_letter` name the
     generated originals for a folder from before copies were kept.
-
-    Every refusal comes before the first copy, so a refused call touches
-    nothing on disk.
     """
     if as_generated and (resume or letter):
         raise ValueError("as_generated records the generated copies; name no files with it")
@@ -95,41 +114,94 @@ def record(
             plans.append((kind, given, original, latest))
     if not plans:
         raise NoGeneratedCopy("resume or cover letter", folder or ws.documents.folder_name(jd, today))
+    return Prepared(jd=jd, folder=folder, plans=plans, as_generated=as_generated)
 
-    # -- nothing on disk has been touched before this point -----------------
-    folder = folder or ws.documents.ensure_folder(jd, today)
-    with store.open_store(ws.db_path) as conn:
-        existing = store.list_sent(conn, jd_id)
-        rows: list[SentDocument] = []
-        for kind, given, original, generated in plans:
-            if original is not None:
-                generated = ws.documents.record_generated(jd, folder, original, now, today)
-            source = given or ws.documents.local_path(jd, folder, generated, today)
-            digest = _sha256(source)
-            repeat = next(
-                (r for r in existing if r.kind is kind and r.sha256 == digest), None
-            )
-            if repeat is not None:
-                rows.append(repeat)
-                continue
-            name = ws.documents.keep_sent(jd, folder, source, sent_on, today)
-            same = generated is not None and digest == _sha256(
-                ws.documents.local_path(jd, folder, generated, today)
-            )
-            row = SentDocument(
-                jd_id=jd_id,
-                kind=kind,
-                folder=folder,
-                name=name,
-                sha256=digest,
-                generated=generated,
-                as_generated=as_generated or same,
-                sent_on=sent_on,
-                recorded_at=now,
-            )
-            row.id = store.add_sent(conn, row)
-            rows.append(row)
+
+def prepare_uploads(
+    ws: Workspace,
+    jd_id: int,
+    *,
+    resume: tuple[str, bytes] | None = None,
+    letter: tuple[str, bytes] | None = None,
+    as_generated: bool = False,
+    today: date,
+) -> Prepared:
+    """`prepare` for files that arrived from the browser as (file name, bytes)."""
+    holder = tempfile.TemporaryDirectory(prefix="jobagent-sent-")
+    paths = {}
+    for key, upload in (("resume", resume), ("letter", letter)):
+        if upload is None:
+            continue
+        filename, data = upload
+        name = _bare_name(filename)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise SentFileUnusable(name, f"over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+        path = Path(holder.name) / key / name
+        path.parent.mkdir()
+        path.write_bytes(data)
+        paths[key] = path
+    prepared = prepare(ws, jd_id, as_generated=as_generated, today=today, **paths)
+    prepared.uploads = holder
+    return prepared
+
+
+def commit(
+    ws: Workspace, prepared: Prepared, *, sent_on: date, today: date, now: datetime
+) -> list[SentDocument]:
+    """Copy and record. Returns the rows, new or existing: the same file twice is one row."""
+    jd = prepared.jd
+    folder = prepared.folder or ws.documents.ensure_folder(jd, today)
+    try:
+        with store.open_store(ws.db_path) as conn:
+            existing = store.list_sent(conn, jd.id)
+            rows: list[SentDocument] = []
+            for kind, given, original, generated in prepared.plans:
+                if original is not None:
+                    generated = ws.documents.record_generated(jd, folder, original, now, today)
+                source = given or ws.documents.local_path(jd, folder, generated, today)
+                digest = _sha256(source)
+                repeat = next(
+                    (r for r in existing if r.kind is kind and r.sha256 == digest), None
+                )
+                if repeat is not None:
+                    rows.append(repeat)
+                    continue
+                name = ws.documents.keep_sent(jd, folder, source, sent_on, today)
+                same = generated is not None and digest == _sha256(
+                    ws.documents.local_path(jd, folder, generated, today)
+                )
+                row = SentDocument(
+                    jd_id=jd.id,
+                    kind=kind,
+                    folder=folder,
+                    name=name,
+                    sha256=digest,
+                    generated=generated,
+                    as_generated=prepared.as_generated or same,
+                    sent_on=sent_on,
+                    recorded_at=now,
+                )
+                row.id = store.add_sent(conn, row)
+                rows.append(row)
+    finally:
+        if prepared.uploads is not None:
+            prepared.uploads.cleanup()
     return rows
+
+
+def sent_on_for(ws: Workspace, jd_id: int, today: date) -> date:
+    """The application's date when it has one, else today."""
+    with store.open_store(ws.db_path) as conn:
+        application = store.get_application(conn, jd_id)
+    return application.applied_on if application and application.applied_on else today
+
+
+def summary(ws: Workspace, jd_id: int, today: date) -> list[Comparison]:
+    """`compare_sent` for the ad's page: nothing recorded is an empty list."""
+    try:
+        return compare_sent(ws, jd_id, today)
+    except NothingSent:
+        return []
 
 
 def recorded(ws: Workspace, jd_id: int | None = None) -> list[SentDocument]:
@@ -232,6 +304,16 @@ def _check(path: Path, suffixes: tuple[str, ...]) -> None:
         raise SentFileUnusable(str(path), "no such file")
     if path.suffix.lower() not in suffixes:
         raise SentFileUnusable(str(path), f"expected {' or '.join(suffixes)}")
+
+
+def _bare_name(filename: str) -> str:
+    """The browser's file name, as a name and nothing else."""
+    name = (filename or "").strip()
+    if not name or "/" in name or "\\" in name or ".." in name or name.startswith("."):
+        raise SentFileUnusable(filename or "(no name)", "not a plain file name")
+    if Path(name).suffix.lower() not in SENT_SUFFIXES:
+        raise SentFileUnusable(name, f"expected {' or '.join(SENT_SUFFIXES)}")
+    return name
 
 
 def _sha256(path: Path) -> str:

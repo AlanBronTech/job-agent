@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Sent vs generated · {{ d.jd.title }} · job-agent{% endblock %}
+{% block main %}
+{% set jd = d.jd %}
+<p><a href="/ads/{{ jd.id }}#pipeline">← {{ jd.title }}{% if jd.company %} · {{ jd.company }}{% endif %}</a></p>
+<h1>Sent vs generated</h1>
+{% if not d.sent %}
+  <p class="muted">Nothing recorded as sent for this job. Record the files under Pipeline on its page.</p>
+{% endif %}
+{% for c in d.sent %}
+<h2>{{ "Resume" if c.sent.kind.value == "resume" else "Cover letter" }} <span class="muted">sent {{ c.sent.sent_on.strftime("%-d %b %Y") }}</span></h2>
+<div class="panel">
+  <p class="detail"><code>{{ c.sent.name }}</code>{% if c.sent.generated %} against <code>{{ c.sent.generated }}</code>{% endif %}</p>
+  {% if not c.diff %}
+    <p>Not compared: {{ c.problem }}.</p>
+  {% elif c.diff.unchanged %}
+    <p><span class="pill verdict-apply">unedited</span> Sent exactly as generated.</p>
+  {% else %}
+    <p><strong>{{ "%.0f" | format(c.diff.kept_share * 100) }}%</strong> of generated words kept
+      <span class="muted">({{ c.diff.generated_words }} generated, {{ c.diff.sent_words }} sent)</span></p>
+    <table class="ads">
+      <thead><tr><th>Section</th><th class="num">Words</th><th class="num">Kept</th><th class="num">Changed</th><th class="num">Added</th><th class="num">Removed</th></tr></thead>
+      <tbody>
+      {% for sec in c.diff.sections %}
+        <tr><td>{{ sec.name }}</td><td class="num">{{ sec.generated_words }}</td>
+          <td class="num">{{ "new" if sec.kept_share is none else "%.0f%%" | format(sec.kept_share * 100) }}</td>
+          <td class="num">{{ sec.changed | length }}</td><td class="num">{{ sec.added | length }}</td><td class="num">{{ sec.removed | length }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% for sec in c.diff.sections if not sec.unchanged and (sec.changed or sec.added or sec.removed) %}
+      <h3>{{ sec.name }}</h3>
+      <ul class="checks">
+      {% for old, new in sec.changed %}
+        <li><span class="mark unknown">~</span><span><del>{{ old }}</del><div>{{ new }}</div></span></li>
+      {% endfor %}
+      {% for line in sec.removed %}<li><span class="mark breach">−</span><span><del>{{ line }}</del></span></li>{% endfor %}
+      {% for line in sec.added %}<li><span class="mark ok">+</span><span>{{ line }}</span></li>{% endfor %}
+      </ul>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

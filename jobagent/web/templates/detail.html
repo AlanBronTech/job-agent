@@ -204,7 +204,19 @@
 {% endif %}
   {% if pipeline_saved %}<p class="detail"><strong>Saved.</strong></p>{% endif %}
   {% if pipeline_problem %}<div class="banner bad">{{ pipeline_problem }}</div>{% endif %}
-  <form class="pipeline" method="post" action="/ads/{{ jd.id }}/pipeline">
+  {% if d.sent %}
+  <p><strong>Sent</strong> <span class="muted">against what was generated</span> · <a href="/ads/{{ jd.id }}/diff">every change</a></p>
+  <ul class="checks">
+  {% for c in d.sent %}
+    <li><span class="mark {{ 'ok' if c.sent.as_generated or (c.diff and c.diff.unchanged) else 'muted' }}">{{ "✓" if c.sent.as_generated or (c.diff and c.diff.unchanged) else "·" }}</span>
+      <span>{{ "Resume" if c.sent.kind.value == "resume" else "Cover letter" }} · sent {{ c.sent.sent_on.strftime("%-d %b %Y") }} ·
+      {% if c.sent.as_generated or (c.diff and c.diff.unchanged) %}unedited
+      {% elif c.diff %}{{ "%.0f" | format(c.diff.kept_share * 100) }}% of generated words kept
+      {% else %}<span class="detail">not compared: {{ c.problem }}</span>{% endif %}</span></li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  <form class="pipeline" method="post" action="/ads/{{ jd.id }}/pipeline" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ token }}">
     {% set current = d.application.status.value if d.application else "" %}
     <div class="fields">
@@ -232,6 +244,13 @@
       <label>Why <input type="text" id="why" name="why" placeholder="one line, read in the eval report"></label>
     </div>
     <label>Note <input type="text" id="note" name="note" class="wide" placeholder="added to the notes, never replacing them"></label>
+    <div class="fields">
+      <label>Resume sent <input type="file" id="sent_resume" name="sent_resume" accept=".docx,.pdf"></label>
+      <label>Cover letter sent <input type="file" id="sent_letter" name="sent_letter" accept=".docx,.pdf"></label>
+      <label><input type="checkbox" id="sent_as_generated" name="sent_as_generated" value="1">
+        Sent the generated documents unedited</label>
+    </div>
+    <p class="detail">The files you sent are kept in the job's folder under <code>sent/</code>, never replaced, and compared with what was generated. Choose the .docx: a PDF is kept but cannot be compared.</p>
     {% if pipeline_confirm %}
     <div class="banner bad">These documents still have blockers: {{ pipeline_confirm | join(", ") }}.
       <label><input type="checkbox" id="confirm_blockers" name="confirm_blockers" value="1">

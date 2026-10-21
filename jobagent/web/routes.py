@@ -7,6 +7,7 @@ rather than about HTTP, that `if` belongs in `jobagent.services`.
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -25,14 +26,17 @@ from jobagent.services import (
     reapply,
     runs,
     scoring,
+    sent,
 )
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
+    NoGeneratedCopy,
     NoSuchAd,
     NothingSelected,
     NotScored,
     RunInProgress,
+    SentFileUnusable,
     UnreadableAd,
 )
 from jobagent.web import work
@@ -76,11 +80,27 @@ def ad_page(request: Request, jd_id: int, saved: int = 0):
 
 @router.post("/ads/{jd_id:int}/pipeline")
 async def pipeline_save(request: Request, jd_id: int):
-    """Record where an application stands, as `apply` and `outcome` do. Free."""
+    """Record where an application stands, and what was sent, as `apply` does. Free.
+
+    The sent files are checked first, the status second, and copied last, so
+    a refusal from either leaves nothing half-recorded.
+    """
     form = await checked_form(request)
+    ws = workspace(request)
+    today = request.app.state.today()
+    try:
+        prepared = await _sent_files(form, ws, jd_id, today)
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except SentFileUnusable as exc:
+        return _back_to_ad(request, jd_id, f"Not saved: {exc.path}: {exc.reason}.")
+    except NoGeneratedCopy:
+        return _back_to_ad(request, jd_id, "Not saved: no generated copy is kept for this job, "
+                           "so there is nothing to record as sent unedited. Choose the files you sent.")
     try:
         pipeline.update_from_form(
-            workspace(request),
+            ws,
             jd_id,
             status=str(form.get("status") or ""),
             applied_on=str(form.get("applied_on") or ""),
@@ -89,8 +109,9 @@ async def pipeline_save(request: Request, jd_id: int):
             worth=str(form.get("worth") or ""),
             why=str(form.get("why") or ""),
             note=str(form.get("note") or ""),
-            today=request.app.state.today(),
+            today=today,
             confirm_blockers=form.get("confirm_blockers") == "1",
+            sent_files=prepared is not None,
         )
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
@@ -101,7 +122,37 @@ async def pipeline_save(request: Request, jd_id: int):
                            extra={"pipeline_confirm": exc.files})
     except ValueError as exc:
         return _back_to_ad(request, jd_id, f"Not saved: {exc}")
+    if prepared is not None:
+        sent.commit(ws, prepared, sent_on=sent.sent_on_for(ws, jd_id, today),
+                    today=today, now=datetime.now())
     return RedirectResponse(f"/ads/{jd_id}?saved=1#pipeline", status_code=303)
+
+
+async def _sent_files(form, ws, jd_id: int, today):
+    """The form's sent documents, checked and held, or None if it named none."""
+    files = {}
+    for key in ("resume", "letter"):
+        upload = form.get(f"sent_{key}")
+        if upload is not None and getattr(upload, "filename", ""):
+            files[key] = (upload.filename, await upload.read(sent.MAX_UPLOAD_BYTES + 1))
+    as_generated = form.get("sent_as_generated") == "1"
+    if not files and not as_generated:
+        return None
+    if files and as_generated:
+        raise SentFileUnusable("Sent unedited", "untick it, or choose no files")
+    return sent.prepare_uploads(ws, jd_id, as_generated=as_generated, today=today, **files)
+
+
+@router.get("/ads/{jd_id:int}/diff")
+def diff_page(request: Request, jd_id: int):
+    """Each sent document against its generated copy, sentence by sentence. Free."""
+    ws = workspace(request)
+    try:
+        detail = listing.ad_detail(ws, jd_id, today=request.app.state.today())
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    return render(request, "diff.html", {"nav": "ads", "d": detail})
 
 
 # Plain form POSTs answered with 204: the browser stays on the page, and the
