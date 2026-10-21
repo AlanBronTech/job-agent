@@ -171,6 +171,7 @@ def document_kind(name: str) -> str | None:
 
 
 GENERATED_DIR = ".generated"
+EDITED_DIR = ".edited"
 SENT_DIR = "sent"
 
 

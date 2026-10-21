@@ -63,6 +63,8 @@ from jobagent.core.validation import (
 
 RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
+CONTEXT_PROMPT = "context"
+REVISION_PROMPT = "revision"
 ANSWERS_PROMPT = "generate_answers"
 
 # Letters and answers. Raised from 8,192 on 2026-10-14: with the cited-sentence
@@ -203,11 +205,14 @@ def build_resume(
     client: LLMClient,
     today: date | None = None,
     kind: RoleClassification | None = None,
+    instructions: str | None = None,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
     With a role kind, evidence excluded for it is left out of what the model
     is shown, and any reference to it in the answer is still a blocker.
+    `instructions` is Alan's context and revision note (`instructions_block`),
+    sent with every attempt; a rejected draft's failures follow it.
     """
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     catalogue = build_catalogue(profile, excluded)
@@ -221,7 +226,7 @@ def build_resume(
     for attempt in range(REWRITE_ATTEMPTS + 1):
         selection = _ask_for_selection(
             jd, profile, assessment, catalogue, client=client, kind=kind,
-            excluded=excluded, retry_note=retry_note,
+            excluded=excluded, retry_note=retry_note, instructions=instructions,
         )
         built = _check_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
@@ -330,6 +335,7 @@ def _ask_for_selection(
     kind: RoleClassification | None = None,
     excluded: set[str] = frozenset(),
     retry_note: str | None = None,
+    instructions: str | None = None,
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
@@ -347,6 +353,8 @@ def _ask_for_selection(
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
 
+    if instructions:
+        prompt = f"{prompt}\n\n{instructions}"
     if retry_note:
         prompt = f"{prompt}\n\n{retry_note}"
     try:
@@ -564,9 +572,11 @@ def build_cover_letter(
     kind: RoleClassification | None = None,
     feedback: str | None = None,
     on_resume: dict[str, str] | None = None,
+    instructions: str | None = None,
 ) -> GeneratedText:
     """`feedback` is appended to the prompt: what a previous draft got wrong
-    that only a later check could see (the paid claim check)."""
+    that only a later check could see (the paid claim check). `instructions`
+    is Alan's context and revision note, ahead of it."""
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     try:
         prompt = load_prompt(
@@ -585,6 +595,8 @@ def build_cover_letter(
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
+    if instructions:
+        prompt = f"{prompt}\n\n{instructions}"
     if feedback:
         prompt = f"{prompt}\n\n{feedback}"
 
@@ -610,6 +622,7 @@ def build_answers(
     client: LLMClient,
     kind: RoleClassification | None = None,
     limit: int | None = None,
+    instructions: str | None = None,
 ) -> "GeneratedAnswers":
     """One answer per question, short and long, each sentence cited (spec 003, US7).
 
@@ -636,6 +649,8 @@ def build_answers(
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
+    if instructions:
+        prompt = f"{prompt}\n\n{instructions}"
 
     known = known_citations(profile, excluded)
     attempt_prompt = prompt
@@ -920,6 +935,30 @@ def known_citations(profile: Profile, excluded: set[str] = frozenset()) -> set[s
     }
     known |= {key.value for key in profile.stories.answers}
     return known
+
+
+def instructions_block(
+    *, context: str | None = None, previous: str | None = None,
+    note: str | None = None, document: str = "document",
+) -> str | None:
+    """Alan's context for the application and his revision note, as prompt text.
+
+    Both are things only he knew, given to the tool rather than applied by
+    hand afterwards, so they can be counted (REVIEW-2026-10-18, task 2). The
+    prompts say what neither can do: license a claim the evidence lacks.
+    """
+    parts = []
+    try:
+        if context and context.strip():
+            parts.append(load_prompt(CONTEXT_PROMPT, context=context.strip()))
+        if note and note.strip():
+            parts.append(load_prompt(
+                REVISION_PROMPT, document=document,
+                previous=(previous or "(not available)").strip(), note=note.strip(),
+            ))
+    except PromptError as exc:
+        raise GenerateError(str(exc)) from exc
+    return "\n\n".join(parts) or None
 
 
 def _rewrite_instruction(failures: list[ValidationIssue], *, json_output: bool = False) -> str:

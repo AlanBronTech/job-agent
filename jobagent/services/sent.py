@@ -105,7 +105,7 @@ def prepare(
         (DocumentKind.resume, resume, generated_resume),
         (DocumentKind.cover_letter, letter, generated_letter),
     ):
-        latest = None if original or folder is None else _latest_generated(ws, jd, folder, kind, today)
+        latest = None if original or folder is None else latest_generated(ws, jd, folder, kind, today)
         if as_generated:
             if latest is None:
                 continue
@@ -270,7 +270,7 @@ def _latest_per_kind(rows: list[SentDocument]) -> list[SentDocument]:
     return [latest[k] for k in DocumentKind if k in latest]
 
 
-def _latest_generated(
+def latest_generated(
     ws: Workspace, jd: JobDescription, folder: str, kind: DocumentKind, today: date
 ) -> str | None:
     for name in ws.documents.generated_copies(jd, folder, today):

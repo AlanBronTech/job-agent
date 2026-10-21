@@ -865,6 +865,23 @@ class SentDocument(_Base):
     recorded_at: datetime
 
 
+class RevisionNote(_Base):
+    """What Alan asked to change in one generated document, in his words.
+
+    Kept, because a correction given to the tool can be counted and promoted
+    into `voice.md` or the profile once it recurs; one made by hand in Word
+    is lost the moment it is made (REVIEW-2026-10-18, task 2). `result` is
+    the kept copy the revision produced, None until it is written.
+    """
+
+    id: int | None = None
+    jd_id: int
+    kind: DocumentKind
+    note: str
+    created_at: datetime
+    result: str | None = None
+
+
 class ReapplyDecision(_Base):
     """Alan's answer about one ad and the earlier application it resembles.
 

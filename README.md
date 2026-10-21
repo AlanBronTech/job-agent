@@ -386,6 +386,28 @@ After the folder list you get:
 **What to do about it:** open the .docx, read it, edit what you want, send it
 yourself. Ten minutes, not two hours.
 
+**Better: tell the tool what is wrong, rather than fixing it by hand.**
+
+```
+jobagent revise 22 --cover --note "lead with the payments work; drop the second paragraph"
+jobagent context 22 "Recruiter said they care most about payments"   # before generating
+jobagent generate 22 --resume --cover --context "Hiring manager is ex-Atlassian"
+jobagent notes                                                        # what you keep asking for
+```
+
+`revise` writes one document again, from the previous draft plus your note,
+and runs the same checks as a first draft: a note asking for something the
+profile does not hold is still refused. It costs what generating that one
+document costs. The note is kept; the previous version stays in
+`.generated/`. If you have already edited the file by hand it stops and says
+so — put the edit in the note instead, or pass `--replace-edits` to keep the
+edited file under `.edited/` and revise anyway.
+
+Context is what you know that the ad does not say. It is kept with the ad,
+given to every writer from then on, and never to the scorer. `notes` groups
+your revision notes: one you have given across three applications is a rule
+waiting to be written into `voice.md` or the profile.
+
 Edit the visible file freely. `generate` keeps a read-only copy of each
 document as it wrote it, in `.generated/<run time>/` inside the folder
 (hidden in Finder; ⌘⇧. shows it). That copy is what `jobagent diff` measures
@@ -525,6 +547,9 @@ assessment is what shapes the selection.
 | `jobagent diff <jd_id>` | Each sent document against the generated copy. `--summary` for sections only. |
 | `jobagent diff --all` | One line per document sent, and how many went unedited. |
 | `jobagent diff --generated F --sent F` | Any two files, no records needed. |
+| `jobagent revise <jd_id> --resume\|--cover --note "…"` | Write one document again, changed as the note says. Paid, as generating it. |
+| `jobagent context <jd_id> ["…"]` | Show, or add a line to, what you know that the ad does not say. `--set`, `--clear`. |
+| `jobagent notes [--jd N]` | Revision notes, grouped; recurring ones flagged. |
 
 `apply` options: `--on YYYY-MM-DD` (defaults to today), `--channel <text>`,
 `--note <text>`, `--sent-resume F`, `--sent-letter F`, `--sent-as-generated`.

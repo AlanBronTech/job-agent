@@ -101,6 +101,10 @@ class DocumentStore(Protocol):
 
     def ensure_folder(self, jd: JobDescription, when: date) -> str: ...
 
+    def keep_edited(self, jd: JobDescription, folder: str, name: str, now: datetime, today: date) -> str: ...
+
+    def remove(self, jd: JobDescription, folder: str, name: str, today: date) -> None: ...
+
     def local_path(self, jd: JobDescription, folder: str, name: str, today: date) -> Path: ...
 
     def open(self, jd: JobDescription, folder: str, name: str, today: date) -> None: ...
@@ -180,6 +184,21 @@ class LocalFolderStore:
     def ensure_folder(self, jd: JobDescription, when: date) -> str:
         """This month's folder, created if absent. Returns its name."""
         return docs.application_folder(self.output_dir, jd, when=when).name
+
+    def keep_edited(self, jd: JobDescription, folder: str, name: str, now: datetime, today: date) -> str:
+        """Keep a hand-edited document before a revision writes over it.
+
+        Under `.edited/`, not `.generated/`: it is not what the tool wrote, and
+        `diff` must never compare against it as though it were.
+        """
+        source = self.local_path(jd, folder, name, today)
+        relative = f"{docs.EDITED_DIR}/{now:%Y%m%dT%H%M%S}/{name}"
+        docs.keep_copy(source, source.parent / relative)
+        return relative
+
+    def remove(self, jd: JobDescription, folder: str, name: str, today: date) -> None:
+        """Delete one visible file. Only ever one that a kept copy already holds."""
+        self.local_path(jd, folder, name, today).unlink()
 
     def local_path(self, jd: JobDescription, folder: str, name: str, today: date) -> Path:
         """A file in one of this ad's folders, for reading. Nothing outside them."""

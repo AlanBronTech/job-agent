@@ -36,10 +36,11 @@ from jobagent.core.models import (
     OutsideApplication,
     ReapplyDecision,
     RoleClassification,
+    RevisionNote,
     SentDocument,
 )
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -169,6 +170,25 @@ CREATE TABLE IF NOT EXISTS sent_documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sent_jd ON sent_documents (jd_id);
+
+-- v14. What Alan knows about an application that the ad does not say, given
+-- to the writer on every generate. Kept apart from job_descriptions so it
+-- never reaches the scorer or the eval: it was not part of the ad.
+CREATE TABLE IF NOT EXISTS ad_context (
+    jd_id      INTEGER PRIMARY KEY REFERENCES job_descriptions (id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- v14. What Alan asked `revise` to change, in his words. Only ever added to.
+CREATE TABLE IF NOT EXISTS revision_notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    jd_id      INTEGER NOT NULL REFERENCES job_descriptions (id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('resume', 'cover_letter')),
+    note       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    result     TEXT
+);
 
 CREATE TABLE IF NOT EXISTS fit_assessments (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1073,6 +1093,15 @@ def add_sent(conn: sqlite3.Connection, document: SentDocument) -> int:
     return cursor.lastrowid
 
 
+def move_sent_folder(conn: sqlite3.Connection, old: str, new: str) -> None:
+    """Follow a folder `supersede` moved aside: the sent copies moved with it."""
+    try:
+        conn.execute("UPDATE sent_documents SET folder = ? WHERE folder = ?", (new, old))
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not follow {old} to {new}: {exc}") from exc
+
+
 def list_sent(conn: sqlite3.Connection, jd_id: int | None = None) -> list[SentDocument]:
     """Sent documents, oldest first; every ad's when `jd_id` is None."""
     sql = "SELECT * FROM sent_documents"
@@ -1096,6 +1125,71 @@ def list_sent(conn: sqlite3.Connection, jd_id: int | None = None) -> list[SentDo
             as_generated=bool(row["as_generated"]),
             sent_on=row["sent_on"],
             recorded_at=row["recorded_at"],
+        )
+        for row in rows
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# v14: context and revision notes
+# --------------------------------------------------------------------------- #
+
+
+def get_context(conn: sqlite3.Connection, jd_id: int) -> str | None:
+    row = conn.execute("SELECT text FROM ad_context WHERE jd_id = ?", (jd_id,)).fetchone()
+    return row["text"] if row else None
+
+
+def set_context(conn: sqlite3.Connection, jd_id: int, text: str | None, now: datetime) -> None:
+    """Replace the ad's context; empty or None removes it."""
+    try:
+        if text and text.strip():
+            conn.execute(
+                "INSERT INTO ad_context (jd_id, text, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(jd_id) DO UPDATE SET text = excluded.text, "
+                "updated_at = excluded.updated_at",
+                (jd_id, text.strip(), _to_iso(now)),
+            )
+        else:
+            conn.execute("DELETE FROM ad_context WHERE jd_id = ?", (jd_id,))
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save the context for JD {jd_id}: {exc}") from exc
+
+
+def add_revision_note(conn: sqlite3.Connection, note: RevisionNote) -> int:
+    try:
+        cursor = conn.execute(
+            "INSERT INTO revision_notes (jd_id, kind, note, created_at, result) VALUES (?,?,?,?,?)",
+            (note.jd_id, note.kind.value, note.note, _to_iso(note.created_at), note.result),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not record the revision note: {exc}") from exc
+    return cursor.lastrowid
+
+
+def set_revision_result(conn: sqlite3.Connection, note_id: int, result: str) -> None:
+    try:
+        conn.execute("UPDATE revision_notes SET result = ? WHERE id = ?", (result, note_id))
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not update revision note {note_id}: {exc}") from exc
+
+
+def list_revision_notes(conn: sqlite3.Connection, jd_id: int | None = None) -> list[RevisionNote]:
+    """Oldest first; every ad's when `jd_id` is None."""
+    sql, params = "SELECT * FROM revision_notes", ()
+    if jd_id is not None:
+        sql, params = sql + " WHERE jd_id = ?", (jd_id,)
+    try:
+        rows = conn.execute(sql + " ORDER BY created_at, id", params).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list revision notes: {exc}") from exc
+    return [
+        RevisionNote(
+            id=row["id"], jd_id=row["jd_id"], kind=row["kind"], note=row["note"],
+            created_at=row["created_at"], result=row["result"],
         )
         for row in rows
     ]

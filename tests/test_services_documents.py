@@ -340,3 +340,17 @@ def test_a_claim_mismatch_writes_the_letter_once_more(ws, ids, fake_model, monke
     assert drafts[0] is None and "unsupported detail" in drafts[1]
     assert result.claims == [] and not any(i.rule == "claim mismatch" for i in result.issues)
     assert any(p.name == "AlanBron_CoverLetter_AcmeLogistics_202609.docx" for p in result.written)
+
+
+def test_supersede_moves_the_sent_records_with_the_folder(ws, ids, fake_model):
+    from jobagent.core.models import DocumentKind, SentDocument
+
+    first = run(ws, ids["acme"])
+    with store.open_store(ws.db_path) as conn:
+        store.add_sent(conn, SentDocument(
+            jd_id=ids["acme"], kind=DocumentKind.resume, folder=first.folder.name,
+            name="sent/2026-09-29/x.docx", sha256="0", sent_on=TODAY, recorded_at=NOW))
+    second = run(ws, ids["acme"], supersede=True)
+    with store.open_store(ws.db_path) as conn:
+        (row,) = store.list_sent(conn, ids["acme"])
+    assert row.folder == second.superseded.name

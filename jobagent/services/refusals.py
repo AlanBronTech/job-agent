@@ -167,6 +167,18 @@ class NoGeneratedCopy(Refusal):
         self.folder = folder
 
 
+class EditedByHand(Refusal):
+    """The visible document differs from the copy generate kept.
+
+    A revision writes a new version; done over a hand edit, the edit would be
+    replaced by a version that never saw it. The caller asks before going on.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"{name} has been edited since it was generated")
+        self.name = name
+
+
 class NothingSent(Refusal):
     """Nothing recorded as sent for this ad, so there is nothing to compare."""
 

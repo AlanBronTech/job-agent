@@ -381,3 +381,13 @@ def test_diff_of_two_files_needs_no_records(wired, tmp_path):
     result = runner.invoke(app, ["diff", "--generated", str(a), "--sent", str(b)])
     assert result.exit_code == 0, result.output
     assert "Sent exactly as generated." in result.output
+
+
+def test_sent_records_follow_a_superseded_folder(ws, ids, acme):
+    (name,) = generate_into(ws, acme, resume=resume_content())
+    record(ws, ids["acme"], resume=visible(ws, acme, name))
+    moved = ws.documents.supersede(acme, TODAY, LATER)
+    with store.open_store(ws.db_path) as conn:
+        store.move_sent_folder(conn, ws.documents.folder_name(acme, TODAY), moved)
+    (comparison,) = sent.compare_sent(ws, ids["acme"], TODAY)
+    assert comparison.sent.folder == moved and comparison.diff.unchanged

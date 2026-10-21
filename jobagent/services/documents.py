@@ -32,6 +32,7 @@ from jobagent.core.generate import (
     build_answers,
     build_cover_letter,
     build_resume,
+    instructions_block,
     resume_text,
 )
 from jobagent.core.validation import banned_phrases
@@ -145,9 +146,14 @@ def generate(
     check_claims: bool | None = None,
     review: bool | None = None,
     limit: int | None = None,
+    revisions: dict[str, tuple[str, str]] | None = None,
 ) -> GenerateResult:
     """Run generate. `before_spend` is called once every refusal has passed and
-    immediately before the first model call: the CLI prints its cost line there."""
+    immediately before the first model call: the CLI prints its cost line there.
+
+    The ad's stored context goes to every writer. `revisions` maps "resume" or
+    "cover_letter" to (previous draft text, Alan's note): `services.revise`.
+    """
     if supersede and overwrite:
         raise ValueError("supersede and overwrite are mutually exclusive")
     # None means "as configured"; both checks are on unless switched off.
@@ -159,6 +165,12 @@ def generate(
     loaded = _load(ws, jd_id)
     jd, assessment = loaded.jd, loaded.assessment
     refuse_if_reapplying(ws, jd_id, today)
+    with store.open_store(ws.db_path) as conn:
+        context = store.get_context(conn, jd_id)
+
+    def instructions(kind_name: str, document: str) -> str | None:
+        previous, note = (revisions or {}).get(kind_name, (None, None))
+        return instructions_block(context=context, previous=previous, note=note, document=document)
     warnings: list[str] = []
 
     if assessment.verdict is Verdict.skip:
@@ -204,6 +216,10 @@ def generate(
         except docs.DocsError as exc:
             raise SupersedeFailed(ws.documents.folder_name(jd, today), str(exc)) from exc
         superseded = Path(moved) if moved else None
+        if moved:
+            # The sent copies went with the folder; their records follow it.
+            with store.open_store(ws.db_path) as conn:
+                store.move_sent_folder(conn, ws.documents.folder_name(jd, today), moved)
 
     # -- spending starts here ------------------------------------------------
     if before_spend is not None:
@@ -227,7 +243,8 @@ def generate(
     if resume:
         try:
             built = build_resume(
-                jd, profile, assessment, client=client, today=today, kind=kind
+                jd, profile, assessment, client=client, today=today, kind=kind,
+                instructions=instructions("resume", "resume"),
             )
         except GenerateError as exc:
             raise GenerationFailed("resume", exc, written) from exc
@@ -247,7 +264,8 @@ def generate(
     if cover:
         try:
             letter = build_cover_letter(
-                jd, profile, assessment, client=client, kind=kind, on_resume=on_resume
+                jd, profile, assessment, client=client, kind=kind, on_resume=on_resume,
+                instructions=instructions("cover_letter", "cover letter"),
             )
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
@@ -264,6 +282,7 @@ def generate(
                     letter = build_cover_letter(
                         jd, profile, assessment, client=client, kind=kind,
                         feedback=claims_feedback(found), on_resume=on_resume,
+                        instructions=instructions("cover_letter", "cover letter"),
                     )
                 except GenerateError as exc:
                     raise GenerationFailed("cover", exc, written) from exc
@@ -291,7 +310,8 @@ def generate(
     if questions:
         try:
             built_answers = build_answers(
-                questions, jd, profile, assessment, client=client, kind=kind, limit=limit
+                questions, jd, profile, assessment, client=client, kind=kind, limit=limit,
+                instructions=instructions_block(context=context),
             )
         except GenerateError as exc:
             raise GenerationFailed("answers", exc, written) from exc

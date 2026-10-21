@@ -85,6 +85,12 @@ def generate(
         "--review/--no-review",
         help="Run the paid independent review (~$0.12), or skip it. Default: REVIEW in .env (off).",
     ),
+    context: str | None = typer.Option(
+        None,
+        "--context",
+        help="Something you know that the ad does not say ('recruiter said …'). "
+        "Kept with the ad and given to every writer; see `jobagent context`.",
+    ),
 ) -> None:
     """Generate application documents for one job description."""
     if supersede and overwrite:
@@ -130,6 +136,10 @@ def generate(
 
     questions = _read_questions(answers) if answers else []
     overrule_if_asked(ws, jd_id, today, overrule_reapply)
+    if context:
+        from jobagent.services import revise as revise_service
+
+        revise_service.add_context(ws, jd_id, context, datetime.now())
     check_claims = config.check_claims and not no_check_claims
     review = config.review if review_flag is None else review_flag
 
