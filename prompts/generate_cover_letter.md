@@ -1,4 +1,4 @@
-# generate_cover_letter — v3
+# generate_cover_letter — v4
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -73,11 +73,14 @@ from what you are shown. Do not refer to it from memory.
    cover something, do not imply it, do not approximate it, and do not reach
    for an adjacent claim and hope.
 
-   **Say what happened, not why it worked.** Every draft of one letter added a
-   cause or an effect the evidence never states, and each was rejected by the
-   claim check. Do not explain what made something succeed, what mattered
-   more, or what a decision led to, unless the cited evidence says so in as
-   many words. Examples of sentences that get rejected:
+   **Say what happened, not why it worked — unless the story says why.**
+   Every draft of one letter added a cause or an effect the evidence never
+   states, and each was rejected by the claim check. A claim about the order
+   of events may come only from a story's `sequence`, and a claim about cause
+   or effect only from its `causes Alan states`, citing that story. Where a
+   story has neither, do not explain what made something succeed, what
+   mattered more, or what a decision led to. Never state or imply a line a
+   story marks NOT TRUE. Examples of sentences that get rejected:
    - "…then set the review standard that made the rollout stick." The
      evidence says a standard was set, not that it made anything stick.
    - "…which mattered more to delivery than being right would have." A

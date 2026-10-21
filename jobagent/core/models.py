@@ -258,6 +258,19 @@ class Story(_Base):
     action: str
     result: str
     what_id_do_differently: str | None = None
+    # The mechanism (REVIEW-2026-10-18 task 3). A letter persuades with how, in
+    # what order and why, and a story that records only what happened leaves
+    # the model to supply those — it supplied "side by side" and "CI/CD before
+    # the migration", both false. Each is written by Alan; a letter may claim
+    # an order or a cause only from `sequence` or `cause_effect`.
+    sequence: list[str] = Field(default_factory=list)
+    how_it_worked: str | None = None
+    why_this_way: str | None = None
+    cause_effect: list[str] = Field(default_factory=list)
+    # Tempting inferences that are false. Shown to the writer and the claim
+    # check as never-say lines; kept out of the number haystack, because a
+    # figure in a false statement licenses nothing.
+    not_true: list[str] = Field(default_factory=list)
     note_for_scorer: str | None = None
     # The cover letter and answers prompts see the story but not its notes.
     # See Bullet.note_for_writer.

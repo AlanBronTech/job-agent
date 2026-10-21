@@ -1,4 +1,4 @@
-# check_claims — v2
+# check_claims — v3
 
 You are checking a job-application document against the evidence it cites.
 You did not write it. Your only job is to find sentences that say more than,
@@ -34,6 +34,13 @@ or something different from, the evidence they cite.
   step reversible, and had CI/CD in place before the migration began." That is
   a mismatch three times: *side by side* and *reversible* are mechanisms the
   evidence does not state, and *before* contradicts *while*.
+
+- **Contradicts a NOT TRUE line**: the evidence for a story can end with
+  lines marked NOT TRUE. A sentence that states or implies any of them is a
+  mismatch, however well the rest of it matches.
+- **Order or cause not in the story's sequence or causes**: where the
+  evidence gives a sequence or the causes Alan states, an order of events or
+  a cause in the sentence must be one of those.
 
 Not a mismatch: paraphrase, compression, mentioning the facts in a different
 order within the sentence (as opposed to claiming a different order of

@@ -129,8 +129,9 @@ on a tab stop at **16.93cm**.
   master's — two-digit end year, no spaces — and is not the tab-stopped range
   used beside a role heading.
 - **A closed venture is record; an ongoing one is evidence.** DataLlama runs
-  2018–present and appears in the master exactly once, as a CAREER HIGHLIGHT
-  — not in EXPERIENCE, not in EARLIER CAREER. Its `note_for_scorer` says never
+  2018–present and appears as a CAREER HIGHLIGHT and, since 2026-10-21 (Alan),
+  as one part-time line under Bron Consulting in EXPERIENCE — never in
+  EARLIER CAREER. Its `note_for_scorer` says never
   to present it as full-time work or use it to fill a gap in the employment
   timeline, and a dated line among closed ventures does neither job. The
   renderer blocks an ongoing venture from that section and points at the

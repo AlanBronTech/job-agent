@@ -1248,6 +1248,7 @@ def _render_stories(profile: Profile, excluded: set[str] = frozenset()) -> str:
             f"  action: {story.action}\n"
             f"  result: {story.result}"
         )
+        lines += _mechanism_lines(story, "  ")
         _append_writer_note(lines, story.note_for_writer, "  ")
     explanations = profile.stories.explanations.model_dump(exclude_none=True)
     if explanations:
@@ -1261,6 +1262,25 @@ def _render_stories(profile: Profile, excluded: set[str] = frozenset()) -> str:
 # --------------------------------------------------------------------------- #
 # Deterministic details
 # --------------------------------------------------------------------------- #
+
+
+def _mechanism_lines(story, indent: str) -> list[str]:
+    """A story's order, mechanism and causes, and what is false about it."""
+    lines = []
+    if story.sequence:
+        lines.append(f"{indent}sequence, in this order:")
+        lines += [f"{indent}  {n}. {step}" for n, step in enumerate(story.sequence, 1)]
+    if story.how_it_worked:
+        lines.append(f"{indent}how it worked: {story.how_it_worked}")
+    if story.why_this_way:
+        lines.append(f"{indent}why this way: {story.why_this_way}")
+    if story.cause_effect:
+        lines.append(f"{indent}causes Alan states (the only ones a sentence may claim):")
+        lines += [f"{indent}  - {claim}" for claim in story.cause_effect]
+    if story.not_true:
+        lines.append(f"{indent}NOT TRUE — never state or imply any of these:")
+        lines += [f"{indent}  - {claim}" for claim in story.not_true]
+    return lines
 
 
 def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
@@ -1561,10 +1581,12 @@ def evidence_text(profile: Profile, ref: str) -> str | None:
             return f"{entry.company}: {entry.summary}"
     for story in profile.stories.stories:
         if story.id == ref:
-            return (
+            text = (
                 f"{story.label}. Situation: {story.situation} Action: {story.action} "
                 f"Result: {story.result}"
             )
+            mechanism = _mechanism_lines(story, "")
+            return f"{text}\n" + "\n".join(mechanism) if mechanism else text
     explanations = profile.stories.explanations.model_dump(exclude_none=True)
     if isinstance(explanations.get(ref), str):
         return explanations[ref]

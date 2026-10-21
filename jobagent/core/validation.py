@@ -662,10 +662,14 @@ def _profile_numbers(profile: Profile) -> set[str]:
 #                    through generated prose. Its digits are not evidence, and
 #                    including them licensed "379" as a headcount.
 #   *_rationale      why a filter is set, not a claim about Alan.
+#   not_true         a story's list of false statements. A number in one is
+#                    false by definition and must not license itself in prose.
 #
 # Entries marked ``visibility: scorer_only`` are skipped for the same reason as
 # ``note_for_scorer``: they inform the decision and are never rendered.
-_NON_EVIDENCE_KEYS = frozenset({"voice", "note_for_scorer", "note_for_writer", "phone"})
+_NON_EVIDENCE_KEYS = frozenset(
+    {"voice", "note_for_scorer", "note_for_writer", "phone", "not_true"}
+)
 
 
 def _evidence_text(profile: Profile) -> list[str]:
