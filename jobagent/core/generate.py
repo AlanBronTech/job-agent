@@ -65,6 +65,9 @@ from jobagent.core.validation import (
 RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
 CONTEXT_PROMPT = "context"
+CONTRACT_PROMPT = "contract_writing"
+# A contract's cover note: three or four sentences, not a letter.
+CONTRACT_NOTE_MAX_WORDS = 120
 REVISION_PROMPT = "revision"
 ANSWERS_PROMPT = "generate_answers"
 
@@ -576,6 +579,7 @@ def build_cover_letter(
     feedback: str | None = None,
     on_resume: dict[str, str] | None = None,
     instructions: str | None = None,
+    max_words: int = COVER_LETTER_MAX_WORDS,
 ) -> GeneratedText:
     """`feedback` is appended to the prompt: what a previous draft got wrong
     that only a later check could see (the paid claim check). `instructions`
@@ -609,7 +613,7 @@ def build_cover_letter(
         COVER_PROMPT,
         profile,
         known=known_citations(profile, excluded),
-        max_words=COVER_LETTER_MAX_WORDS,
+        max_words=max_words,
         context="The cover letter",
         ad_text=jd.raw_text,
         on_resume=on_resume or {},
@@ -940,9 +944,30 @@ def known_citations(profile: Profile, excluded: set[str] = frozenset()) -> set[s
     return known
 
 
+def contract_block(profile: Profile, offer_id: str | None, *, letter: bool) -> str | None:
+    """The contract framing for a writer, when the assessment matched an offer."""
+    offer = next((o for o in profile.assets.contract_offers if o.id == offer_id), None)
+    if offer is None:
+        return None
+    evidence = ", ".join(offer.evidence) or "(none listed)"
+    rule = (
+        f"\nThe letter is a cover note, not a letter: three or four sentences, "
+        f"under {CONTRACT_NOTE_MAX_WORDS} words. Longer is rejected."
+        if letter else ""
+    )
+    try:
+        return load_prompt(
+            CONTRACT_PROMPT,
+            offer=f"{offer.label}: {offer.detail}\nEvidence: {evidence}",
+            letter_rule=rule,
+        )
+    except PromptError as exc:
+        raise GenerateError(str(exc)) from exc
+
+
 def instructions_block(
     *, context: str | None = None, previous: str | None = None,
-    note: str | None = None, document: str = "document",
+    note: str | None = None, document: str = "document", contract: str | None = None,
 ) -> str | None:
     """Alan's context for the application and his revision note, as prompt text.
 
@@ -950,7 +975,7 @@ def instructions_block(
     hand afterwards, so they can be counted (REVIEW-2026-10-18, task 2). The
     prompts say what neither can do: license a claim the evidence lacks.
     """
-    parts = []
+    parts = [contract] if contract else []
     try:
         if context and context.strip():
             parts.append(load_prompt(CONTEXT_PROMPT, context=context.strip()))

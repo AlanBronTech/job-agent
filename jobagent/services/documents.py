@@ -28,10 +28,13 @@ from jobagent.adapters.llm import CallType, LLMError, RunContext, get_client
 from jobagent.core import history, store
 from jobagent.core import roles as kinds
 from jobagent.core.generate import (
+    CONTRACT_NOTE_MAX_WORDS,
+    COVER_LETTER_MAX_WORDS,
     GenerateError,
     build_answers,
     build_cover_letter,
     build_resume,
+    contract_block,
     instructions_block,
     resume_text,
 )
@@ -170,7 +173,13 @@ def generate(
 
     def instructions(kind_name: str, document: str) -> str | None:
         previous, note = (revisions or {}).get(kind_name, (None, None))
-        return instructions_block(context=context, previous=previous, note=note, document=document)
+        contract = contract_block(
+            profile, assessment.contract_offer, letter=kind_name == "cover_letter"
+        )
+        return instructions_block(
+            context=context, previous=previous, note=note, document=document,
+            contract=contract,
+        )
     warnings: list[str] = []
 
     if assessment.verdict is Verdict.skip:
@@ -262,10 +271,17 @@ def generate(
         _keep_generated(ws, jd, today, path, now, warnings)
 
     if cover:
+        # A contract matched to an offer gets a cover note, not a letter.
+        letter_words = (
+            CONTRACT_NOTE_MAX_WORDS
+            if contract_block(profile, assessment.contract_offer, letter=True)
+            else COVER_LETTER_MAX_WORDS
+        )
         try:
             letter = build_cover_letter(
                 jd, profile, assessment, client=client, kind=kind, on_resume=on_resume,
                 instructions=instructions("cover_letter", "cover letter"),
+                max_words=letter_words,
             )
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
@@ -283,6 +299,7 @@ def generate(
                         jd, profile, assessment, client=client, kind=kind,
                         feedback=claims_feedback(found), on_resume=on_resume,
                         instructions=instructions("cover_letter", "cover letter"),
+                        max_words=letter_words,
                     )
                 except GenerateError as exc:
                     raise GenerationFailed("cover", exc, written) from exc

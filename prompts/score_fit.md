@@ -1,4 +1,4 @@
-# score_fit — v4
+# score_fit — v5
 
 You are deciding whether a specific candidate should spend a day applying for a
 specific job. You are not a cheerleader and you are not his advocate. A false
@@ -64,6 +64,8 @@ Writing your own version produces the same question twice in slightly
 different words. `questions_to_ask` is for what the filters do not cover:
 the team, the scope, the delivery record, what the role has to have changed
 in six months.
+
+{contract_framing}
 
 ## What to decide, in order
 
@@ -168,5 +170,6 @@ JSON only. No prose, no markdown fences.
     }
   ],
   "profile_gaps": ["what the profile fails to evidence that would have helped"],
-  "questions_to_ask": ["what to establish before applying — not salary, commute or employment type; those are added for you"]
+  "questions_to_ask": ["what to establish before applying — not salary, commute or employment type; those are added for you"],
+  "contract_offer": "the id of the contract offer this ad matches, or null; always null for a permanent role"
 }

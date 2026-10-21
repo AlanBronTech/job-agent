@@ -160,6 +160,18 @@ def _validate_cross_references(profile: Profile) -> None:
                         f"references unknown story '{bullet.linked_story}'"
                     )
 
+    # A contract offer's evidence must be something the profile holds.
+    known_evidence = known_stories | {
+        e.id for _, entries in bullet_sections for e in entries
+    } | {e.id for e in profile.roles.earlier_career}
+    for offer in profile.assets.contract_offers:
+        for ref in offer.evidence:
+            if ref not in known_evidence:
+                errors.append(
+                    f"assets.contract_offers[{offer.id}].evidence references "
+                    f"unknown entry or story '{ref}'"
+                )
+
     # question_types must come from the controlled vocabulary.
     for story in profile.stories.stories:
         for qt in story.question_types:

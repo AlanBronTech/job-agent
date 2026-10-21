@@ -273,6 +273,8 @@ def _render(
         ("[green]yes[/] " if fit.target_role_match else "[red]no[/] ")
         + f"[dim]{fit.target_role_note}[/]",
     )
+    if fit.contract_offer:
+        header.add_row("contract offer", fit.contract_offer.replace("_", " "))
     if kind is not None:
         header.add_row("role kind", f"{describe_kind(kind)}  [dim]{kind.reason}[/]")
 

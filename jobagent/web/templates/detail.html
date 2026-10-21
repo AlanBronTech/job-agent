@@ -69,6 +69,7 @@
       <div><div class="label">Hiring manager</div><div class="value">{{ a.overall_score }}/100</div></div>
       <div><div class="label">Recruiter screen</div><div class="value">{{ a.recruiter_screen_score }}/100</div></div>
       <div><div class="label">Target role</div><div class="value">{{ "yes" if a.target_role_match else "no" }}</div></div>
+      {% if a.contract_offer %}<div><div class="label">Contract offer</div><div class="value">{{ a.contract_offer.replace("_", " ") }}</div></div>{% endif %}
     </div>
     <p>{{ a.rationale }}</p>
     <p class="detail">{{ a.target_role_note }}</p>

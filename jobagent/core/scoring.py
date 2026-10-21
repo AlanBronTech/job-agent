@@ -43,10 +43,11 @@ from jobagent.core.models import (
     WorkArrangement,
     WorkType,
 )
-from jobagent.core import timeline
+from jobagent.core import rates, timeline
 from jobagent.core.prompts import PromptError, load_prompt
 
 PROMPT_NAME = "score_fit"
+CONTRACT_PROMPT = "contract_framing"
 
 # An assessment is several times the size of a parsed ad: one entry per
 # requirement with a note against each, plus challenge points, emphasis and
@@ -71,6 +72,7 @@ _EXPECTED_KEYS = frozenset(
         "challenge_points",
         "profile_gaps",
         "questions_to_ask",
+        "contract_offer",
     }
 )
 
@@ -96,6 +98,9 @@ def score_fit(
             timeline=timeline.render(profile),
             jd_json=_jd_json(jd),
             constraints_json=_constraints_json(constraints),
+            contract_framing=(
+                load_prompt(CONTRACT_PROMPT) if rates.is_contract(jd) else ""
+            ),
         )
     except PromptError as exc:
         raise ScoringError(str(exc)) from exc
@@ -113,6 +118,11 @@ def score_fit(
         )
 
     data = {key: value for key, value in parsed.items() if key in _EXPECTED_KEYS}
+    # Only an offer the profile holds, and only for a contract: an invented id
+    # would read as a match the evidence never made.
+    offers = {offer.id for offer in profile.assets.contract_offers}
+    if not rates.is_contract(jd) or data.get("contract_offer") not in offers:
+        data["contract_offer"] = None
     data["jd_id"] = jd.id if jd.id is not None else 0
     data["constraints"] = [check.model_dump() for check in constraints]
     data["model_used"] = response.model
@@ -142,8 +152,60 @@ def check_constraints(jd: JobDescription, profile: Profile) -> list[ConstraintCh
         _check_hiring_status(jd),
         _check_work_type(jd, filters.work_types),
         _advisory(_check_location(jd, filters), filters.location_advisory),
-        _check_salary(jd, filters.min_salary_aud),
+        _check_pay(jd, filters),
     ]
+
+
+def _check_pay(jd: JobDescription, filters) -> ConstraintCheck:
+    """A day rate against the day-rate floor; anything else against the salary floor.
+
+    A contract is quoted per day. Asking a contract ad for an annual band
+    against a $150,000 floor asked the wrong question in the wrong unit, so a
+    stated day rate — or a contract with no pay stated — is judged as a day
+    rate. A fixed-term role quoting an annual salary keeps the salary check.
+    """
+    rate = rates.day_rate(jd)
+    if rate is not None or jd.work_type is WorkType.contract:
+        return _check_day_rate(rate, filters.min_day_rate_aud)
+    return _check_salary(jd, filters.min_salary_aud)
+
+
+def _check_day_rate(rate, floor: int | None) -> ConstraintCheck:
+    if rate is None:
+        return ConstraintCheck(
+            name="day rate",
+            status=ConstraintStatus.unknown,
+            detail="No day rate stated."
+            + (f" The floor is ${floor:,} a day." if floor else " No day-rate floor is set."),
+            question="What is the day rate?" + (f" The floor is ${floor:,}." if floor else ""),
+            # With no floor there is nothing for it to decide.
+            advisory=floor is None,
+        )
+    band = f"${rate.low:,}" if rate.low == rate.high else f"${rate.low:,}–${rate.high:,}"
+    super_note = {True: " including super", False: " plus super", None: ""}[rate.includes_super]
+    stated = f'{band} a day{super_note} ("{rate.text}")'
+    if floor is None:
+        return ConstraintCheck(
+            name="day rate",
+            status=ConstraintStatus.ok,
+            advisory=True,
+            detail=f"{stated}. No day-rate floor is set, so it is reported, not judged.",
+        )
+    if rate.high < floor:
+        return ConstraintCheck(
+            name="day rate", status=ConstraintStatus.breach,
+            detail=f"{stated}: below the ${floor:,} floor.",
+        )
+    if rate.low < floor:
+        return ConstraintCheck(
+            name="day rate", status=ConstraintStatus.unknown,
+            detail=f"{stated} straddles the ${floor:,} floor.",
+            question=f"Where in {band} a day would this land? The floor is ${floor:,}.",
+        )
+    return ConstraintCheck(
+        name="day rate", status=ConstraintStatus.ok,
+        detail=f"{stated}: at or above the ${floor:,} floor.",
+    )
 
 
 def _advisory(check: ConstraintCheck, advisory: bool) -> ConstraintCheck:

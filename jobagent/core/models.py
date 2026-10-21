@@ -368,6 +368,9 @@ class TargetFilters(_Base):
     # off. Alan, 2026-10-03; 183 days is "six months" (spec 002).
     reapply_window_days: int | None = 183
     min_salary_aud: int
+    # The floor for a contract quoted as a day rate, AUD excluding super.
+    # None means no floor has been set: a day rate is reported, never judged.
+    min_day_rate_aud: int | None = None
     work_types: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
 
@@ -385,9 +388,26 @@ class Narrative(_Base):
     consistency_rules: list[str] = Field(default_factory=list)
 
 
+class ContractOffer(_Base):
+    """One thing Alan sells as a contractor, and the evidence that backs it.
+
+    Contractors are bought as specialists for a defined piece of work, so a
+    contract ad is matched to one of these rather than read against the
+    permanent engineering-manager story (REVIEW-2026-10-18, task 7). Every
+    `evidence` id must be a profile entry or story.
+    """
+
+    id: str
+    label: str
+    detail: str
+    evidence: list[str] = Field(default_factory=list)
+    note_for_scorer: str | None = None
+
+
 class AssetsFile(_Base):
     narrative: Narrative = Field(default_factory=Narrative)
     differentiators: list[Differentiator] = Field(default_factory=list)
+    contract_offers: list[ContractOffer] = Field(default_factory=list)
     target_roles: list[str] = Field(default_factory=list)
     target_filters: TargetFilters
     positive_signals: list[str] = Field(default_factory=list)
@@ -702,6 +722,9 @@ class FitAssessment(_Base):
     challenge_points: list[ChallengePoint] = Field(default_factory=list)
     profile_gaps: list[str] = Field(default_factory=list)
     questions_to_ask: list[str] = Field(default_factory=list)
+    # For a contract or fixed-term ad: the id of the contract offer it was
+    # matched to, None when none fits or the ad is permanent.
+    contract_offer: str | None = None
 
     model_used: str | None = None
     scored_at: datetime

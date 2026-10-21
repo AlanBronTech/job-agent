@@ -40,13 +40,15 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
 # not a migration framework and is not pretending to be one: it handles the only
 # kind of change that is safe to make without one.
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    # v15 — the contract offer a contract ad was matched to (task 7).
+    "fit_assessments": [("contract_offer", "TEXT")],
     "applications": [
         ("worth_derived", "INTEGER NOT NULL DEFAULT 0"),
         ("overrode_scorer", "INTEGER NOT NULL DEFAULT 0"),
@@ -601,8 +603,8 @@ def add_assessment(conn: sqlite3.Connection, assessment: FitAssessment) -> int:
                 jd_id, overall_score, recruiter_screen_score, verdict,
                 rationale, target_role_match, target_role_note, constraints,
                 requirements, emphasise, challenge_points, profile_gaps,
-                questions_to_ask, model_used, scored_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                questions_to_ask, model_used, scored_at, contract_offer
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 assessment.jd_id,
@@ -615,6 +617,7 @@ def add_assessment(conn: sqlite3.Connection, assessment: FitAssessment) -> int:
                 *(json.dumps(data[column]) for column in _FIT_LIST_COLUMNS),
                 assessment.model_used,
                 _to_iso(assessment.scored_at),
+                assessment.contract_offer,
             ),
         )
         conn.commit()
@@ -793,6 +796,7 @@ def _row_to_assessment(row: sqlite3.Row) -> FitAssessment:
         "target_role_note": row["target_role_note"],
         "model_used": row["model_used"],
         "scored_at": row["scored_at"],
+        "contract_offer": row["contract_offer"],
     }
     for column in _FIT_LIST_COLUMNS:
         data[column] = _load_json_list(row, column)

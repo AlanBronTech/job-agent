@@ -221,6 +221,8 @@ def assessment_markdown(
         f"{assessment.recruiter_screen_score}/100 recruiter screen  ",
         f"**Target role:** {'yes' if assessment.target_role_match else 'no'} — "
         f"{assessment.target_role_note}  ",
+        *([f"**Contract offer:** {assessment.contract_offer.replace('_', ' ')}  "]
+          if assessment.contract_offer else []),
         f"**Scored:** {local(assessment.scored_at):%Y-%m-%d} using "
         f"{assessment.model_used or 'an unrecorded model'}",
         "",
