@@ -55,6 +55,7 @@ from jobagent.core.validation import (
     check_employers,
     check_resume_reuse,
     check_story_reuse,
+    check_third_person,
     story_of,
     story_uses,
     validate_prose,
@@ -245,6 +246,8 @@ def _check_resume(
     issues: list[ValidationIssue] = []
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
         issues += validate_prose(paragraph, profile, context="the PROFILE section")
+        # Solely about him, so "he" and "his" are third person too.
+        issues += check_third_person(paragraph, "the PROFILE section", name=False, pronouns=True)
     for highlight in selection.highlights:
         issues += validate_prose(
             f"{highlight.label} — {highlight.text}",

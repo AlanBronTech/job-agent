@@ -1,4 +1,4 @@
-# generate_resume — v3
+# generate_resume — v4
 
 Select and order profile content for one specific job advertisement.
 
@@ -108,9 +108,13 @@ Skill category keys available: {skills}
    does not. This is checked and rejected.
 6. **Eight skill categories, ordered with the most relevant first.** Return the
    keys, not the values.
-7. **PROFILE is two short paragraphs.** The first says what he is and the
-   single strongest thing he has done that matters to *this* ad. The second
-   says what he is doing now and where it points. Blunt, factual, specific. No
+7. **PROFILE is two short paragraphs, in the first person**, as the master
+   writes them: "Engineering leader and three-time co-founder. I have led
+   teams of up to 15 …". The first says what Alan is and the single strongest
+   thing he has done that matters to *this* ad. The second says what he is
+   doing now and where it points. Never "Alan", "he" or "his" about him: that
+   is rejected. Highlights are written the same way, or with no pronoun, as
+   the experience bullets are. Blunt, factual, specific. No
    adjectives that could be said of anyone.
 8. **The tagline** is three short phrases separated by "  ·  ", pitched at this
    ad. The master's is "Engineering Leader  ·  Co-Founder  ·  AI Adoption &

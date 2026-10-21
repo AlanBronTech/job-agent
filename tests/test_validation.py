@@ -445,3 +445,30 @@ def test_a_contact_detail_does_not_license_a_number(profile) -> None:
     digits = _numbers_in(profile.roles.person.phone)
 
     assert digits and not digits & _profile_numbers(profile)
+
+
+# -- first person (Alan, 2026-10-21) -------------------------------------------
+
+
+def test_his_name_in_prose_is_a_blocker(profile_factory) -> None:
+    from jobagent.core.validation import validate_prose
+
+    profile = load_profile(profile_factory())
+    assert "third person" in rules(validate_prose("Alan is an engineering manager.", profile))
+    assert "third person" in rules(validate_prose("Alan's team shipped weekly.", profile))
+    assert "third person" not in rules(validate_prose("I lead teams that ship.", profile))
+
+
+def test_a_copied_bullet_in_the_third_person_is_a_blocker() -> None:
+    from jobagent.core.validation import validate_rendered
+
+    assert "third person" in rules(validate_rendered("A job Alan estimates took months."))
+
+
+def test_he_is_third_person_only_where_the_text_is_solely_about_him() -> None:
+    from jobagent.core.validation import check_third_person
+
+    profile_line = "He has led teams of up to 15."
+    assert check_third_person(profile_line, "the PROFILE section", name=False, pronouns=True)
+    # A letter may say "he" of someone else.
+    assert not check_third_person("I coached a junior until he reached mid-level.", "The letter")

@@ -118,6 +118,7 @@ def validate_prose(
     issues += _check_scorer_only_leakage(text, profile)
     issues += _check_contrast_phrasing(text, context)
     issues += _check_chronology(text, context)
+    issues += check_third_person(text, context)
     if max_words is not None:
         issues += _check_length(text, max_words, context)
     return issues
@@ -132,7 +133,7 @@ def validate_rendered(text: str, *, context: str = "a bullet") -> list[Validatio
     field names — does not reach the reader, and that no bullet states a
     career length.
     """
-    issues = _check_age_signals(text)
+    issues = _check_age_signals(text) + check_third_person(text, context)
     for pattern, description in _INTERNAL_REFERENCE_PATTERNS:
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             issues.append(
@@ -395,6 +396,39 @@ def check_resume_reuse(uses: dict[str, list[str]]) -> list[ValidationIssue]:
 # --------------------------------------------------------------------------- #
 # Individual rules
 # --------------------------------------------------------------------------- #
+
+
+_HIS_NAME = re.compile(r"\bAlan(?:'s|’s)?\b")
+_PRONOUN = re.compile(r"\b(?:he|his|him|himself)\b", re.IGNORECASE)
+
+
+def check_third_person(
+    text: str, context: str, *, name: bool = True, pronouns: bool = False
+) -> list[ValidationIssue]:
+    """Prose about Alan in the third person, on a page he signs (Alan, 2026-10-21).
+
+    The resume and letter are first person, as the master is. The profile is
+    written about Alan, and its wording leaked: "a job Alan estimates" was a
+    bullet copied onto a resume, and generated PROFILE paragraphs opened
+    "Alan is an engineering manager". His name in the body is always wrong;
+    the renderer writes it on the letterhead and signature. `pronouns` adds
+    he/his/him, only for text that is solely about him — a highlight or a
+    letter may rightly say "he" of a junior he coached.
+    """
+    issues = []
+    patterns = ([_HIS_NAME] if name else []) + ([_PRONOUN] if pronouns else [])
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            issues.append(
+                ValidationIssue(
+                    rule="third person",
+                    severity=Severity.blocker,
+                    detail=f"{context} refers to Alan in the third person. Write it as him: \"I\", or no pronoun.",
+                    excerpt=_excerpt(text, match.start(), match.end()),
+                )
+            )
+            break
+    return issues
 
 
 def _check_age_signals(text: str) -> list[ValidationIssue]:

@@ -1,4 +1,4 @@
-# generate_cover_letter — v4
+# generate_cover_letter — v5
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -57,7 +57,8 @@ from what you are shown. Do not refer to it from memory.
 ## Rules
 
 1. **Under 350 words.** One page. This is checked and a longer letter is
-   rejected.
+   rejected. Written in the first person throughout: never "Alan" or "he"
+   for him, which is rejected.
 2. **Structure**, per voice.md: one sentence naming the role and the single
    strongest reason to have a conversation; two or three short paragraphs each
    anchored on one concrete piece of evidence mapped to a stated requirement in
