@@ -143,3 +143,33 @@ class PossiblySameJob(Refusal):
     def __init__(self, match) -> None:
         super().__init__(f"possibly the same job as an application {match.age_days} days ago")
         self.match = match
+
+
+class SentFileUnusable(Refusal):
+    """A file named as sent is missing, or is not a .docx or .pdf."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(f"{path}: {reason}")
+        self.path = path
+        self.reason = reason
+
+
+class NoGeneratedCopy(Refusal):
+    """Asked to compare with, or record as, the generated copy, and none was kept.
+
+    Copies have been kept since 2026-10-21; a folder generated before that has
+    only the visible file, which may already be the edited one.
+    """
+
+    def __init__(self, kind: str, folder: str) -> None:
+        super().__init__(f"no generated {kind} kept in {folder}")
+        self.kind = kind
+        self.folder = folder
+
+
+class NothingSent(Refusal):
+    """Nothing recorded as sent for this ad, so there is nothing to compare."""
+
+    def __init__(self, jd_id: int) -> None:
+        super().__init__(f"nothing recorded as sent for JD {jd_id}")
+        self.jd_id = jd_id

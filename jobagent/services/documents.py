@@ -242,6 +242,7 @@ def generate(
             jd, today, _name("Resume", jd, today, blocked=_blocked(built.issues))
         )
         written.append(_write(lambda: write_resume(built.content, path), written))
+        _keep_generated(ws, jd, today, path, now, warnings)
 
     if cover:
         try:
@@ -285,6 +286,7 @@ def generate(
             jd, today, _name("CoverLetter", jd, today, blocked=_blocked(letter_issues))
         )
         written.append(_write(lambda: write_cover_letter(content, path), written))
+        _keep_generated(ws, jd, today, path, now, warnings)
 
     if questions:
         try:
@@ -483,6 +485,19 @@ def _clashes(ws: Workspace, jd: JobDescription, when: date, names: list[str]):
         return []
     wanted = set(names)
     return [(f.name, f.modified) for f in current.files if f.name in wanted]
+
+
+def _keep_generated(ws: Workspace, jd, today: date, path: Path, now: datetime, warnings: list[str]) -> None:
+    """A read-only copy of the document as generated, for `jobagent diff`.
+
+    The visible file is the one that gets edited and sent; without this copy
+    the edit cannot be measured, because the edit replaces the only original.
+    A warning, not a failure: the documents are written and paid for.
+    """
+    try:
+        ws.documents.keep_generated(jd, today, path.name, now)
+    except docs.DocsError as exc:
+        warnings.append(f"Could not keep a generated copy of {path.name}: {exc}")
 
 
 def _write(action, written: list[Path]) -> Path:

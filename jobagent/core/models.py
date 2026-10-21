@@ -834,6 +834,37 @@ class OutsideApplication(_Base):
     created_at: datetime
 
 
+class DocumentKind(str, Enum):
+    resume = "resume"
+    cover_letter = "cover_letter"
+
+
+class SentDocument(_Base):
+    """A copy of a document as it actually went to an employer.
+
+    Kept beside the copy `generate` wrote, so the two can be compared: the
+    edits made between them are the measure of how far the tool's output is
+    from usable (REVIEW-2026-10-18, task 1). `folder` and `name` are how the
+    document store refers to a file, never a filesystem path; `name` is
+    relative to the folder, as in `sent/2026-10-21/AlanBron_Resume_X.docx`.
+
+    `generated` is the copy it is compared against, `None` when no generated
+    copy existed. `as_generated` is true when Alan said the file went
+    unedited or the bytes match that copy.
+    """
+
+    id: int | None = None
+    jd_id: int
+    kind: DocumentKind
+    folder: str
+    name: str
+    sha256: str
+    generated: str | None = None
+    as_generated: bool = False
+    sent_on: date
+    recorded_at: datetime
+
+
 class ReapplyDecision(_Base):
     """Alan's answer about one ad and the earlier application it resembles.
 

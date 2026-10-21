@@ -28,6 +28,7 @@ from jobagent.timefmt import local
 
 import os
 import re
+import shutil
 from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
@@ -154,6 +155,43 @@ def document_name(kind: str, jd: JobDescription, *, when: date | None = None) ->
     when = when or date.today()
     company = _slug(jd.company or jd.posted_by or "Unknown")
     return f"AlanBron_{kind}_{company}_{when:%Y%m}.docx"
+
+
+def document_kind(name: str) -> str | None:
+    """`resume` or `cover_letter` from a file name `document_name` made, else None.
+
+    Matched on the part `document_name` puts there, so a NOT-READY name, a
+    `_v2` Alan added, or a PDF exported beside the .docx still counts.
+    """
+    if "_CoverLetter_" in name:
+        return "cover_letter"
+    if "_Resume_" in name:
+        return "resume"
+    return None
+
+
+GENERATED_DIR = ".generated"
+SENT_DIR = "sent"
+
+
+def keep_copy(source: Path, target: Path) -> Path:
+    """Copy `source` to `target` read-only, never replacing anything.
+
+    For the two records the edit measurement rests on: what `generate` wrote,
+    and what was sent. Either one overwritten is a measurement lost — five of
+    the first six applications measured had the sent version saved over the
+    generated one, so there was nothing left to compare. Read-only so that
+    opening the copy in Word and pressing save cannot quietly do the same.
+    """
+    if target.exists():
+        raise DocsError(f"{target} already exists; a kept copy is never replaced.")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        target.chmod(0o444)
+    except OSError as exc:
+        raise DocsError(f"Could not copy {source} to {target}: {exc}") from exc
+    return target
 
 
 def write_text(folder: Path, filename: str, text: str) -> Path:

@@ -430,6 +430,7 @@ def delete(
 
             application = store.get_application(conn, jd_id)
             assessments = store.list_assessments(conn, jd_id)
+            sent_rows = store.list_sent(conn, jd_id)
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
         raise typer.Exit(code=1)
@@ -468,6 +469,11 @@ def delete(
         console.print(
             f"  [bold red]the application row[/] ({application.status.value}), "
             "by cascade — forced"
+        )
+    if sent_rows:
+        console.print(
+            f"  [bold yellow]{len(sent_rows)} sent-document record(s)[/], by cascade — "
+            "the files in sent/ stay"
         )
 
     for folder in docs.folders_for(config.output_dir, jd):

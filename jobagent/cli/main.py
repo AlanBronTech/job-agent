@@ -18,6 +18,7 @@ from jobagent.cli import prep as prep_cli
 from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
 from jobagent.cli import screen as screen_cli
+from jobagent.cli import sent as sent_cli
 from jobagent.cli import spend as spend_cli
 from jobagent.cli import ui as ui_cli
 from jobagent.config import get_config
@@ -86,6 +87,8 @@ app.command(name="prep")(prep_cli.prep)
 app.command(name="apply")(apply_cli.apply)
 app.command(name="outcome")(apply_cli.outcome)
 app.command(name="status")(apply_cli.status_command)
+app.command(name="sent")(sent_cli.sent)
+app.command(name="diff")(sent_cli.diff)
 app.command(name="spend")(spend_cli.spend)
 app.command(name="ui")(ui_cli.ui)
 

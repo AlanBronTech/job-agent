@@ -383,6 +383,11 @@ After the folder list you get:
 **What to do about it:** open the .docx, read it, edit what you want, send it
 yourself. Ten minutes, not two hours.
 
+Edit the visible file freely. `generate` keeps a read-only copy of each
+document as it wrote it, in `.generated/<run time>/` inside the folder
+(hidden in Finder; ⌘⇧. shows it). That copy is what `jobagent diff` measures
+your edits against, so leave it alone.
+
 ### 4. Record that you applied
 
 ```
@@ -393,6 +398,27 @@ Free and instant. `--channel` is free text and worth being specific about
 — `seek`, `linkedin`, `recruiter — Jane Smith, Talent Int'l`, `referral` —
 because across your first fourteen applications the channel predicted the
 outcome better than the requirement match did.
+
+Say what you sent, in the same command:
+
+```
+jobagent apply 22 --channel seek --sent-resume ~/Desktop/AlanBron_Resume_Acme_202610.docx \
+                                 --sent-letter ~/Desktop/AlanBron_CoverLetter_Acme_202610.docx
+jobagent apply 22 --channel seek --sent-as-generated     # sent unedited
+```
+
+Each file is copied into the folder's `sent/<date>/`, read-only, and never
+replaced. Then see how far it moved from what was generated:
+
+```
+jobagent diff 22            # kept share per section, every sentence changed
+jobagent diff --all         # one line per document sent: the headline number
+```
+
+The goal is that what you send is what was generated. Every edit you find
+yourself making is either a fix for the tool (a defect, a missing profile
+fact, a voice preference) or something only you knew — and the diff is how
+you tell which.
 
 ### 5. Record what happened
 
@@ -492,9 +518,19 @@ assessment is what shapes the selection.
 | `jobagent apply <jd_id>` | Record that you applied. |
 | `jobagent outcome <jd_id> <status>` | Record what became of it. |
 | `jobagent status [--all]` | The pipeline. Live applications by default. |
+| `jobagent sent <jd_id> [--resume F] [--letter F]` | Record what you sent, without changing the status. No options lists what is recorded. |
+| `jobagent diff <jd_id>` | Each sent document against the generated copy. `--summary` for sections only. |
+| `jobagent diff --all` | One line per document sent, and how many went unedited. |
+| `jobagent diff --generated F --sent F` | Any two files, no records needed. |
 
 `apply` options: `--on YYYY-MM-DD` (defaults to today), `--channel <text>`,
-`--note <text>`.
+`--note <text>`, `--sent-resume F`, `--sent-letter F`, `--sent-as-generated`.
+
+`sent` options: `--as-generated`, `--on YYYY-MM-DD`, and for a folder from
+before 2026-10-21, when no generated copy was kept,
+`--generated-resume F` / `--generated-letter F` to name the original.
+`.pdf` is accepted as sent, but `diff` reads only `.docx`: record the .docx
+you exported it from.
 
 `outcome` options: `--worth yes|no|unsure`, `--why <text>`, `--note <text>`.
 
@@ -612,15 +648,16 @@ tight, not as the default.
 | Path | What it holds |
 |---|---|
 | `~/job-agent-jds/` | Saved job ads. Print pages to PDF into here. |
-| `~/job-agent-out/` | One folder per application: documents, assessment, ad. |
+| `~/job-agent-out/` | One folder per application: documents, assessment, ad; `.generated/` and `sent/` inside it. |
 | `~/.job-agent/jobagent.db` | The store — ads, assessments, applications. |
 | `profile/` | You, as data. Everything generated is built from this. |
 | `prompts/` | The prompts, versioned as files so they can be diffed. |
 | `evals/cases.yaml` | An exported snapshot of the eval set. Local only — it is your application history, and this repository is public. |
 | `runs.jsonl` | Every model call: prompt, tokens, cost. |
 
-Back up `~/.job-agent/jobagent.db` and `profile/` and you have lost nothing
-that matters. The rest regenerates.
+Back up `~/.job-agent/jobagent.db`, `profile/` and `~/job-agent-out/`. The
+first two are your data; the third holds what you actually sent, and the
+generated copies it is measured against, neither of which regenerates.
 
 ---
 

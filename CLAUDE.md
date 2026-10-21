@@ -261,7 +261,8 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent generate <id> --resume --cover  ~$0.13  documents + assessment
     jobagent generate <id> ... --supersede   keep earlier documents, dated
     jobagent prep <id>                 ~$0.11   interview questions
-    jobagent apply|outcome|status      free     the pipeline
+    jobagent apply|outcome|status      free     the pipeline; apply --sent-resume/--sent-letter
+    jobagent sent <id> | diff <id>|--all free   what was sent, against what was generated
     jobagent spend [--jd N]            free     where the bill went
     jobagent eval report|diff|export   free     grade the scorer
     jobagent eval run                  ~$0.11/case

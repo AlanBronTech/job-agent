@@ -36,9 +36,10 @@ from jobagent.core.models import (
     OutsideApplication,
     ReapplyDecision,
     RoleClassification,
+    SentDocument,
 )
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -151,6 +152,23 @@ CREATE TABLE IF NOT EXISTS reapply_decisions (
     matched    TEXT NOT NULL,
     decided_at TEXT NOT NULL
 );
+
+-- v13. What was actually sent, kept beside what was generated so the two can
+-- be compared. Rows are only ever added: a sent copy is the record.
+CREATE TABLE IF NOT EXISTS sent_documents (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    jd_id        INTEGER NOT NULL REFERENCES job_descriptions (id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL CHECK (kind IN ('resume', 'cover_letter')),
+    folder       TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    sha256       TEXT NOT NULL,
+    generated    TEXT,
+    as_generated INTEGER NOT NULL DEFAULT 0,
+    sent_on      TEXT NOT NULL,
+    recorded_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sent_jd ON sent_documents (jd_id);
 
 CREATE TABLE IF NOT EXISTS fit_assessments (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1025,6 +1043,62 @@ def set_reapply_decision(conn: sqlite3.Connection, decision: ReapplyDecision) ->
         conn.commit()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not record the decision for JD {decision.jd_id}: {exc}") from exc
+
+
+# --------------------------------------------------------------------------- #
+# Sent documents
+# --------------------------------------------------------------------------- #
+
+
+def add_sent(conn: sqlite3.Connection, document: SentDocument) -> int:
+    try:
+        cursor = conn.execute(
+            "INSERT INTO sent_documents (jd_id, kind, folder, name, sha256, "
+            "generated, as_generated, sent_on, recorded_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                document.jd_id,
+                document.kind.value,
+                document.folder,
+                document.name,
+                document.sha256,
+                document.generated,
+                int(document.as_generated),
+                document.sent_on.isoformat(),
+                _to_iso(document.recorded_at),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not record the sent document: {exc}") from exc
+    return cursor.lastrowid
+
+
+def list_sent(conn: sqlite3.Connection, jd_id: int | None = None) -> list[SentDocument]:
+    """Sent documents, oldest first; every ad's when `jd_id` is None."""
+    sql = "SELECT * FROM sent_documents"
+    params: tuple = ()
+    if jd_id is not None:
+        sql += " WHERE jd_id = ?"
+        params = (jd_id,)
+    try:
+        rows = conn.execute(sql + " ORDER BY sent_on, id", params).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list sent documents: {exc}") from exc
+    return [
+        SentDocument(
+            id=row["id"],
+            jd_id=row["jd_id"],
+            kind=row["kind"],
+            folder=row["folder"],
+            name=row["name"],
+            sha256=row["sha256"],
+            generated=row["generated"],
+            as_generated=bool(row["as_generated"]),
+            sent_on=row["sent_on"],
+            recorded_at=row["recorded_at"],
+        )
+        for row in rows
+    ]
 
 
 def _row_to_outside(row: sqlite3.Row) -> OutsideApplication:

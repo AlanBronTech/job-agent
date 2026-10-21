@@ -87,6 +87,22 @@ class DocumentStore(Protocol):
 
     def index(self, jds: Iterable[JobDescription], today: date) -> dict[int, OutputFolders]: ...
 
+    def keep_generated(self, jd: JobDescription, when: date, name: str, now: datetime) -> str: ...
+
+    def record_generated(
+        self, jd: JobDescription, folder: str, source: Path, now: datetime, today: date
+    ) -> str: ...
+
+    def generated_copies(self, jd: JobDescription, folder: str, today: date) -> list[str]: ...
+
+    def keep_sent(
+        self, jd: JobDescription, folder: str, source: Path, sent_on: date, today: date
+    ) -> str: ...
+
+    def ensure_folder(self, jd: JobDescription, when: date) -> str: ...
+
+    def local_path(self, jd: JobDescription, folder: str, name: str, today: date) -> Path: ...
+
     def open(self, jd: JobDescription, folder: str, name: str, today: date) -> None: ...
 
     def reveal(self, jd: JobDescription, folder: str, today: date) -> None: ...
@@ -117,6 +133,61 @@ class LocalFolderStore:
         if not folder.is_dir():
             return None
         return docs.supersede_folder(folder, now).name
+
+    # -- kept copies --------------------------------------------------------
+    #
+    # Names below are relative to the application folder, as in
+    # `.generated/20261021T101500/AlanBron_Resume_X.docx`. The visible file is
+    # the one Alan edits; these are the records the edits are measured against.
+
+    def keep_generated(self, jd: JobDescription, when: date, name: str, now: datetime) -> str:
+        """Keep a read-only copy of a file this run just wrote, under its run time."""
+        folder = docs.application_folder_path(self.output_dir, jd, when=when)
+        relative = f"{docs.GENERATED_DIR}/{now:%Y%m%dT%H%M%S}/{name}"
+        docs.keep_copy(folder / name, folder / relative)
+        return relative
+
+    def record_generated(
+        self, jd: JobDescription, folder: str, source: Path, now: datetime, today: date
+    ) -> str:
+        """Keep a generated file from before copies were kept, named as recorded."""
+        stored = self._find(jd, folder, today)
+        relative = f"{docs.GENERATED_DIR}/recorded-{now:%Y%m%dT%H%M%S}/{Path(source).name}"
+        docs.keep_copy(Path(source).expanduser(), self.output_dir / stored.name / relative)
+        return relative
+
+    def generated_copies(self, jd: JobDescription, folder: str, today: date) -> list[str]:
+        """Every kept generated copy in a folder, newest run first."""
+        root = self.output_dir / self._find(jd, folder, today).name / docs.GENERATED_DIR
+        if not root.is_dir():
+            return []
+        runs = sorted((p for p in root.iterdir() if p.is_dir()), key=_run_order, reverse=True)
+        return [
+            f"{docs.GENERATED_DIR}/{run.name}/{path.name}"
+            for run in runs
+            for path in sorted(run.iterdir())
+            if path.is_file() and not path.name.startswith((".", "~$"))
+        ]
+
+    def keep_sent(
+        self, jd: JobDescription, folder: str, source: Path, sent_on: date, today: date
+    ) -> str:
+        stored = self._find(jd, folder, today)
+        relative = f"{docs.SENT_DIR}/{sent_on:%Y-%m-%d}/{Path(source).name}"
+        docs.keep_copy(Path(source).expanduser(), self.output_dir / stored.name / relative)
+        return relative
+
+    def ensure_folder(self, jd: JobDescription, when: date) -> str:
+        """This month's folder, created if absent. Returns its name."""
+        return docs.application_folder(self.output_dir, jd, when=when).name
+
+    def local_path(self, jd: JobDescription, folder: str, name: str, today: date) -> Path:
+        """A file in one of this ad's folders, for reading. Nothing outside them."""
+        root = (self.output_dir / self._find(jd, folder, today).name).resolve()
+        path = (root / name).resolve()
+        if root not in path.parents or not path.is_file():
+            raise FileNotFoundError(name)
+        return path
 
     # -- reading ------------------------------------------------------------
 
@@ -180,6 +251,11 @@ class LocalFolderStore:
         result.superseded.sort(key=lambda f: f.name, reverse=True)
         result.earlier.sort(key=lambda f: f.name, reverse=True)
         return result
+
+
+def _run_order(run: Path) -> str:
+    """`20261021T101500` and `recorded-20261021T101500` sort by their time."""
+    return run.name.removeprefix("recorded-")
 
 
 def _stored(path: Path) -> StoredFolder:

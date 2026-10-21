@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from jobagent.cli import sent as sent_cli
 from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.models import ApplicationStatus, Worth
@@ -53,8 +55,17 @@ def apply(
         "applied. Supersedes the age implied by the saved page.",
     ),
     note: str = typer.Option("", "--note", help="Anything worth remembering."),
+    sent_resume: Path | None = typer.Option(
+        None, "--sent-resume", help="The resume file you sent. Kept, never overwritten."
+    ),
+    sent_letter: Path | None = typer.Option(
+        None, "--sent-letter", help="The cover letter file you sent. Kept, never overwritten."
+    ),
+    sent_as_generated: bool = typer.Option(
+        False, "--sent-as-generated", help="You sent the generated documents unedited."
+    ),
 ) -> None:
-    """Record that you applied for a job."""
+    """Record that you applied for a job, and what you sent."""
     applied_on = _parse_date(on) if on else date.today()
     reposted = _parse_date(reposted_on) if reposted_on else None
     if reposted is not None and reposted > applied_on:
@@ -64,6 +75,12 @@ def apply(
             "you applied cannot postdate the application."
         )
         raise typer.Exit(code=2)
+    if sent_resume or sent_letter or sent_as_generated:
+        # First: a refused file stops the run before the status is recorded.
+        sent_cli.record_sent(
+            Workspace.from_config(get_config()), jd_id, sent_on=applied_on,
+            resume=sent_resume, letter=sent_letter, as_generated=sent_as_generated,
+        )
     _save(
         jd_id,
         status=ApplicationStatus.applied,

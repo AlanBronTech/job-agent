@@ -177,6 +177,32 @@ def test_a_clean_run(ws, ids, fake_model):
     assert result.superseded is None
 
 
+def test_each_document_is_kept_as_generated(ws, ids, fake_model):
+    """The visible file gets edited and sent; the kept copy is what `diff` reads."""
+    result = run(ws, ids["acme"], cover=True)
+    kept = result.folder / ".generated" / "20260929T140000"
+    assert sorted(p.name for p in kept.iterdir()) == [
+        "AlanBron_CoverLetter_AcmeLogistics_202609.docx",
+        "AlanBron_Resume_AcmeLogistics_202609.docx",
+    ]
+    result.written[0].write_bytes(b"edited by hand")
+    assert (kept / result.written[0].name).read_bytes() == b"docx:resume content"
+    assert result.warnings == []
+
+
+def test_a_copy_that_cannot_be_kept_is_a_warning(ws, ids, fake_model, monkeypatch):
+    from jobagent.adapters import docs
+
+    def refuse(*a, **k):
+        raise docs.DocsError("disk full")
+    monkeypatch.setattr(ws.documents, "keep_generated", refuse)
+    result = run(ws, ids["acme"])
+    assert result.written[0].is_file()
+    assert result.warnings == [
+        "Could not keep a generated copy of AlanBron_Resume_AcmeLogistics_202609.docx: disk full"
+    ]
+
+
 def test_before_spend_runs_once_after_the_refusals(ws, ids, fake_model):
     seen = []
     run(ws, ids["acme"], before_spend=lambda: seen.append(list(fake_model.calls)))
