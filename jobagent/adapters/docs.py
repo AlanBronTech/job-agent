@@ -211,8 +211,13 @@ def assessment_markdown(
     *,
     role_kind=None,
     coverage=None,
+    by_document: dict[str, list[ValidationIssue]] | None = None,
 ) -> str:
-    """The assessment as a readable record, kept with the documents it shaped."""
+    """The assessment as a readable record, kept with the documents it shaped.
+
+    `by_document` ("resume", "cover letter", "answers") replaces the flat
+    `issues` list with one section per document, each the latest run of it.
+    """
     lines = [
         f"# {jd.title}" + (f" · {jd.company}" if jd.company else ""),
         "",
@@ -286,9 +291,13 @@ def assessment_markdown(
         lines += ["", "## Gaps in the profile itself", ""]
         lines += [f"- {gap}" for gap in assessment.profile_gaps]
 
-    if issues:
-        lines += ["", "## Validation issues raised at generation", ""]
-        for issue in issues:
+    sections = by_document if by_document is not None else ({"": issues} if issues else {})
+    for document, found in sections.items():
+        heading = "## Validation issues raised at generation" + (f" — {document}" if document else "")
+        lines += ["", heading, ""]
+        if not found:
+            lines.append("None.")
+        for issue in found:
             lines.append(f"- **{issue.severity.value}** {issue.rule}: {issue.detail}")
             if issue.excerpt:
                 lines.append(f"  - `{issue.excerpt}`")

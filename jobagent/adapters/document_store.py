@@ -14,6 +14,7 @@ deliberate, and not a reason to change the writer.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -101,6 +102,10 @@ class DocumentStore(Protocol):
 
     def ensure_folder(self, jd: JobDescription, when: date) -> str: ...
 
+    def keep_record(self, jd: JobDescription, when: date, now: datetime, document: str, data: dict) -> None: ...
+
+    def latest_record(self, jd: JobDescription, when: date, document: str) -> dict | None: ...
+
     def keep_edited(self, jd: JobDescription, folder: str, name: str, now: datetime, today: date) -> str: ...
 
     def remove(self, jd: JobDescription, folder: str, name: str, today: date) -> None: ...
@@ -170,7 +175,7 @@ class LocalFolderStore:
             f"{docs.GENERATED_DIR}/{run.name}/{path.name}"
             for run in runs
             for path in sorted(run.iterdir())
-            if path.is_file() and not path.name.startswith((".", "~$"))
+            if path.is_file() and path.suffix == ".docx" and not path.name.startswith((".", "~$"))
         ]
 
     def keep_sent(
@@ -184,6 +189,34 @@ class LocalFolderStore:
     def ensure_folder(self, jd: JobDescription, when: date) -> str:
         """This month's folder, created if absent. Returns its name."""
         return docs.application_folder(self.output_dir, jd, when=when).name
+
+    def keep_record(self, jd: JobDescription, when: date, now: datetime, document: str, data: dict) -> None:
+        """What a run found in one document, kept beside that run's copies.
+
+        `assessment.md` is rewritten by every run, and a revise writes only one
+        document: without this, the other document's blockers vanished from it.
+        """
+        folder = docs.application_folder(self.output_dir, jd, when=when)
+        path = folder / docs.GENERATED_DIR / f"{now:%Y%m%dT%H%M%S}" / f"record-{document}.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except OSError as exc:
+            raise docs.DocsError(f"Could not write {path}: {exc}") from exc
+
+    def latest_record(self, jd: JobDescription, when: date, document: str) -> dict | None:
+        """The newest kept record for one document in this month's folder."""
+        root = docs.application_folder_path(self.output_dir, jd, when=when) / docs.GENERATED_DIR
+        if not root.is_dir():
+            return None
+        for run in sorted((p for p in root.iterdir() if p.is_dir()), key=_run_order, reverse=True):
+            path = run / f"record-{document}.json"
+            if path.is_file():
+                try:
+                    return json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    return None
+        return None
 
     def keep_edited(self, jd: JobDescription, folder: str, name: str, now: datetime, today: date) -> str:
         """Keep a hand-edited document before a revision writes over it.

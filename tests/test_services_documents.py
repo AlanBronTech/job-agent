@@ -181,7 +181,7 @@ def test_each_document_is_kept_as_generated(ws, ids, fake_model):
     """The visible file gets edited and sent; the kept copy is what `diff` reads."""
     result = run(ws, ids["acme"], cover=True)
     kept = result.folder / ".generated" / "20260929T140000"
-    assert sorted(p.name for p in kept.iterdir()) == [
+    assert sorted(p.name for p in kept.iterdir() if p.suffix == ".docx") == [
         "AlanBron_CoverLetter_AcmeLogistics_202609.docx",
         "AlanBron_Resume_AcmeLogistics_202609.docx",
     ]
@@ -354,3 +354,17 @@ def test_supersede_moves_the_sent_records_with_the_folder(ws, ids, fake_model):
     with store.open_store(ws.db_path) as conn:
         (row,) = store.list_sent(conn, ids["acme"])
     assert row.folder == second.superseded.name
+
+
+def test_a_one_document_run_keeps_the_other_document_s_issues(ws, ids, fake_model):
+    """A revise writes one document; assessment.md used to lose the other's blockers."""
+    first = run(ws, ids["acme"], cover=True)
+    text = (first.folder / "assessment.md").read_text()
+    assert "Validation issues raised at generation — resume" in text and "banned_phrase" in text
+    assert "Validation issues raised at generation — cover letter" in text
+
+    later = run(ws, ids["acme"], resume=False, cover=True, overwrite=True,
+                now=datetime(2026, 9, 29, 15, 0, 0))
+    text = (later.folder / "assessment.md").read_text()
+    assert "— resume" in text and "banned_phrase" in text  # the resume's, kept
+    assert "— cover letter" in text

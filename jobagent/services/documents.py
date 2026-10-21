@@ -235,6 +235,7 @@ def generate(
         before_spend()
     written: list[Path] = []
     issues = []
+    per_document: dict[str, list] = {}  # what this run found, by document
     unused = []
     coverage = []
     claims = None  # None: not run (switched off, or nothing to check)
@@ -258,6 +259,7 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("resume", exc, written) from exc
         issues += built.issues
+        per_document["resume"] = list(built.issues)
         unused = built.unused
         coverage = getattr(built, "coverage", [])
         on_resume = getattr(built, "on_page", {})
@@ -310,6 +312,7 @@ def generate(
             claims = merge_claims(claims, found)
         letter_issues = list(letter.issues) + claim_issues(found)
         issues += letter_issues
+        per_document["cover letter"] = letter_issues
         rendered["cover letter"] = letter.text
         content = CoverLetterContent(
             name=profile.roles.person.name,
@@ -333,6 +336,7 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("answers", exc, written) from exc
         issues += built_answers.issues
+        per_document["answers"] = list(built_answers.issues)
         rendered["answers"] = built_answers.text
         sentences = getattr(built_answers, "sentences", [])
         if check_claims and sentences:
@@ -341,6 +345,7 @@ def generate(
             )
             claims = merge_claims(claims, found)
             issues += claim_issues(found)
+            per_document["answers"] += claim_issues(found)
         written.append(
             _write(lambda: ws.documents.write_text(jd, today, "answers.md", built_answers.text), written)
         )
@@ -367,6 +372,7 @@ def generate(
             )
         )
 
+    by_document, coverage_shown = _records(ws, jd, today, now, per_document, coverage, warnings)
     written.append(
         _write(
             lambda: ws.documents.write_text(
@@ -374,7 +380,8 @@ def generate(
                 today,
                 "assessment.md",
                 docs.assessment_markdown(
-                    assessment, jd, issues, role_kind=kind, coverage=coverage
+                    assessment, jd, issues, role_kind=kind, coverage=coverage_shown,
+                    by_document=by_document,
                 ),
             ),
             written,
@@ -522,6 +529,55 @@ def _clashes(ws: Workspace, jd: JobDescription, when: date, names: list[str]):
         return []
     wanted = set(names)
     return [(f.name, f.modified) for f in current.files if f.name in wanted]
+
+
+_DOCUMENTS = ("resume", "cover letter", "answers")
+
+
+def _records(ws: Workspace, jd, today: date, now: datetime, found: dict, coverage, warnings: list[str]):
+    """Issues by document for `assessment.md`: this run's, and the latest kept for the rest.
+
+    A revise writes one document, and `assessment.md` used to be rebuilt from
+    that run alone, so the other document's blockers disappeared from it while
+    its file still said NOT-READY (JD 92, 2026-10-22). Each run now keeps what
+    it found per document beside its copies; the assessment shows the newest
+    record of every document in the folder. Coverage is the resume's, so it
+    follows the resume.
+    """
+    from jobagent.core.coverage import CoverageRow
+    from jobagent.core.validation import Severity, ValidationIssue
+
+    by_document: dict[str, list] = {}
+    coverage_shown = coverage
+    for document in _DOCUMENTS:
+        key = document.replace(" ", "_")
+        if document in found:
+            record = {"issues": [_issue_dict(i) for i in found[document]]}
+            if document == "resume":
+                record["coverage"] = [vars(row).copy() for row in coverage]
+            try:
+                ws.documents.keep_record(jd, today, now, key, record)
+            except docs.DocsError as exc:
+                warnings.append(f"Could not keep the {document} record: {exc}")
+            by_document[document] = found[document]
+            continue
+        record = ws.documents.latest_record(jd, today, key)
+        if record is None:
+            continue
+        by_document[document] = [
+            ValidationIssue(rule=i["rule"], severity=Severity(i["severity"]),
+                            detail=i["detail"], excerpt=i.get("excerpt", ""))
+            for i in record.get("issues", [])
+        ]
+        if document == "resume" and not coverage:
+            coverage_shown = [CoverageRow(**row) for row in record.get("coverage", [])]
+    return by_document, coverage_shown
+
+
+def _issue_dict(issue) -> dict:
+    severity = getattr(issue.severity, "value", issue.severity)
+    return {"rule": issue.rule, "severity": severity, "detail": issue.detail,
+            "excerpt": getattr(issue, "excerpt", "") or ""}
 
 
 def _keep_generated(ws: Workspace, jd, today: date, path: Path, now: datetime, warnings: list[str]) -> None:
