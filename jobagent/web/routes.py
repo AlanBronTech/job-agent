@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from jobagent.adapters.llm import RunContext
-from jobagent.core.models import ApplicationStatus
+from jobagent.core.models import ApplicationStatus, DocumentKind
 from jobagent.services import (
     ads,
     batches,
@@ -24,6 +24,7 @@ from jobagent.services import (
     pipeline,
     readiness,
     reapply,
+    revise,
     runs,
     scoring,
     sent,
@@ -141,6 +142,112 @@ async def _sent_files(form, ws, jd_id: int, today):
     if files and as_generated:
         raise SentFileUnusable("Sent unedited", "untick it, or choose no files")
     return sent.prepare_uploads(ws, jd_id, as_generated=as_generated, today=today, **files)
+
+
+@router.post("/ads/{jd_id:int}/context")
+async def context_save(request: Request, jd_id: int):
+    """What Alan knows that the ad does not say. Replaces it; empty clears. Free."""
+    form = await checked_form(request)
+    try:
+        revise.set_context(workspace(request), jd_id, str(form.get("context") or ""), datetime.now())
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    return RedirectResponse(f"/ads/{jd_id}#context", status_code=303)
+
+
+# --------------------------------------------------------------------------- #
+# Revise: confirm (free) → start (spends) → the ad page shows the run
+# --------------------------------------------------------------------------- #
+
+
+def _revise_choice(form, config) -> dict:
+    kind = DocumentKind.cover_letter if form.get("kind") == "cover_letter" else DocumentKind.resume
+    return {
+        "kind": kind,
+        "note": str(form.get("note") or "").strip(),
+        "replace_edits": form.get("replace_edits") == "1",
+        "check_claims": form.get("check_claims") == "1" if form.get("checks_shown") else config.check_claims,
+    }
+
+
+def _revise_confirm(request: Request, jd_id: int, choice: dict, problem: str | None = None):
+    ws = workspace(request)
+    config = config_of(request)
+    today = request.app.state.today()
+    try:
+        plan = revise.plan(ws, jd_id, choice["kind"], today)
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except NoGeneratedCopy:
+        return _back_to_ad(request, jd_id, "Nothing to revise: no generated copy is kept for that "
+                           "document. Revise works on documents generated from 2026-10-21 on.")
+    if not choice["note"]:
+        return _back_to_ad(request, jd_id, "Say what to change: a revision needs a note.")
+    is_letter = choice["kind"] is DocumentKind.cover_letter
+    estimate = costs.estimate(
+        ws, config, "generate", resume=not is_letter, cover=is_letter, answers=False,
+        check_claims=choice["check_claims"] and is_letter, review=False, jd_id=jd_id,
+    )
+    return render(
+        request,
+        "revise_confirm.html",
+        {
+            "nav": "ads",
+            "plan": plan,
+            "choice": choice,
+            "estimate": costs.describe(estimate),
+            "missing": readiness.missing(ws, config, "generate"),
+            "problem": problem,
+        },
+        status_code=409 if problem else 200,
+    )
+
+
+@router.post("/ads/{jd_id:int}/revise/confirm")
+async def revise_confirm(request: Request, jd_id: int):
+    form = await checked_form(request)
+    return _revise_confirm(request, jd_id, _revise_choice(form, config_of(request)))
+
+
+@router.post("/ads/{jd_id:int}/revise")
+async def revise_start(request: Request, jd_id: int):
+    form = await checked_form(request)
+    config = config_of(request)
+    choice = _revise_choice(form, config)
+    if form.get("confirmed") != "1":
+        return _revise_confirm(request, jd_id, choice, "Nothing was started: confirm the cost first.")
+    ws = workspace(request)
+    today = request.app.state.today()
+    try:
+        plan = revise.plan(ws, jd_id, choice["kind"], today)
+    except (NoSuchAd, NoGeneratedCopy):
+        return _revise_confirm(request, jd_id, choice)
+    # Checked again by the service; here so the page can say so before a run exists.
+    if not choice["note"]:
+        return _revise_confirm(request, jd_id, choice, "Say what to change: a revision needs a note.")
+    if plan.edited and not choice["replace_edits"]:
+        return _revise_confirm(request, jd_id, choice,
+                               "The file was edited by hand. Tick the box to keep that version and revise anyway.")
+    missing = readiness.missing(ws, config, "generate")
+    if missing:
+        return _revise_confirm(request, jd_id, choice, "Nothing was started: " + " ".join(missing))
+    label = "resume" if choice["kind"] is DocumentKind.resume else "cover letter"
+    ctx = RunContext(command="revise", jd_id=jd_id, source="ui")
+    try:
+        request.app.state.runner.start(
+            ws, kind="generate", jd_id=jd_id, run_id=ctx.run_id,
+            request={"title": f"{plan.jd.title} (revising the {label})", "revise": choice["kind"].value,
+                     "note": choice["note"]},
+            work=work.revise(
+                ws, config, ctx, jd_id, kind=choice["kind"], note=choice["note"],
+                replace_edits=choice["replace_edits"], check_claims=choice["check_claims"], today=today,
+            ),
+        )
+    except RunInProgress:
+        pass
+    return RedirectResponse(f"/ads/{jd_id}", status_code=303)
 
 
 @router.get("/ads/{jd_id:int}/diff")

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set jd = plan.jd %}
+{% set label = "resume" if plan.kind.value == "resume" else "cover letter" %}
+{% block title %}Revise · {{ jd.title }} · job-agent{% endblock %}
+{% block main %}
+<p class="muted"><a href="/ads/{{ jd.id }}">← {{ jd.title }}</a></p>
+<h1>Revise the {{ label }}{% if jd.company %} · {{ jd.company }}{% endif %}</h1>
+
+{% if problem %}<div class="banner bad">{{ problem }}</div>{% endif %}
+
+<form method="post" action="/ads/{{ jd.id }}/revise">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <input type="hidden" name="confirmed" value="1">
+  <input type="hidden" name="kind" value="{{ plan.kind.value }}">
+
+  <div class="panel">
+    <strong>Starting from</strong> <code>{{ plan.kept }}</code>
+    <label>What to change <textarea name="note" rows="4" class="wide">{{ choice.note }}</textarea></label>
+    <p class="detail">Everything you do not mention is kept. A change the evidence does not support is left out, not invented: the same checks run as on a first draft. The note is kept, and the previous version stays in <code>.generated/</code>.</p>
+  </div>
+
+  {% if plan.edited %}
+  <div class="banner warn">
+    <strong>{{ plan.visible }} was edited by hand</strong> since it was generated. The revision starts from the generated version, so those edits will not be in it. Better: say what they were in the note above.
+    <label><input type="checkbox" name="replace_edits" value="1" {% if choice.replace_edits %}checked{% endif %}>
+      Keep my edited file under <code>.edited/</code> and revise anyway.</label>
+  </div>
+  {% endif %}
+
+  {% if plan.kind.value == "cover_letter" %}
+  <div class="panel">
+    <input type="hidden" name="checks_shown" value="1">
+    <label><input type="checkbox" name="check_claims" value="1" {% if choice.check_claims %}checked{% endif %}>
+      Claim check: each letter sentence against its evidence</label>
+  </div>
+  {% endif %}
+
+  <div class="panel">
+    <strong>Cost:</strong> {{ estimate }}
+    <p class="detail">Estimated from first drafts; a revision also sends the previous draft, so a little more.</p>
+  </div>
+
+  {% if missing %}
+  <div class="banner bad"><strong>Cannot run yet.</strong>
+    <ul>{% for m in missing %}<li>{{ m }}</li>{% endfor %}</ul></div>
+  {% else %}
+  <p><button type="submit" class="primary">Confirm and revise</button>
+    <a href="/ads/{{ jd.id }}">Cancel</a></p>
+  {% endif %}
+</form>
+{% endblock %}

@@ -188,6 +188,29 @@
   </div>
   {% endfor %}
 {% endif %}
+{% if d.revisable %}
+  <form method="post" action="/ads/{{ jd.id }}/revise/confirm" class="revise">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <p><strong>Revise</strong> <span class="muted">say what is wrong instead of fixing it by hand: the note is kept, and counted</span></p>
+    <label>Document
+      <select name="kind">
+        {% for r in d.revisable %}<option value="{{ r.kind.value }}">{{ "Resume" if r.kind.value == "resume" else "Cover letter" }}{% if r.edited %} (edited by hand since generated){% endif %}</option>{% endfor %}
+      </select></label>
+    <label>What to change <textarea name="note" rows="3" class="wide" placeholder="e.g. lead with the payments work; drop the second AI highlight"></textarea></label>
+    <p><button type="submit">Review cost and revise…</button>
+      <span class="detail">Nothing is spent until you confirm on the next page.</span></p>
+  </form>
+{% endif %}
+</div>
+
+<h2 id="context">What the ad does not say</h2>
+<div class="panel">
+  <form method="post" action="/ads/{{ jd.id }}/context">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <textarea name="context" rows="3" class="wide" placeholder="e.g. Recruiter said they care most about payments experience">{{ d.context or "" }}</textarea>
+    <p><button type="submit">Save</button>
+      <span class="detail">Free. Given to every writer from the next generate or revise on, as framing, never as evidence about you. Never shown to the scorer.</span></p>
+  </form>
 </div>
 
 <h2 id="pipeline">Pipeline</h2>

@@ -80,6 +80,10 @@ first.
   Choose the resume and letter you sent (or tick *sent unedited*) and they are
   kept under `sent/`, as `apply --sent-*` does; the page then shows how much of
   each generated document survived, and *every change* lists the sentences.
+- **Revise and context.** Under Documents, choose the resume or letter and say
+  what to change; the next page shows the cost before anything runs, as
+  `jobagent revise` does. *What the ad does not say* holds the context given
+  to every writer, as `jobagent context` does.
 
 **Still in the terminal for now:** `prep`, and anything under `jd amend`,
 `jd delete`, `eval` and `spend`.

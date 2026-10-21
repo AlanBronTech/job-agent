@@ -22,7 +22,7 @@ from jobagent.core.models import (
     RoleClassification,
     Verdict,
 )
-from jobagent.services import outputs, sent
+from jobagent.services import outputs, revise, sent
 from jobagent.services.refusals import NoSuchAd
 from jobagent.services.workspace import Workspace
 
@@ -53,6 +53,10 @@ class AdDetail:
     role_kind: RoleClassification | None = None
     # What was sent, each against its generated copy (services.sent.Comparison).
     sent: list = field(default_factory=list)
+    # What Alan knows that the ad does not say; given to every writer.
+    context: str | None = None
+    # Documents in the current folder a revision can start from (RevisionPlan).
+    revisable: list = field(default_factory=list)
 
 
 def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
@@ -103,6 +107,7 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         seen_before = history.company_history(conn, jd)
         application = store.get_application(conn, jd_id)
         kind = store.get_role_kind(conn, jd_id)
+        context = store.get_context(conn, jd_id)
     return AdDetail(
         jd=jd,
         assessment=assessment,
@@ -112,4 +117,6 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         application=application,
         role_kind=kind,
         sent=sent.summary(ws, jd_id, today),
+        context=context,
+        revisable=revise.revisable(ws, jd_id, today),
     )

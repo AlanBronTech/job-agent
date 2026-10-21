@@ -14,6 +14,7 @@ from jobagent.core.jd import JDError
 from jobagent.core.scoring import ScoringError
 from jobagent.core.store import StoreError
 from jobagent.services import ads, batches, documents, scoring
+from jobagent.services import revise as revise_service
 from jobagent.services.documents import GenerationFailed
 from jobagent.services.workspace import Workspace
 from jobagent.web.runner import RunFailed
@@ -60,32 +61,55 @@ def generate(
                     + ", ".join(p.name for p in failure.written)
                 )
             raise RunFailed(message) from failure
-        return {
-            "jd_id": jd_id,
-            "folder": result.folder.name,
-            "written": [p.name for p in result.written],
-            "issues": [
-                {"rule": i.rule, "severity": i.severity.value, "detail": i.detail, "excerpt": i.excerpt}
-                for i in result.issues
-            ],
-            "blocked": any(i.severity.value == "blocker" for i in result.issues),
-            "unused": [
-                {"id": u.id, "label": u.label, "strong": u.strong, "highlight_only": u.highlight_only}
-                for u in result.unused
-            ],
-            "coverage": [
-                {"requirement": c.requirement, "status": c.status, "where": c.where,
-                 "verdict": c.verdict}
-                for c in result.coverage
-            ],
-            "ready": result.ready,
-            "review": _review_dict(result.review),
-            "claims_not_checked": getattr(result.claims, "reason", None),
-            "superseded": result.superseded.name if result.superseded else None,
-            "warnings": result.warnings,
-        }
+        return _generated(jd_id, result)
 
     return work
+
+
+def revise(ws: Workspace, config, ctx: RunContext, jd_id: int, *, kind, note: str,
+           replace_edits: bool, check_claims: bool, today: date):
+    """A revision is a generate run for one document; its outcome shows the same way."""
+    def work() -> dict:
+        try:
+            result, record = revise_service.revise(
+                ws, config, ctx, jd_id, kind=kind, note=note, today=today, now=datetime.now(),
+                replace_edits=replace_edits, check_claims=check_claims,
+            )
+        except GenerationFailed as failure:
+            raise RunFailed(f"{_STAGE[failure.stage]}: {failure.cause}") from failure
+        summary = _generated(jd_id, result)
+        summary["revision_note"] = record.note
+        return summary
+
+    return work
+
+
+def _generated(jd_id: int, result) -> dict:
+    """What a generate or revise run did, as the run page shows it."""
+    return {
+        "jd_id": jd_id,
+        "folder": result.folder.name,
+        "written": [p.name for p in result.written],
+        "issues": [
+            {"rule": i.rule, "severity": i.severity.value, "detail": i.detail, "excerpt": i.excerpt}
+            for i in result.issues
+        ],
+        "blocked": any(i.severity.value == "blocker" for i in result.issues),
+        "unused": [
+            {"id": u.id, "label": u.label, "strong": u.strong, "highlight_only": u.highlight_only}
+            for u in result.unused
+        ],
+        "coverage": [
+            {"requirement": c.requirement, "status": c.status, "where": c.where,
+             "verdict": c.verdict}
+            for c in result.coverage
+        ],
+        "ready": result.ready,
+        "review": _review_dict(result.review),
+        "claims_not_checked": getattr(result.claims, "reason", None),
+        "superseded": result.superseded.name if result.superseded else None,
+        "warnings": result.warnings,
+    }
 
 
 def add_ad(ws: Workspace, config, ctx: RunContext, ad, *, source: str | None):

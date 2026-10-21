@@ -69,6 +69,17 @@ def plan(ws: Workspace, jd_id: int, kind: DocumentKind, today: date) -> Revision
     return RevisionPlan(jd, kind, current.name, kept, visible, edited, previous)
 
 
+def revisable(ws: Workspace, jd_id: int, today: date) -> list[RevisionPlan]:
+    """The documents a revision could start from now, for the ad's page."""
+    plans = []
+    for kind in DocumentKind:
+        try:
+            plans.append(plan(ws, jd_id, kind, today))
+        except NoGeneratedCopy:
+            continue
+    return plans
+
+
 def revise(
     ws: Workspace,
     config,
