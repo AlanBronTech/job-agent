@@ -255,7 +255,7 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
     employer's offshore team: true facts, from two roles, merged into a claim
     that is false. The paid claim check caught it; this catches it for free and
     every time. A story licenses the employers whose bullets tell it and any
-    employer its own text names.
+    employer its own text names; so does an explanation or answer-bank entry.
     """
     employers = _employers(profile)
     by_story: dict[str, set[str]] = {}
@@ -270,6 +270,15 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
         s.id: f"{s.label} {s.situation} {s.task} {s.action} {s.result}"
         for s in profile.stories.stories
     }
+    # An agreed explanation or answer-bank entry licenses the employers it
+    # names, as a story does: the Java explanation lists Macquarie Bank, and a
+    # sentence citing it was blocked for naming Macquarie (2026-10-22).
+    story_text |= {
+        key: value
+        for key, value in profile.stories.explanations.model_dump(exclude_none=True).items()
+        if isinstance(value, str)
+    }
+    story_text |= {key.value: text for key, text in profile.stories.answers.items()}
 
     issues = []
     for paragraph in paragraphs:

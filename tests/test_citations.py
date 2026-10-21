@@ -186,3 +186,12 @@ def test_a_story_cited_by_a_step_counts_as_the_story(profile_factory) -> None:
     known = known_citations(profile)
     fixed = _story_cites([[Sentence(text="x", cites=[f"{story}.0", "ad", "made_up.1"])]], profile, known)
     assert fixed[0][0].cites == [story, "ad", "made_up.1"]
+
+
+def test_an_explanation_licenses_the_employers_it_names(profile):
+    """The Java explanation lists Macquarie Bank; citing it may name Macquarie (2026-10-22)."""
+    from jobagent.core.validation import check_employers
+
+    profile.stories.explanations.stack_mismatch = "Java at Example Manufacturing Co and elsewhere."
+    sentence = Sentence(text="I wrote Java at Example Manufacturing Co.", cites=["stack_mismatch"])
+    assert check_employers([[sentence]], profile) == []
