@@ -82,10 +82,14 @@ readable stdlib beats clever abstractions.
 
 ## Document format (non-negotiable)
 
-Source of truth: `~/Documents/AlanBronResumeMaster092026.docx`, revised Sep 2026.
-Every value below was measured from that file, not chosen, and re-measured on
+Source of truth: `~/Documents/AlanBronResumeMaster102026.docx`, revised Oct 2026.
+Every value below was measured from the master, not chosen, and re-measured on
 2026-09-20 when the September revision superseded the August one — all of them
-held, because that revision changed content rather than format. The earlier
+held, because that revision changed content rather than format. The October
+revision (2026-10-21) was made from the September file by editing text inside
+its existing paragraphs and copying one bullet paragraph for two new ones, so
+every format value is unchanged; only content changed (corrected claims and two
+new bullets under the current role). The earlier
 version of this section was wrong on all six values — if a future spec and the
 master disagree, the master wins, and this section gets corrected.
 

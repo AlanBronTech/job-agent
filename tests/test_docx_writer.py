@@ -1,7 +1,7 @@
 """Formatting tests for the .docx renderer.
 
 Every figure asserted here was measured off
-`~/Documents/AlanBronResumeMaster2026.docx`. The master is the source of
+`~/Documents/AlanBronResumeMaster102026.docx`. The master is the source of
 truth: if it and these tests disagree, the master wins and these change.
 """
 

@@ -1,6 +1,6 @@
 """Rendering documents to Alan's .docx format.
 
-Every measurement here came off `~/Documents/AlanBronResumeMaster2026.docx`,
+Every measurement here came off `~/Documents/AlanBronResumeMaster102026.docx`,
 not from taste. If this file and the master ever disagree, the master wins.
 
 Two decisions worth knowing:

@@ -418,7 +418,7 @@ def test_a_clean_first_draft_is_not_regenerated(profile, jd, assessment) -> None
 # had no correct slot for it. On the Colonial First State generation it put four
 # founder ids in `roles` and lost all four to blockers.
 #
-# The format below is taken from AlanBronResumeMaster2026.docx, which wins over
+# The format below is taken from AlanBronResumeMaster102026.docx, which wins over
 # any spec that disagrees with it.
 
 
