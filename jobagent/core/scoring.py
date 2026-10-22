@@ -165,18 +165,22 @@ def _check_pay(jd: JobDescription, filters) -> ConstraintCheck:
     rate. A fixed-term role quoting an annual salary keeps the salary check.
     """
     rate = rates.day_rate(jd)
-    if rate is not None or jd.work_type is WorkType.contract:
-        return _check_day_rate(rate, filters.min_day_rate_aud)
+    # JD 90, fixed-term with a "Competitive day rate" and no figure, was asked
+    # for an annual band against the salary floor.
+    if rate is not None or jd.work_type is WorkType.contract or rates.quoted_daily(jd):
+        raw = jd.salary_range.raw if jd.salary_range and jd.salary_range.raw else None
+        return _check_day_rate(rate, filters.min_day_rate_aud, raw=raw)
     return _check_salary(jd, filters.min_salary_aud)
 
 
-def _check_day_rate(rate, floor: int | None) -> ConstraintCheck:
+def _check_day_rate(rate, floor: int | None, *, raw: str | None = None) -> ConstraintCheck:
     if rate is None:
         return ConstraintCheck(
             name="day rate",
             status=ConstraintStatus.unknown,
             detail="No day rate stated."
-            + (f" The floor is ${floor:,} a day." if floor else " No day-rate floor is set."),
+            + (f" The floor is ${floor:,} a day." if floor else " No day-rate floor is set.")
+            + (f' Ad says: "{raw}".' if raw else ""),
             question="What is the day rate?" + (f" The floor is ${floor:,}." if floor else ""),
             # With no floor there is nothing for it to decide.
             advisory=floor is None,

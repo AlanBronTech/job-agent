@@ -261,7 +261,8 @@ def test_no_band_is_a_question_and_keeps_the_ad_s_own_wording(
         make_jd(salary_range=SalaryRange(raw="Exceptional Daily Rate")),
         make_profile(profile_factory),
     )
-    check = constraint(checks, "salary")
+    # A daily rate with no figure is asked as a day rate (2026-10-22).
+    check = constraint(checks, "day rate")
 
     assert check.status is ConstraintStatus.unknown
     assert "Exceptional Daily Rate" in check.detail

@@ -70,6 +70,15 @@ def find_day_rate(text: str) -> DayRate | None:
     return None
 
 
+_DAY_RATE_WORDS = re.compile(r"\b(?:day|daily)\s+rate\b|\bper\s+day\b", re.IGNORECASE)
+
+
+def quoted_daily(jd: JobDescription) -> bool:
+    """The ad says it pays by the day, with or without an amount ("Competitive day rate")."""
+    raw = jd.salary_range.raw if jd.salary_range and jd.salary_range.raw else ""
+    return bool(_DAY_RATE_WORDS.search(raw) or _DAY_RATE_WORDS.search(jd.raw_text))
+
+
 def is_contract(jd: JobDescription) -> bool:
     """Contract or fixed-term: bought for a defined piece of work."""
     return jd.work_type in (WorkType.contract, WorkType.fixed_term)

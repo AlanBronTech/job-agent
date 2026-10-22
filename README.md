@@ -124,14 +124,15 @@ A contract or fixed-term ad is scored the way a contractor is bought:
 - **Pay is a day rate.** It is read out of the ad in code ("$950 per day +
   super") and judged against `min_day_rate_aud` in `assets.yaml`. Until you
   set that floor a stated rate is reported, never judged. A fixed-term role
-  quoting an annual salary keeps the salary check.
+  quoting an annual salary keeps the salary check; one that says "day rate"
+  with no figure is asked for the day rate.
 - **The ad is matched to one of your `contract_offers`** in `assets.yaml`
   (delivery lead, interim EM, .NET modernisation, AI coding-tool adoption,
   senior engineer, Scrum adoption), shown as *Contract offer* on the
   assessment. No match is usually a skip.
 - **Short contracts count for you, not against you**, and the scorer judges
   whether the work is deliverable in three to six months.
-- **The letter becomes a cover note**: three or four sentences, under 120
+- **The letter is short**: three or four brief paragraphs, under 220
   words, leading with the matched offer's evidence. The resume leads with it
   too. (A separate one-page contractor CV is not built yet.)
 

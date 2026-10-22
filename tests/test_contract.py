@@ -86,6 +86,12 @@ def test_with_no_floor_set_a_rate_is_reported_not_judged(profile_factory):
     assert pay.advisory and "No day-rate floor" in pay.detail
 
 
+def test_a_fixed_term_role_quoting_a_day_rate_without_a_figure_is_asked_the_day_rate(profile_factory):
+    jd = make_jd(work_type=WorkType.fixed_term, salary_range=SalaryRange(raw="Competitive day rate"))
+    pay = constraint(check_constraints(jd, with_offer(profile_factory, floor=800)), "day rate")
+    assert pay.status is ConstraintStatus.unknown and "$800" in pay.question
+
+
 def test_a_fixed_term_role_with_an_annual_salary_keeps_the_salary_check(profile_factory):
     jd = make_jd(work_type=WorkType.fixed_term)
     names = {c.name for c in check_constraints(jd, with_offer(profile_factory, floor=1000))}

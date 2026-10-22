@@ -66,8 +66,10 @@ RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
 CONTEXT_PROMPT = "context"
 CONTRACT_PROMPT = "contract_writing"
-# A contract's cover note: three or four sentences, not a letter.
-CONTRACT_NOTE_MAX_WORDS = 120
+# A contract's letter is shorter than a permanent one (350), not a stub: at
+# 120 words the JD 90 letter was cut to three thin paragraphs and dropped the
+# AI work the ad was about (Alan, 2026-10-22).
+CONTRACT_NOTE_MAX_WORDS = 220
 REVISION_PROMPT = "revision"
 ANSWERS_PROMPT = "generate_answers"
 
@@ -1007,8 +1009,8 @@ def contract_block(profile: Profile, offer_id: str | None, *, letter: bool) -> s
         return None
     evidence = ", ".join(offer.evidence) or "(none listed)"
     rule = (
-        f"\nThe letter is a cover note, not a letter: three or four sentences, "
-        f"under {CONTRACT_NOTE_MAX_WORDS} words. Longer is rejected."
+        f"\nThe letter is short: three or four brief paragraphs, under "
+        f"{CONTRACT_NOTE_MAX_WORDS} words. Longer is rejected."
         if letter else ""
     )
     try:
