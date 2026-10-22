@@ -1,4 +1,4 @@
-# generate_cover_letter — v5
+# generate_cover_letter — v6
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -100,6 +100,9 @@ from what you are shown. Do not refer to it from memory.
    {must_have_gaps}
    </must_have_gaps>
 
+   The gap sentence cites `"ad"` (it is about the ad's requirement), plus
+   the evidence for whatever compensates. Never cite `must_have_gaps`: it is
+   the name of this list, not evidence, and is rejected.
    These are the ad's must-haves the assessment marked as gaps. Never admit a
    gap in something the ad lists as a nice-to-have, an example ("e.g."), or
    "ideally" / "a plus": volunteering it to a screener costs more than it
