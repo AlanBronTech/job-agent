@@ -32,9 +32,13 @@ def rewrites() -> None:
     table.add_column("any draft", justify="right")
     table.add_column("still blocking", justify="right")
     table.add_column("example", style="dim")
-    for rule, count in r.any_draft_rules.most_common():
+    # Rules that blocked a final draft without ever forcing a rewrite belong
+    # here too: they are why a file is NOT-READY.
+    rules = list(r.any_draft_rules) + [x for x in r.still_blocked if x not in r.any_draft_rules]
+    rules.sort(key=lambda x: (-(r.any_draft_rules.get(x, 0) + r.still_blocked.get(x, 0)), x))
+    for rule in rules:
         table.add_row(
-            rule, str(r.first_draft_rules.get(rule, 0)), str(count),
-            str(r.still_blocked.get(rule, 0)) or "", escape(r.examples.get(rule, "")[:70]),
+            rule, str(r.first_draft_rules.get(rule, 0)), str(r.any_draft_rules.get(rule, 0)),
+            str(r.still_blocked.get(rule, 0)), escape(r.examples.get(rule, "")[:70]),
         )
     console.print(table)

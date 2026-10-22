@@ -256,6 +256,7 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
     that is false. The paid claim check caught it; this catches it for free and
     every time. A story licenses the employers whose bullets tell it and any
     employer its own text names; so does an explanation or answer-bank entry.
+    A multi-word name the cited evidence itself uses is not checked at all.
     """
     employers = _employers(profile)
     by_story: dict[str, set[str]] = {}
@@ -279,6 +280,15 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
         if isinstance(value, str)
     }
     story_text |= {key.value: text for key, text in profile.stories.answers.items()}
+    # Each entry's own text, for the names it uses (see _mask_names).
+    entry_text: dict[str, str] = {}
+    for group in (r.roles, r.founder_track_record, r.ai_capability):
+        for entry in group:
+            for i, bullet in enumerate(entry.bullets):
+                entry_text[f"{entry.id}.{i}"] = bullet.text
+            entry_text[entry.id] = " ".join(b.text for b in entry.bullets)
+    for entry in r.earlier_career:
+        entry_text[entry.id] = f"{entry.company}: {entry.summary}"
 
     issues = []
     for paragraph in paragraphs:
@@ -290,9 +300,17 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
                 licensed |= by_story.get(ref, set())
                 if ref in story_text:
                     licensed |= {a for a in all_aliases if _names(story_text[ref], a)}
+            # A name the cited evidence itself uses is not a claim about an
+            # employer: "Deutsche Bahn" in the PROS bullet is the client, and
+            # its first word is the Deutsche Bank employer's short name.
+            cited = " ".join(
+                entry_text.get(ref) or entry_text.get(ref.split(".", 1)[0], "")
+                for ref in sentence.cites
+            )
+            text = _mask_names(sentence.text, cited)
             # Longest name first, so the detail names the employer as written.
             for alias, entry_id in sorted(all_aliases.items(), key=lambda kv: -len(kv[0])):
-                if _names(sentence.text, alias) and not (employers[entry_id] & licensed):
+                if _names(text, alias) and not (employers[entry_id] & licensed):
                     issues.append(
                         ValidationIssue(
                             rule="employer not in cited evidence",
@@ -307,6 +325,27 @@ def check_employers(paragraphs, profile: Profile) -> list[ValidationIssue]:
                     )
                     break
     return issues
+
+
+_PROPER = re.compile(r"\b[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*)+")
+
+
+def _mask_names(sentence: str, evidence: str) -> str:
+    """Blank every multi-word proper name the cited evidence also uses.
+
+    JD 89, 2026-10-22: a faithful sentence about the PROS Deutsche Bahn system
+    was blocked because "Deutsche" is the short name of another employer,
+    Deutsche Bank. Blanking the whole name the evidence uses — not licensing
+    every alias its text contains — keeps "At Deutsche Bank I…" blocked.
+    """
+    if not evidence:
+        return sentence
+
+    def blank(match: re.Match) -> str:
+        name = re.sub(r"['’]s$", "", match.group(0))
+        return " " * len(match.group(0)) if name in evidence else match.group(0)
+
+    return _PROPER.sub(blank, sentence)
 
 
 def _names(text: str, alias: str) -> bool:

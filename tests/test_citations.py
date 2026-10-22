@@ -204,3 +204,18 @@ def test_a_highlight_citing_several_bullets_of_one_entry_cites_the_entry() -> No
     assert _Highlight(label="x", text="y", source_ref=["venture.0", "venture.1"]).source_ref == "venture"
     assert _Highlight(label="x", text="y", source_ref=["a.0", "b.1"]).source_ref == "a.0"
     assert _Highlight(label="x", text="y", source_ref=["a.0"]).source_ref == "a.0"
+
+
+def test_a_client_name_in_the_cited_evidence_is_not_an_employer_claim(profile):
+    """JD 89: "Deutsche Bahn", the client in the PROS bullet, tripped the Deutsche
+    Bank employer's short name. A whole name the evidence uses is not checked; the
+    employer's own name still is."""
+    from jobagent.core.validation import check_employers
+
+    entry = next(e for e in profile.roles.roles if e.id == "startup_em")
+    entry.bullets[0].text = "Led 6 developers on the Example Manufacturing Trust billing system."
+    client = Sentence(text="I led six developers on Example Manufacturing Trust's billing system.",
+                      cites=["startup_em.0"])
+    merged = Sentence(text="At Example Manufacturing Co I led six developers.", cites=["startup_em.0"])
+    assert check_employers([[client]], profile) == []
+    assert check_employers([[merged]], profile)

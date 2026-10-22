@@ -42,7 +42,8 @@ def report(ws: Workspace) -> RewriteReport:
             out.any_draft_rules.update(rules)
             for issue in draft:
                 out.examples.setdefault(issue["rule"], issue.get("excerpt") or issue.get("detail", ""))
-        out.still_blocked.update(
-            {i["rule"] for i in record.get("issues", []) if i.get("severity") == "blocker"}
-        )
+        final = [i for i in record.get("issues", []) if i.get("severity") == "blocker"]
+        out.still_blocked.update({i["rule"] for i in final})
+        for issue in final:
+            out.examples.setdefault(issue["rule"], issue.get("excerpt") or issue.get("detail", ""))
     return out
