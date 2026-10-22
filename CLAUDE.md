@@ -270,6 +270,7 @@ Sonnet 4.6's rate and the estimates on top of that were conservative:
     jobagent sent <id> | diff <id>|--all free   what was sent, against what was generated
     jobagent revise <id> --cover --note  as generating that document; note kept
     jobagent context <id> "…" | notes  free     what the ad does not say; recurring notes
+    jobagent rewrites                  free     which checks reject first drafts (each rewrite doubles a doc)
     jobagent spend [--jd N]            free     where the bill went
     jobagent eval report|diff|export   free     grade the scorer
     jobagent eval run                  ~$0.11/case

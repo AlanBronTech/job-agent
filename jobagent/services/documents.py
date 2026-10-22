@@ -236,6 +236,7 @@ def generate(
     written: list[Path] = []
     issues = []
     per_document: dict[str, list] = {}  # what this run found, by document
+    rewrites: dict[str, list] = {}  # each rejected draft's blockers, by document
     unused = []
     coverage = []
     claims = None  # None: not run (switched off, or nothing to check)
@@ -260,6 +261,7 @@ def generate(
             raise GenerationFailed("resume", exc, written) from exc
         issues += built.issues
         per_document["resume"] = list(built.issues)
+        rewrites["resume"] = list(getattr(built, "rejected", []))
         unused = built.unused
         coverage = getattr(built, "coverage", [])
         on_resume = getattr(built, "on_page", {})
@@ -288,12 +290,14 @@ def generate(
         except GenerateError as exc:
             raise GenerationFailed("cover", exc, written) from exc
         sentences = getattr(letter, "sentences", [])
+        rewrites["cover letter"] = list(getattr(letter, "rejected", []))
         found = None
         if check_claims and sentences:
             found = checks.check_claims(
                 config, ctx, sentences, profile, client_factory=lambda: review_client
             )
             if isinstance(found, list) and found:
+                rejected_claims = found
                 # A mismatch is a blocker, and a blocker means write it again:
                 # once, with the mismatches named, then check the new draft.
                 try:
@@ -305,6 +309,9 @@ def generate(
                     )
                 except GenerateError as exc:
                     raise GenerationFailed("cover", exc, written) from exc
+                # The claim check's rejection is a rewrite like any other.
+                rewrites["cover letter"] += [claim_issues(rejected_claims)]
+                rewrites["cover letter"] += list(getattr(letter, "rejected", []))
                 found = checks.check_claims(
                     config, ctx, getattr(letter, "sentences", []), profile,
                     client_factory=lambda: review_client,
@@ -337,6 +344,7 @@ def generate(
             raise GenerationFailed("answers", exc, written) from exc
         issues += built_answers.issues
         per_document["answers"] = list(built_answers.issues)
+        rewrites["answers"] = list(getattr(built_answers, "rejected", []))
         rendered["answers"] = built_answers.text
         sentences = getattr(built_answers, "sentences", [])
         if check_claims and sentences:
@@ -372,7 +380,9 @@ def generate(
             )
         )
 
-    by_document, coverage_shown = _records(ws, jd, today, now, per_document, coverage, warnings)
+    by_document, coverage_shown = _records(
+        ws, jd, today, now, per_document, coverage, warnings, rewrites
+    )
     written.append(
         _write(
             lambda: ws.documents.write_text(
@@ -534,7 +544,10 @@ def _clashes(ws: Workspace, jd: JobDescription, when: date, names: list[str]):
 _DOCUMENTS = ("resume", "cover letter", "answers")
 
 
-def _records(ws: Workspace, jd, today: date, now: datetime, found: dict, coverage, warnings: list[str]):
+def _records(
+    ws: Workspace, jd, today: date, now: datetime, found: dict, coverage,
+    warnings: list[str], rewrites: dict | None = None,
+):
     """Issues by document for `assessment.md`: this run's, and the latest kept for the rest.
 
     A revise writes one document, and `assessment.md` used to be rebuilt from
@@ -552,7 +565,14 @@ def _records(ws: Workspace, jd, today: date, now: datetime, found: dict, coverag
     for document in _DOCUMENTS:
         key = document.replace(" ", "_")
         if document in found:
-            record = {"issues": [_issue_dict(i) for i in found[document]]}
+            record = {
+                "issues": [_issue_dict(i) for i in found[document]],
+                # Blockers of each draft written again, first draft first:
+                # `jobagent rewrites` counts these to find what doubles a run.
+                "rewrites": [
+                    [_issue_dict(i) for i in draft] for draft in (rewrites or {}).get(document, [])
+                ],
+            }
             if document == "resume":
                 record["coverage"] = [vars(row).copy() for row in coverage]
             try:

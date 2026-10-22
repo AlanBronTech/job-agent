@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from jobagent.adapters.docx_writer import (
     CoverLetterContent,
@@ -123,6 +123,22 @@ class _Highlight(BaseModel):
     text: str
     source_ref: str
 
+    @field_validator("source_ref", mode="before")
+    @classmethod
+    def _one_ref(cls, value: object) -> object:
+        """A highlight cites one source; a list of bullets of one entry is that entry.
+
+        The model sent `["datallama.0", "datallama.1"]` for a DataLlama
+        highlight and the whole resume was lost on a type error after the
+        tokens were paid for (JD 89, 2026-10-22). Bullets of a single entry
+        become the entry id, which a highlight may cite; refs from different
+        entries keep the first, so the citation is still checked.
+        """
+        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+            heads = {v.split(".", 1)[0] for v in value}
+            return heads.pop() if len(heads) == 1 and len(value) > 1 else value[0]
+        return value
+
 
 class _ResumeSelection(BaseModel):
     tagline: str
@@ -182,6 +198,10 @@ class GeneratedResume:
     coverage: list[cover.CoverageRow] = field(default_factory=list)
     # Text already on the page, by ref: what the letter must not repeat.
     on_page: dict[str, str] = field(default_factory=dict)
+    # The blockers of each draft that was rejected and written again, in
+    # order. A rewrite doubles the time and cost of a document, and the
+    # final issues alone cannot say why one happened.
+    rejected: list[list[ValidationIssue]] = field(default_factory=list)
 
 
 @dataclass
@@ -190,6 +210,8 @@ class GeneratedText:
     issues: list[ValidationIssue] = field(default_factory=list)
     # The cited sentences behind `text`, by paragraph (letters, spec 003).
     paragraphs: list[list[Sentence]] = field(default_factory=list)
+    # As GeneratedResume.rejected.
+    rejected: list[list[ValidationIssue]] = field(default_factory=list)
 
     @property
     def sentences(self) -> list[Sentence]:
@@ -223,6 +245,7 @@ def build_resume(
     citable = build_citable(profile, excluded)
     retry_note = None
     built: GeneratedResume | None = None
+    rejected: list[list[ValidationIssue]] = []
     # A blocker is a stop, not a note (2026-10-15): the selection is asked for
     # again once with the failures named, as the letter always was. Whatever
     # survives the retry is returned with its issues, and the caller marks the
@@ -239,7 +262,9 @@ def build_resume(
         failures = [i for i in built.issues if i.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
             break
+        rejected.append(failures)
         retry_note = _rewrite_instruction(failures, json_output=True)
+    built.rejected = rejected
     return built
 
 
@@ -662,6 +687,7 @@ def build_answers(
     known = known_citations(profile, excluded)
     attempt_prompt = prompt
     result = GeneratedAnswers(text="")
+    rejected: list[list[ValidationIssue]] = []
     for attempt in range(REWRITE_ATTEMPTS + 1):
         try:
             parsed, _ = client.complete_json(
@@ -676,7 +702,9 @@ def build_answers(
         failures = [i for i in result.issues if i.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
             break
+        rejected.append(failures)
         attempt_prompt = f"{prompt}\n\n{_rewrite_instruction(failures, json_output=True)}"
+    result.rejected = rejected
     return result
 
 
@@ -700,6 +728,7 @@ class GeneratedAnswers:
     text: str
     issues: list[ValidationIssue] = field(default_factory=list)
     answers: list = field(default_factory=list)
+    rejected: list[list[ValidationIssue]] = field(default_factory=list)
 
     @property
     def sentences(self) -> list[Sentence]:
@@ -852,6 +881,7 @@ def _write_cited(
     """
     attempt_prompt = prompt
     result = GeneratedText(text="")
+    rejected: list[list[ValidationIssue]] = []
     name = profile.roles.person.name
     for attempt in range(REWRITE_ATTEMPTS + 1):
         try:
@@ -891,7 +921,9 @@ def _write_cited(
         failures = [issue for issue in issues if issue.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
             break
+        rejected.append(failures)
         attempt_prompt = f"{prompt}\n\n{_rewrite_instruction(failures, json_output=True)}"
+    result.rejected = rejected
     return result
 
 

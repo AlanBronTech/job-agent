@@ -368,3 +368,18 @@ def test_a_one_document_run_keeps_the_other_document_s_issues(ws, ids, fake_mode
     text = (later.folder / "assessment.md").read_text()
     assert "— resume" in text and "banned_phrase" in text  # the resume's, kept
     assert "— cover letter" in text
+
+
+def test_a_rejected_draft_is_recorded_and_counted(ws, ids, fake_model, monkeypatch):
+    """Every first draft was rejected on 2026-10-22; the record says which rule did it."""
+    from jobagent.services import rewrites
+
+    blocker = ValidationIssue(rule="story reused", severity=Severity.blocker, detail="Told twice.",
+                              excerpt="macquarie.0")
+    monkeypatch.setattr(documents, "build_resume", lambda *a, **k: SimpleNamespace(
+        content="resume content", issues=[], unused=[], rejected=[[blocker]]))
+    run(ws, ids["acme"], cover=True)
+    report = rewrites.report(ws)
+    assert report.documents == 2 and report.rewritten == 1
+    assert report.first_draft_rules["story reused"] == 1
+    assert report.by_document["resume"] == 1 and report.examples["story reused"] == "macquarie.0"

@@ -195,3 +195,12 @@ def test_an_explanation_licenses_the_employers_it_names(profile):
     profile.stories.explanations.stack_mismatch = "Java at Example Manufacturing Co and elsewhere."
     sentence = Sentence(text="I wrote Java at Example Manufacturing Co.", cites=["stack_mismatch"])
     assert check_employers([[sentence]], profile) == []
+
+
+def test_a_highlight_citing_several_bullets_of_one_entry_cites_the_entry() -> None:
+    """JD 89: ["datallama.0", "datallama.1"] lost a whole resume on a type error."""
+    from jobagent.core.generate import _Highlight
+
+    assert _Highlight(label="x", text="y", source_ref=["venture.0", "venture.1"]).source_ref == "venture"
+    assert _Highlight(label="x", text="y", source_ref=["a.0", "b.1"]).source_ref == "a.0"
+    assert _Highlight(label="x", text="y", source_ref=["a.0"]).source_ref == "a.0"

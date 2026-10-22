@@ -106,6 +106,8 @@ class DocumentStore(Protocol):
 
     def latest_record(self, jd: JobDescription, when: date, document: str) -> dict | None: ...
 
+    def all_records(self) -> list[tuple[str, str, str, dict]]: ...
+
     def keep_edited(self, jd: JobDescription, folder: str, name: str, now: datetime, today: date) -> str: ...
 
     def remove(self, jd: JobDescription, folder: str, name: str, today: date) -> None: ...
@@ -203,6 +205,20 @@ class LocalFolderStore:
             path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         except OSError as exc:
             raise docs.DocsError(f"Could not write {path}: {exc}") from exc
+
+    def all_records(self) -> list[tuple[str, str, str, dict]]:
+        """(folder, run, document, record) for every kept record, oldest run first."""
+        out = []
+        if not self.output_dir.is_dir():
+            return out
+        for path in self.output_dir.glob(f"*/{docs.GENERATED_DIR}/*/record-*.json"):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            document = path.stem.removeprefix("record-").replace("_", " ")
+            out.append((path.parents[2].name, path.parent.name, document, data))
+        return sorted(out, key=lambda r: _run_order(Path(r[1])))
 
     def latest_record(self, jd: JobDescription, when: date, document: str) -> dict | None:
         """The newest kept record for one document in this month's folder."""

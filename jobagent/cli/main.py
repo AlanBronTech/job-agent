@@ -18,6 +18,7 @@ from jobagent.cli import prep as prep_cli
 from jobagent.cli import profile as profile_cli
 from jobagent.cli import score as score_cli
 from jobagent.cli import revise as revise_cli
+from jobagent.cli import rewrites as rewrites_cli
 from jobagent.cli import screen as screen_cli
 from jobagent.cli import sent as sent_cli
 from jobagent.cli import spend as spend_cli
@@ -93,6 +94,7 @@ app.command(name="diff")(sent_cli.diff)
 app.command(name="revise")(revise_cli.revise)
 app.command(name="notes")(revise_cli.notes)
 app.command(name="context")(revise_cli.context)
+app.command(name="rewrites")(rewrites_cli.rewrites)
 app.command(name="spend")(spend_cli.spend)
 app.command(name="ui")(ui_cli.ui)
 

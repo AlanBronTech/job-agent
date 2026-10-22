@@ -573,6 +573,7 @@ assessment is what shapes the selection.
 | `jobagent revise <jd_id> --resume\|--cover --note "…"` | Write one document again, changed as the note says. Paid, as generating it. |
 | `jobagent context <jd_id> ["…"]` | Show, or add a line to, what you know that the ad does not say. `--set`, `--clear`. |
 | `jobagent notes [--jd N]` | Revision notes, grouped; recurring ones flagged. |
+| `jobagent rewrites` | Which checks rejected first drafts. Each rejection means the document was written twice, doubling its time and cost. |
 
 `apply` options: `--on YYYY-MM-DD` (defaults to today), `--channel <text>`,
 `--note <text>`, `--sent-resume F`, `--sent-letter F`, `--sent-as-generated`.
