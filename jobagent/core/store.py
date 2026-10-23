@@ -31,6 +31,7 @@ from pydantic import ValidationError
 
 from jobagent.core.models import (
     Application,
+    Contact,
     FitAssessment,
     JobDescription,
     OutsideApplication,
@@ -40,7 +41,7 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -190,6 +191,23 @@ CREATE TABLE IF NOT EXISTS revision_notes (
     note       TEXT NOT NULL,
     created_at TEXT NOT NULL,
     result     TEXT
+);
+
+-- v16. People worth staying in touch with, recruiters first (task 5). A
+-- contact outlives any one ad, so jd_id is optional and survives its deletion.
+CREATE TABLE IF NOT EXISTS contacts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    firm          TEXT NOT NULL DEFAULT '',
+    kind          TEXT NOT NULL,
+    specialty     TEXT NOT NULL DEFAULT '',
+    channel       TEXT NOT NULL DEFAULT '',
+    first_contact TEXT NOT NULL,
+    last_touch    TEXT NOT NULL,
+    next_followup TEXT,
+    notes         TEXT NOT NULL DEFAULT '',
+    jd_id         INTEGER REFERENCES job_descriptions (id) ON DELETE SET NULL,
+    created_at    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS fit_assessments (
@@ -1210,5 +1228,73 @@ def _row_to_outside(row: sqlite3.Row) -> OutsideApplication:
         status=row["status"],
         notes=row["notes"],
         linked_jd_id=row["linked_jd_id"],
+        created_at=row["created_at"],
+    )
+
+
+# --------------------------------------------------------------------------- #
+# v16: contacts
+# --------------------------------------------------------------------------- #
+
+
+def add_contact(conn: sqlite3.Connection, contact: Contact) -> int:
+    try:
+        cur = conn.execute(
+            "INSERT INTO contacts (name, firm, kind, specialty, channel, first_contact, "
+            "last_touch, next_followup, notes, jd_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                contact.name, contact.firm, contact.kind.value, contact.specialty,
+                contact.channel, contact.first_contact.isoformat(),
+                contact.last_touch.isoformat(),
+                contact.next_followup.isoformat() if contact.next_followup else None,
+                contact.notes, contact.jd_id, contact.created_at.isoformat(),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save the contact: {exc}") from exc
+    return int(cur.lastrowid)
+
+
+def get_contact(conn: sqlite3.Connection, contact_id: int) -> Contact | None:
+    row = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+    return _row_to_contact(row) if row else None
+
+
+def list_contacts(conn: sqlite3.Connection) -> list[Contact]:
+    """Soonest follow-up first; contacts with none last."""
+    try:
+        rows = conn.execute(
+            "SELECT * FROM contacts ORDER BY next_followup IS NULL, next_followup, name"
+        ).fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list contacts: {exc}") from exc
+    return [_row_to_contact(row) for row in rows]
+
+
+def update_contact(conn: sqlite3.Connection, contact: Contact) -> None:
+    """Write back the fields that change after a contact is added."""
+    try:
+        conn.execute(
+            "UPDATE contacts SET last_touch = ?, next_followup = ?, notes = ?, jd_id = ? "
+            "WHERE id = ?",
+            (
+                contact.last_touch.isoformat(),
+                contact.next_followup.isoformat() if contact.next_followup else None,
+                contact.notes, contact.jd_id, contact.id,
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not update contact {contact.id}: {exc}") from exc
+
+
+def _row_to_contact(row: sqlite3.Row) -> Contact:
+    return Contact(
+        id=row["id"], name=row["name"], firm=row["firm"], kind=row["kind"],
+        specialty=row["specialty"], channel=row["channel"],
+        first_contact=row["first_contact"], last_touch=row["last_touch"],
+        next_followup=row["next_followup"], notes=row["notes"], jd_id=row["jd_id"],
         created_at=row["created_at"],
     )

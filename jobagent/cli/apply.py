@@ -130,6 +130,7 @@ def status_command(
             "[dim]No applications recorded. `jobagent apply <jd_id>` after you "
             "send one.[/]"
         )
+        _print_due()
         return
 
     live = {
@@ -151,6 +152,7 @@ def status_command(
             f"[dim]Nothing live. {len(applications)} finished application(s) — "
             "pass --all to see them.[/]"
         )
+        _print_due()
         return
 
     table = Table(box=None, pad_edge=False)
@@ -180,6 +182,18 @@ def status_command(
         console.print(
             f"\n[dim]{len(applications) - len(shown)} finished; --all shows them.[/]"
         )
+    _print_due()
+
+
+def _print_due() -> None:
+    # Recruiters were where the human replies came from (task 5): the reminder
+    # sits where the pipeline is read every day.
+    from jobagent.cli.contacts import print_due
+
+    try:
+        print_due()
+    except StoreError as exc:
+        err_console.print(f"[bold red]{exc}[/]")
 
 
 def _as_records(applications, jds: dict) -> list[dict]:

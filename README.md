@@ -592,6 +592,23 @@ you exported it from.
 Applications made outside the tool: `jobagent outside add|list|link` (see
 *Applying again*).
 
+### Contacts and follow-ups
+
+Agency recruiters and contract desks are where the human replies come from,
+and they are worth a re-touch every six to eight weeks. A CRM for one, free:
+
+```
+jobagent contact add "Jo Example" --firm "Contoso Talent" --specialty "contract .NET" \
+    --channel phone --since 2026-10-01         # first follow-up 6 weeks on
+jobagent contact touch <id> --note "Called; nothing this month" [--next 3w]
+jobagent contact list | show <id> | link <id> <jd_id>
+```
+
+`--next` takes `10d`, `6w`, `2m` or a date; the default is six weeks.
+`--kind` is `agency_recruiter` (default), `internal_recruiter`,
+`hiring_manager`, `former_colleague` or `prospect`. `jobagent status` ends with
+**Follow-ups due this week**: anything overdue or due in the next seven days.
+
 **Valid `<status>` values**, in order of how far it got:
 
 | Status | Meaning |

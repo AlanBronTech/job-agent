@@ -901,6 +901,36 @@ class SentDocument(_Base):
     recorded_at: datetime
 
 
+class ContactKind(str, Enum):
+    agency_recruiter = "agency_recruiter"
+    internal_recruiter = "internal_recruiter"
+    hiring_manager = "hiring_manager"
+    former_colleague = "former_colleague"
+    prospect = "prospect"
+
+
+class Contact(_Base):
+    """A person worth staying in touch with: a CRM for one (REVIEW-2026-10-18, task 5).
+
+    Agency recruiters were where human responses came from, and their value is
+    regular follow-up, which nobody does without a reminder. `next_followup`
+    is the reminder; `jobagent status` lists the ones falling due.
+    """
+
+    id: int | None = None
+    name: str
+    firm: str = ""
+    kind: ContactKind = ContactKind.agency_recruiter
+    specialty: str = ""
+    channel: str = ""
+    first_contact: date
+    last_touch: date
+    next_followup: date | None = None
+    notes: str = ""
+    jd_id: int | None = None
+    created_at: datetime
+
+
 class RevisionNote(_Base):
     """What Alan asked to change in one generated document, in his words.
 

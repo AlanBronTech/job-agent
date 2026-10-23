@@ -10,6 +10,7 @@ from jobagent.adapters.prices import PRICES_FILE, unpriced_models
 from jobagent.cli import apply as apply_cli
 from jobagent.cli import batch as batch_cli
 from jobagent.cli import config as config_cli
+from jobagent.cli import contacts as contacts_cli
 from jobagent.cli import evals as evals_cli
 from jobagent.cli import generate as generate_cli
 from jobagent.cli import jd as jd_cli
@@ -80,6 +81,7 @@ app.add_typer(config_cli.app, name="config")
 app.add_typer(jd_cli.app, name="jd")
 app.add_typer(batch_cli.app, name="batch")
 app.add_typer(outside_cli.app, name="outside")
+app.add_typer(contacts_cli.app, name="contact")
 app.add_typer(evals_cli.app, name="eval")
 # `score` is one command, not a group — mounted directly.
 app.command(name="score")(score_cli.score)
