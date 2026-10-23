@@ -235,6 +235,13 @@ CREATE TABLE IF NOT EXISTS alert_listings (
     UNIQUE (source, job_id)
 );
 
+-- v17. Alert emails already read, so a re-run over the same days does not
+-- count a job as seen twice.
+CREATE TABLE IF NOT EXISTS alert_emails (
+    message_id TEXT PRIMARY KEY,
+    read_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS fit_assessments (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
     jd_id                  INTEGER NOT NULL REFERENCES job_descriptions (id)
@@ -1407,3 +1414,16 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         conn.commit()
     except sqlite3.Error as exc:
         raise StoreError(f"Could not save {key}: {exc}") from exc
+
+
+def alert_email_read(conn: sqlite3.Connection, message_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM alert_emails WHERE message_id = ?", (message_id,)
+    ).fetchone() is not None
+
+
+def mark_alert_email(conn: sqlite3.Connection, message_id: str, read_at: str) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO alert_emails (message_id, read_at) VALUES (?, ?)", (message_id, read_at)
+    )
+    conn.commit()

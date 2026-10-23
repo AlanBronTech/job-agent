@@ -126,8 +126,9 @@ def ingest(ws: Workspace, mails: list, *, now: datetime, rules: AlertRules | Non
         applications = {a.jd_id: a for a in store.list_applications(conn)}
         outside = store.list_outside(conn)
         for mail in mails:
+            again = store.alert_email_read(conn, mail.message_id)
             listings = core.parse_email(mail.sender, mail.text)
-            if not listings and _looks_like_jobs(mail.subject):
+            if not listings and core.has_job_links(mail.text):
                 result.unread.append(mail.subject)
             for parsed in listings:
                 result.listings += 1
@@ -141,14 +142,17 @@ def ingest(ws: Workspace, mails: list, *, now: datetime, rules: AlertRules | Non
                     )
                     result.new += 1
                 else:
-                    row.times_seen += 1
+                    row.times_seen += 0 if again else 1
                     row.first_seen = min(row.first_seen, seen)
                     row.last_seen = max(row.last_seen, seen)
-                    row.pay = row.pay or parsed.pay
-                    row.location = row.location or parsed.location
+                    # The latest email's reading wins: a parser fix corrects old rows.
+                    row.title, row.company = parsed.title, parsed.company
+                    row.pay = parsed.pay or row.pay
+                    row.location = parsed.location or row.location
                 if row.decision is None:
                     _judge(row, parsed, rules, filters, conn, ads, applications, outside)
                 store.save_alert(conn, row)
+            store.mark_alert_email(conn, mail.message_id, now.isoformat())
         store.set_meta(conn, LAST_FETCH, now.isoformat())
         result.suggested = len(_pending_rows(store.list_alerts(conn), now))
     return result
@@ -191,11 +195,6 @@ def _already_known(row: AlertListing, conn, ads, applications, outside) -> str |
 
 def _status(application) -> str:
     return f" ({application.status.value})" if application else ""
-
-
-def _looks_like_jobs(subject: str) -> bool:
-    s = subject.lower()
-    return any(w in s for w in ("job", "role", "hiring", " at "))
 
 
 def _rules(ws: Workspace) -> AlertRules:
@@ -330,9 +329,20 @@ def report(ws: Workspace) -> Report:
     )
 
 
+_REASON_LABELS = {
+    "already in JobAgent": "already in JobAgent",
+    "possibly": "possibly a job already in JobAgent",
+    "decided before": "decided on before",
+    "same job": "same job as another listing",
+    "pay up to": "pay under the floor",
+    "day rate up to": "day rate under the floor",
+    "hands-on role": "hands-on role with no day rate",
+    "title is not": "title is not a target role",
+}
+
+
 def _reason_kind(reason: str) -> str:
-    for prefix in ("title:", "already in JobAgent", "possibly", "decided before", "same job",
-                   "pay up to", "day rate up to", "hands-on role", "title is not"):
-        if reason.startswith(prefix):
-            return reason if prefix == "title:" else prefix
-    return reason or "(none)"
+    if reason.startswith("title:"):
+        return reason
+    return next((label for prefix, label in _REASON_LABELS.items() if reason.startswith(prefix)),
+                reason or "(none)")

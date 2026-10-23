@@ -31,7 +31,7 @@ _SEEK_BADGE = re.compile(r"^(?:(?:very )?strong applicant|new|featured|be an ear
 _SEEK_STOP = re.compile(
     r"^(?:logo|jobs you may have missed|matches your preference.*|explore now|"
     r"take your next career step|your destination for.*|hi \w+,?|based on your saved search.*|"
-    r"found \d+ new jobs.*|we.ve$|view all matching jobs)$",
+    r"we.ve$|view all matching jobs|.*\bnew jobs?\b.*)$",
     re.I,
 )
 _LINKEDIN_BADGES = {
@@ -66,6 +66,12 @@ class Listing:
 # --------------------------------------------------------------------------- #
 # Reading the emails
 # --------------------------------------------------------------------------- #
+
+
+def has_job_links(text: str) -> bool:
+    """Whether an email links to individual jobs at all: if it does and nothing
+    was read from it, the layout has changed."""
+    return bool(_SEEK_JOB.search(text) or _LINKEDIN_JOB.search(text))
 
 
 def source_of(sender: str) -> str | None:

@@ -199,7 +199,7 @@ def test_saving_the_ad_marks_the_listing_saved(ws):
 
 
 def test_an_alert_email_that_yields_nothing_is_reported(ws):
-    result = alerts.ingest(ws, [mail("jobmail@s.seek.com.au", "a layout we cannot read",
+    result = alerts.ingest(ws, [mail("jobmail@s.seek.com.au", "a layout we cannot read https://au.seek.com/job/1",
                                      subject="20 new jobs for engineering manager")], now=NOW)
     assert result.unread == ["20 new jobs for engineering manager"]
 
@@ -310,3 +310,27 @@ def test_gmail_is_read_read_only_from_all_mail_and_the_bin(monkeypatch):
     assert all(c[1] == "(BODY.PEEK[])" for c in calls if c[0] == "fetch")
     assert any("SINCE 20-Oct-2026" in c[1] and 'FROM "seek.com.au"' in c[1] for c in calls if c[0] == "search")
     assert calls[-1] == ("logout",)
+
+
+
+def test_a_first_listing_without_a_logo_does_not_take_the_greeting_as_its_title():
+    text = (
+        "Hi Alex,\nBased on your saved search for software development manager in All Sydney NSW,\n"
+        "we\u2019ve found 19 new jobs that could be right for you.\n\nDelivery Manager\nFabrikam Digital\n\n"
+        "Mascot, Sydney NSW\n$180k - $195k + Super\n\n[https://au.seek.com/job/90000002?x=1]\n"
+    )
+    [listing] = core.parse_seek(text)
+    assert (listing.title, listing.company, listing.pay) == ("Delivery Manager", "Fabrikam Digital", "$180k - $195k + Super")
+
+
+def test_an_email_with_no_job_links_is_not_reported_as_unreadable(ws):
+    result = alerts.ingest(ws, [mail("jobs-noreply@linkedin.com", "Find the right job for you on LinkedIn",
+                                     subject="Alan, looking for a new job?")], now=NOW)
+    assert result.unread == []
+
+
+def test_reading_the_same_email_twice_does_not_count_it_twice(ws):
+    m = mail("jobmail@s.seek.com.au", SEEK_TEXT, mid="<same@seek>")
+    alerts.ingest(ws, [m], now=NOW)
+    alerts.ingest(ws, [m], now=NOW + timedelta(minutes=5))
+    assert {r.times_seen for r in alerts.listings(ws)} == {1}
