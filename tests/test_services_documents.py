@@ -383,3 +383,39 @@ def test_a_rejected_draft_is_recorded_and_counted(ws, ids, fake_model, monkeypat
     assert report.documents == 2 and report.rewritten == 1
     assert report.first_draft_rules["story reused"] == 1
     assert report.by_document["resume"] == 1 and report.examples["story reused"] == "macquarie.0"
+
+
+def test_a_resume_claim_mismatch_selects_the_resume_once_more(ws, ids, fake_model, monkeypatch):
+    """JD 90: the PROFILE claimed budget ownership nothing in the profile says."""
+    from jobagent.core.generate import Sentence
+    from jobagent.services import checks
+
+    drafts = []
+
+    def resume(*a, feedback=None, **k):
+        drafts.append(feedback)
+        return SimpleNamespace(content="resume content", issues=[], unused=[],
+                               sentences=[Sentence(text="I owned the budget.", cites=["x.0"])])
+    monkeypatch.setattr(documents, "build_resume", resume)
+    verdicts = [[checks.Mismatch(sentence="I owned the budget.", problem="unsupported detail")], []]
+    monkeypatch.setattr(documents.checks, "check_claims", lambda *a, **k: verdicts.pop(0))
+
+    result = run(ws, ids["acme"])
+    assert drafts[0] is None and "previous resume" in drafts[1] and "unsupported detail" in drafts[1]
+    assert result.claims == []
+    assert result.written[0].name == "AlanBron_Resume_AcmeLogistics_202609.docx"
+
+
+def test_a_resume_mismatch_that_survives_marks_it_not_ready(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.generate import Sentence
+    from jobagent.services import checks
+
+    monkeypatch.setattr(documents, "build_resume", lambda *a, **k: SimpleNamespace(
+        content="resume content", issues=[], unused=[],
+        sentences=[Sentence(text="On contract.", cites=["x.0"])]))
+    monkeypatch.setattr(documents.checks, "check_claims", lambda *a, **k: [
+        checks.Mismatch(sentence="On contract.", problem="unsupported detail")])
+
+    result = run(ws, ids["acme"])
+    assert result.written[0].name.endswith("_NOT-READY.docx")
+    assert any(i.rule == "claim mismatch" for i in result.issues)

@@ -1,4 +1,4 @@
-# generate_resume — v4
+# generate_resume — v5
 
 Select and order profile content for one specific job advertisement.
 
@@ -7,9 +7,13 @@ copied verbatim from the catalogue below by its reference — you return
 references, never bullet text. A reference you invent fails a lookup and the
 generation is rejected, so use only references that appear below.
 
-You write prose in exactly two places: the tagline, and the two PROFILE
-paragraphs. Both are checked against the profile afterwards — every number in
-them must already appear in the catalogue, and the voice rules apply.
+You write prose in three places: the tagline, the two PROFILE paragraphs, and
+the CAREER HIGHLIGHTS. All are checked against the profile afterwards — every
+number in them must already appear in the catalogue, and the voice rules
+apply. Each PROFILE paragraph and each highlight is also read against the
+evidence it cites, by a checker that marks anything the evidence does not
+say: a scope, a budget, an employment basis, an outcome or a mechanism. Say
+only what the cited evidence says.
 
 ## The job
 
@@ -136,6 +140,11 @@ Skill category keys available: {skills}
     experience bullet. Never also in the PROFILE paragraphs when it has a
     bullet. List in `profile_refs` the ids each PROFILE paragraph draws on, so
     this can be checked. Reuse past the cap is rejected.
+13. **Every PROFILE paragraph cites.** `profile_refs` has one non-empty list
+    per paragraph, and every claim in the paragraph comes from what those ids
+    say. A paragraph with no ids is rejected. Context or a revision note
+    below is a reason to choose evidence, never evidence itself: if it says
+    the role is a contract, that does not make any past role a contract.
 
 ## Output
 

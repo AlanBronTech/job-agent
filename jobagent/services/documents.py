@@ -259,9 +259,34 @@ def generate(
             )
         except GenerateError as exc:
             raise GenerationFailed("resume", exc, written) from exc
-        issues += built.issues
-        per_document["resume"] = list(built.issues)
         rewrites["resume"] = list(getattr(built, "rejected", []))
+        found = None
+        sentences = getattr(built, "sentences", [])
+        if check_claims and sentences:
+            found = checks.check_claims(
+                config, ctx, sentences, profile, client_factory=lambda: review_client
+            )
+            if isinstance(found, list) and found:
+                # As the letter: a mismatch is a blocker, so select again once
+                # with the mismatches named, then check the new draft.
+                rewrites["resume"] += [claim_issues(found)]
+                try:
+                    built = build_resume(
+                        jd, profile, assessment, client=client, today=today, kind=kind,
+                        instructions=instructions("resume", "resume"),
+                        feedback=claims_feedback(found, "resume"),
+                    )
+                except GenerateError as exc:
+                    raise GenerationFailed("resume", exc, written) from exc
+                rewrites["resume"] += list(getattr(built, "rejected", []))
+                found = checks.check_claims(
+                    config, ctx, getattr(built, "sentences", []), profile,
+                    client_factory=lambda: review_client,
+                )
+            claims = merge_claims(claims, found)
+        resume_issues = list(built.issues) + claim_issues(found)
+        issues += resume_issues
+        per_document["resume"] = resume_issues
         unused = built.unused
         coverage = getattr(built, "coverage", [])
         on_resume = getattr(built, "on_page", {})
@@ -269,7 +294,7 @@ def generate(
             built.content if isinstance(built.content, str) else resume_text(built.content)
         )
         path = ws.documents.path_for_write(
-            jd, today, _name("Resume", jd, today, blocked=_blocked(built.issues))
+            jd, today, _name("Resume", jd, today, blocked=_blocked(resume_issues))
         )
         written.append(_write(lambda: write_resume(built.content, path), written))
         _keep_generated(ws, jd, today, path, now, warnings)
@@ -303,7 +328,7 @@ def generate(
                 try:
                     letter = build_cover_letter(
                         jd, profile, assessment, client=client, kind=kind,
-                        feedback=claims_feedback(found), on_resume=on_resume,
+                        feedback=claims_feedback(found, "letter"), on_resume=on_resume,
                         instructions=instructions("cover_letter", "cover letter"),
                         max_words=letter_words,
                     )
@@ -443,12 +468,12 @@ def _name(kind: str, jd, today, *, blocked: bool) -> str:
     return name.replace(".docx", "_NOT-READY.docx") if blocked else name
 
 
-def claims_feedback(mismatches) -> str:
+def claims_feedback(mismatches, document: str) -> str:
     lines = [
-        "## Your previous letter was checked against its evidence and failed",
+        f"## Your previous {document} was checked against its evidence and failed",
         "",
         "These sentences said more than, or something different from, what they",
-        "cite. Write the letter again without these faults, in the same JSON.",
+        f"cite. Write the {document} again without these faults, in the same JSON.",
         "",
     ]
     for m in mismatches:

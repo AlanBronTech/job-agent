@@ -112,6 +112,7 @@ def selection(profile, **overrides) -> dict:
     data = {
         "tagline": "Engineering Leader  ·  Co-Founder",
         "profile_paragraphs": ["First paragraph.", "Second paragraph."],
+        "profile_refs": [[profile.roles.roles[-1].id], [profile.roles.roles[-1].id]],
         "highlights": [
             {
                 "label": "AI in production",
@@ -707,3 +708,22 @@ def test_the_generated_letter_is_signed_off_once(profile, jd, assessment) -> Non
 
     assert "regards" not in letter.text.lower()
     assert letter.text == "I led 15 engineers."
+
+
+def test_a_profile_paragraph_citing_nothing_is_a_blocker(jd, profile, assessment) -> None:
+    """Uncited prose cannot be claim-checked, so it is not accepted."""
+    from jobagent.core.generate import _ResumeSelection, _uncited_paragraphs
+
+    chosen = _ResumeSelection.model_validate(selection(profile, profile_refs=[["x"], []]))
+    issues = _uncited_paragraphs(chosen)
+    assert [i.rule for i in issues] == ["uncited PROFILE paragraph"]
+    assert "paragraph 2" in issues[0].detail
+
+
+def test_the_resume_hands_its_prose_to_the_claim_check(jd, profile, assessment) -> None:
+    from jobagent.core.generate import _ResumeSelection, resume_sentences
+
+    chosen = _ResumeSelection.model_validate(selection(profile, profile_refs=[["a"], ["b", "c"]]))
+    sentences = resume_sentences(chosen)
+    assert [s.cites for s in sentences] == [["a"], ["b", "c"], [chosen.highlights[0].source_ref]]
+    assert sentences[2].text.startswith("AI in production — ")

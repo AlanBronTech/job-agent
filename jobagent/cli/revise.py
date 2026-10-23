@@ -50,7 +50,7 @@ def revise(
         help="The file was edited by hand: keep that version under .edited/ and revise anyway.",
     ),
     no_check_claims: bool = typer.Option(
-        False, "--no-check-claims", help="Skip the paid claim check of the letter."
+        False, "--no-check-claims", help="Skip the paid claim check of the revised document."
     ),
 ) -> None:
     """Write a generated document again, changed as your note says."""

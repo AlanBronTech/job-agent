@@ -99,7 +99,8 @@ def labels_for(
     if action == "screen":
         return ["screen_fit"]
     if action == "generate":
-        prose = cover or answers
+        # Every document has checked prose now: the resume's PROFILE and highlights too.
+        prose = resume or cover or answers
         return (
             first
             + (["generate_resume"] if resume else [])

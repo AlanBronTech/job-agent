@@ -398,8 +398,10 @@ After the folder list you get:
   blocked, because the record can contradict them.
 - **Two paid checks**: the *claim check* (on by default, ~$0.01) reads each
   sentence against the evidence it cites — merged people, a moved place, a
-  detail the evidence lacks — and a mismatch has the letter written once
-  more. The *independent review* (off by default, ~$0.12) reads only the ad,
+  detail the evidence lacks — and a mismatch has the document written once
+  more. On the resume it reads the PROFILE paragraphs and the highlights
+  (the bullets are copied, so need no check); each PROFILE paragraph must
+  name the ids it draws on or it is rejected. The *independent review* (off by default, ~$0.12) reads only the ad,
   the written policies and the finished documents, and writes `review.md`.
   Then one line: **Ready**, **Not ready**, or **Not reviewed**.
 - **A blocker stops the document.** The resume is selected again once with

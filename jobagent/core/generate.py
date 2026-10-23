@@ -204,6 +204,9 @@ class GeneratedResume:
     # order. A rewrite doubles the time and cost of a document, and the
     # final issues alone cannot say why one happened.
     rejected: list[list[ValidationIssue]] = field(default_factory=list)
+    # The prose the model wrote — each PROFILE paragraph and highlight — with
+    # what it cites, for the claim check. Bullets are copied, so not here.
+    sentences: list[Sentence] = field(default_factory=list)
 
 
 @dataclass
@@ -234,6 +237,7 @@ def build_resume(
     today: date | None = None,
     kind: RoleClassification | None = None,
     instructions: str | None = None,
+    feedback: str | None = None,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
@@ -241,7 +245,9 @@ def build_resume(
     is shown, and any reference to it in the answer is still a blocker.
     `instructions` is Alan's context and revision note (`instructions_block`),
     sent with every attempt; a rejected draft's failures follow it.
+    `feedback` is the claim check's verdict on an earlier draft, sent the same way.
     """
+    instructions = "\n\n".join(part for part in (instructions, feedback) if part) or None
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
     catalogue = build_catalogue(profile, excluded)
     citable = build_citable(profile, excluded)
@@ -273,7 +279,7 @@ def build_resume(
 def _check_resume(
     selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today
 ) -> GeneratedResume:
-    issues: list[ValidationIssue] = []
+    issues: list[ValidationIssue] = _uncited_paragraphs(selection)
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
         issues += validate_prose(paragraph, profile, context="the PROFILE section")
         # Solely about him, so "he" and "his" are third person too.
@@ -320,7 +326,48 @@ def _check_resume(
             **{ref: catalogue[ref] for role in selection.roles
                for ref in role.bullet_refs if ref in catalogue},
         },
+        sentences=resume_sentences(selection),
     )
+
+
+def resume_sentences(selection: _ResumeSelection) -> list[Sentence]:
+    """The resume's composed prose, each piece with the evidence it rests on.
+
+    The JD 90 PROFILE (2026-10-22) claimed budget ownership and "on contract"
+    work, and nothing checked it: the number check found no number, and the
+    claim check only read letters. Bullets are copied verbatim and need no
+    check; the tagline cites nothing and says too little to check.
+    """
+    refs = list(selection.profile_refs) + [[]] * len(selection.profile_paragraphs)
+    out = [
+        Sentence(text=paragraph, cites=list(refs[n]))
+        for n, paragraph in enumerate(selection.profile_paragraphs)
+    ]
+    out += [
+        Sentence(text=f"{h.label} — {h.text}", cites=[h.source_ref])
+        for h in selection.highlights
+    ]
+    return out
+
+
+def _uncited_paragraphs(selection: _ResumeSelection) -> list[ValidationIssue]:
+    """A PROFILE paragraph that names no evidence cannot be claim-checked."""
+    issues = []
+    for n, paragraph in enumerate(selection.profile_paragraphs):
+        if n >= len(selection.profile_refs) or not selection.profile_refs[n]:
+            issues.append(
+                ValidationIssue(
+                    rule="uncited PROFILE paragraph",
+                    severity=Severity.blocker,
+                    detail=(
+                        f"PROFILE paragraph {n + 1} lists no ids in profile_refs, so "
+                        "nothing can check it against the profile. Name the ids it "
+                        "draws on."
+                    ),
+                    excerpt=paragraph[:120],
+                )
+            )
+    return issues
 
 
 # A highlight and an experience bullet sharing this much of their wording is

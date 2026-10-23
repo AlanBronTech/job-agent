@@ -144,7 +144,8 @@ def test_generate_with_checks_lists_them(tmp_path):
     assert costs.labels_for("generate", resume=True, cover=True, check_claims=True, review=True) == [
         "generate_resume", "generate_cover_letter", "check_claims", "review_documents"]
     # No prose, nothing for the claim check to read.
-    assert costs.labels_for("generate", resume=True, check_claims=True) == ["generate_resume"]
+    assert costs.labels_for("generate", resume=True, check_claims=True) == [
+        "generate_resume", "check_claims"]
 
 
 def test_a_new_label_without_samples_names_itself_beside_the_measured_part(tmp_path):

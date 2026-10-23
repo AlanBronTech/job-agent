@@ -78,7 +78,7 @@ def generate(
     no_check_claims: bool = typer.Option(
         False,
         "--no-check-claims",
-        help="Skip the paid check of each letter or answer sentence against its evidence.",
+        help="Skip the paid check of the written prose (resume PROFILE and highlights, letter, answers) against its evidence.",
     ),
     review_flag: bool | None = typer.Option(
         None,
