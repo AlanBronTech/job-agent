@@ -30,6 +30,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from jobagent.core.models import (
+    AlertListing,
     Application,
     Contact,
     FitAssessment,
@@ -41,7 +42,7 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -208,6 +209,30 @@ CREATE TABLE IF NOT EXISTS contacts (
     notes         TEXT NOT NULL DEFAULT '',
     jd_id         INTEGER REFERENCES job_descriptions (id) ON DELETE SET NULL,
     created_at    TEXT NOT NULL
+);
+
+-- v17. Jobs seen in SEEK and LinkedIn alert emails, one row per job id, with
+-- what the filter made of it and what Alan decided after a look. Only what the
+-- email said: the job pages are never fetched.
+CREATE TABLE IF NOT EXISTS alert_listings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source      TEXT NOT NULL,
+    job_id      TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    company     TEXT NOT NULL DEFAULT '',
+    location    TEXT NOT NULL DEFAULT '',
+    pay         TEXT NOT NULL DEFAULT '',
+    url         TEXT NOT NULL,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    times_seen  INTEGER NOT NULL DEFAULT 1,
+    verdict     TEXT NOT NULL,
+    reason      TEXT NOT NULL DEFAULT '',
+    decision    TEXT,
+    decided_at  TEXT,
+    note        TEXT NOT NULL DEFAULT '',
+    jd_id       INTEGER REFERENCES job_descriptions (id) ON DELETE SET NULL,
+    UNIQUE (source, job_id)
 );
 
 CREATE TABLE IF NOT EXISTS fit_assessments (
@@ -1298,3 +1323,87 @@ def _row_to_contact(row: sqlite3.Row) -> Contact:
         next_followup=row["next_followup"], notes=row["notes"], jd_id=row["jd_id"],
         created_at=row["created_at"],
     )
+
+
+# --------------------------------------------------------------------------- #
+# v17: job-alert listings
+# --------------------------------------------------------------------------- #
+
+
+def get_alert(conn: sqlite3.Connection, listing_id: int) -> AlertListing | None:
+    row = conn.execute("SELECT * FROM alert_listings WHERE id = ?", (listing_id,)).fetchone()
+    return _row_to_alert(row) if row else None
+
+
+def find_alert(conn: sqlite3.Connection, source: str, job_id: str) -> AlertListing | None:
+    row = conn.execute(
+        "SELECT * FROM alert_listings WHERE source = ? AND job_id = ?", (source, job_id)
+    ).fetchone()
+    return _row_to_alert(row) if row else None
+
+
+def list_alerts(conn: sqlite3.Connection) -> list[AlertListing]:
+    """Newest first."""
+    try:
+        rows = conn.execute("SELECT * FROM alert_listings ORDER BY first_seen DESC, id DESC").fetchall()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not list alert listings: {exc}") from exc
+    return [_row_to_alert(row) for row in rows]
+
+
+def save_alert(conn: sqlite3.Connection, a: AlertListing) -> int:
+    """Insert a new listing or update an existing one by id."""
+    values = (
+        a.source, a.job_id, a.title, a.company, a.location, a.pay, a.url,
+        a.first_seen.isoformat(), a.last_seen.isoformat(), a.times_seen,
+        a.verdict.value, a.reason, a.decision.value if a.decision else None,
+        a.decided_at.isoformat() if a.decided_at else None, a.note, a.jd_id,
+    )
+    try:
+        if a.id is None:
+            cur = conn.execute(
+                "INSERT INTO alert_listings (source, job_id, title, company, location, pay, url, "
+                "first_seen, last_seen, times_seen, verdict, reason, decision, decided_at, note, jd_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            a.id = int(cur.lastrowid)
+        else:
+            conn.execute(
+                "UPDATE alert_listings SET source = ?, job_id = ?, title = ?, company = ?, "
+                "location = ?, pay = ?, url = ?, first_seen = ?, last_seen = ?, times_seen = ?, "
+                "verdict = ?, reason = ?, decision = ?, decided_at = ?, note = ?, jd_id = ? "
+                "WHERE id = ?",
+                (*values, a.id),
+            )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save alert listing: {exc}") from exc
+    return a.id
+
+
+def _row_to_alert(row: sqlite3.Row) -> AlertListing:
+    return AlertListing(
+        id=row["id"], source=row["source"], job_id=row["job_id"], title=row["title"],
+        company=row["company"], location=row["location"], pay=row["pay"], url=row["url"],
+        first_seen=row["first_seen"], last_seen=row["last_seen"], times_seen=row["times_seen"],
+        verdict=row["verdict"], reason=row["reason"], decision=row["decision"],
+        decided_at=row["decided_at"], note=row["note"], jd_id=row["jd_id"],
+    )
+
+
+def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    try:
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        conn.commit()
+    except sqlite3.Error as exc:
+        raise StoreError(f"Could not save {key}: {exc}") from exc

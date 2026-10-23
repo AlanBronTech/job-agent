@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Alerts · job-agent{% endblock %}
+{% block main %}
+<div class="heading-row">
+  <h1>Job alerts {% if show == "pending" %}<span class="muted count">{{ items | length }}</span>{% endif %}</h1>
+  <form method="post" action="/alerts/fetch" class="inline">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <button class="primary" type="submit">Check email now</button>
+  </form>
+</div>
+<p class="detail">Jobs from your SEEK and LinkedIn alert emails that are worth a look. Only the emails are read;
+  open each link yourself, give the ad a once-over, and record what you made of it. Saving the ad and adding it
+  marks it saved by itself. Free.</p>
+<div class="sort">
+  Show:
+  <a href="/alerts" {% if show == "pending" %}aria-current="true"{% endif %}>to look at</a>
+  <a href="/alerts?show=decided" {% if show == "decided" %}aria-current="true"{% endif %}>decided</a>
+  <a href="/alerts?show=skipped" {% if show == "skipped" %}aria-current="true"{% endif %}>left out by the filter</a>
+</div>
+{% if fetched %}<div class="banner done">{{ fetched }}</div>{% endif %}
+{% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
+
+{% if show == "pending" %}
+  {% if not items %}
+    <p class="empty">Nothing to look at. Check email, or see what the filter left out.</p>
+  {% endif %}
+  {% for item in items %}{% set r = item.listing %}
+  <div class="panel">
+    <div><strong>{{ r.title }}</strong> — {{ r.company }}{% if r.location %} · {{ r.location }}{% endif %}{% if r.pay %} · {{ r.pay }}{% endif %}
+      <span class="pill {% if r.verdict.value == 'suggest' %}{% else %}muted{% endif %}">{{ "worth a look" if r.verdict.value == "suggest" else "maybe" }}</span>
+      {% if r.decision and r.decision.value == "later" %}<span class="pill muted">later</span>{% endif %}</div>
+    <div><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
+      <span class="muted">{{ r.source }} · seen {{ r.times_seen }}× · {{ r.reason }}</span></div>
+    {% if item.history %}<div class="muted">Before: {{ item.history | join("; ") }}</div>{% endif %}
+    <form method="post" action="/alerts/{{ r.id }}/decide" class="inline">
+      <input type="hidden" name="csrf" value="{{ token }}">
+      <input type="hidden" name="show" value="pending">
+      <input type="text" name="note" placeholder="note (optional)" size="28">
+      {% for d in decisions %}
+        <button type="submit" name="decision" value="{{ d.value }}">{{ d.value.replace("_", " ") }}</button>
+      {% endfor %}
+    </form>
+  </div>
+  {% endfor %}
+{% else %}
+  {% if not rows %}<p class="empty">Nothing here yet.</p>{% else %}
+  <div class="table-wrap"><table class="ads">
+    <thead><tr><th class="num">id</th><th>Job</th><th>{{ "Decision" if show == "decided" else "Why left out" }}</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="num muted">{{ r.id }}</td>
+        <td><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer"><strong>{{ r.title }}</strong></a>
+          <div class="muted">{{ r.company }}{% if r.pay %} · {{ r.pay }}{% endif %}</div></td>
+        <td>{% if show == "decided" %}{{ r.decision.value.replace("_", " ") }}{% if r.note %} <span class="muted">— {{ r.note }}</span>{% endif %}{% if r.jd_id %} · <a href="/ads/{{ r.jd_id }}">JD {{ r.jd_id }}</a>{% endif %}
+            {% else %}<span class="muted">{{ r.reason }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -18,6 +18,9 @@ reviews every generated artefact before it goes anywhere.
    headless browser. If a task seems to require it, stop and say so.
    - Permitted: accepting JD text Alan pastes, or a page he has already
      opened and saved himself as PDF, .mhtml or .txt.
+   - Permitted: reading the SEEK and LinkedIn alert *emails* sent to Alan
+     (`jobagent alerts`, IMAP, read-only). The email only — never the job
+     page it links to.
 2. **No invented experience.** All resume and cover-letter content must be
    selected and reweighted from `profile/`. If the profile lacks material for a
    requirement, the output must say so as a gap, not fabricate. Prompts must
@@ -42,6 +45,7 @@ jobagent/
     scoring.py   # fit scoring, gap analysis, go/no-go
     generate.py  # resume + cover letter + application answers
     prep.py      # interview prep from JD + story bank
+    alerts.py    # alert emails → listings, and the title/pay filter
     store.py     # SQLite pipeline persistence
     models.py    # pydantic models shared everywhere
   adapters/      # everything that talks to the outside world
@@ -49,6 +53,7 @@ jobagent/
     docs.py      # writing generated documents to the local output folder
     docx_writer.py  # python-docx rendering to Alan's format
     document_store.py  # where documents live; LocalFolderStore is the only one
+    mailbox.py   # alert emails over IMAP (read-only) or from .eml files
   services/      # workflows shared by cli/ and web/ (added 2026-09-29)
     workspace.py # whose profile, store, run log, saved ads, document store
   cli/           # typer commands — parse args, call services, render
@@ -163,7 +168,9 @@ tasks 1 (sent copies, `diff`), 2 (`revise`, `context`), 3 (story mechanism
 fields), 5 (contacts), 7 (contract framing, day-rate filter, cover note,
 contractor CV), 9
 (`checklists/final-review.md`), 11 (this file; history in
-`docs/decisions.md`); the claim check on the resume's PROFILE and highlights.
+`docs/decisions.md`); the claim check on the resume's PROFILE and highlights;
+`jobagent alerts` (SEEK/LinkedIn alert emails → a filtered list of links,
+and Alan's decision on each, schema v17; UI page Alerts).
 Phase 6 (Gmail triage) and the Drive upload were dropped (`BUILD_PLAN.md`).
 
 Not built: the edits classification table and `edits report` (task 1 — wait
@@ -233,6 +240,9 @@ it protects.
   skipped is the number to keep (D39).
 - A guard that fires when nothing is at risk stops being a guard (D40).
 - A variable informs nothing unless it was observable at decision time (D41).
+- Alerts are filtered by code, not a model: a title alone is too little to
+  judge. Suggest, maybe or skip, each with its reason, so `--skipped` can
+  audit the filter; Alan's decision is recorded apart from the verdict.
 - Read the prompt before blaming the model (D42); a weaker model finds
   underspecified prompts (D43); a cross-model comparison is not a prompt
   regression (D44); one run of a boundary case is a coin flip (D45).

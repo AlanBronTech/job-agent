@@ -1,0 +1,84 @@
+Contoso, Fabrikam and other companies have new roles for you.
+%%str_to_replace_open_tracking%%
+
+seek
+[https://seekcdn.com/notifications/apac-mail/shared/seek-logo-white-bg.png]https://au.seek.com/?tracking=JMC-SavedSearch
+
+Hi Alex,
+Based on your saved search for engineering manager in All Sydney NSW, we’ve
+found 5 new jobs that could be right for you.
+
+logo
+[https://bx-branding-gateway.cloud.seek.com.au/aaaa.1/serpLogo]
+
+Engineering Manager, Payments Platform
+Contoso
+
+Strong applicant
+
+Sydney NSW
+World Class Benefits
+
+[https://au.seek.com/job/90000001?savedSearchID=x&tracking=JMC-SavedSearch-anz-1-ss-pca-b]
+Delivery Manager
+Fabrikam Digital
+
+Mascot, Sydney NSW
+$180k - $195k + Super
+
+[https://au.seek.com/job/90000002?savedSearchID=x&tracking=JMC]
+
+logo
+[https://bx-branding-gateway.cloud.seek.com.au/bbbb.1/serpLogo]
+
+Network Engineering Manager
+Northwind Telco
+
+Sydney NSW
+
+[https://au.seek.com/job/90000003?savedSearchID=x&tracking=JMC]
+Senior Programmer
+Tailspin Tools
+
+Very strong applicant
+
+Riverwood, Sydney NSW
+Up to $140k (DOE) + Superannuation
+
+[https://au.seek.com/job/90000004?savedSearchID=x&tracking=JMC]
+Tech LeadNew
+Litware
+
+Very strong applicant
+
+Sydney NSW
+
+[https://au.seek.com/job/90000005?savedSearchID=x&tracking=JMC]
+
+Take your next career step
+[https://seekcdn.com/notifications/apac-mail/jobmail/rank.png]
+
+Take your next career step
+Your destination for personalised advice and guidance on your career, salary and
+job opportunities.
+
+Explore now
+[https://au.seek.com/?tracking=JMC-SavedSearch-anz-1-careerfeed-ss-pca-b]
+
+Jobs you may have missed
+Matches your preference, posted few days ago
+
+logo
+[https://bx-branding-gateway.cloud.seek.com.au/cccc.1/serpLogo]
+
+Senior Software Engineer
+Adatum Recruitment
+
+Posted on 14 Oct 2026
+Sydney NSW
+Day rate up to $1,000
+
+[https://au.seek.com/job/90000006?savedSearchID=x&tracking=JMC-JYMHM]
+
+View all matching jobs
+[https://au.seek.com/jobs?keywords=engineering+manager&savedSearchID=x]

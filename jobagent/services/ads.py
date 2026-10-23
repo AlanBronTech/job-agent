@@ -14,6 +14,7 @@ So a fragment of a name — `acme` — is matched against the drop folder, and
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -204,6 +205,10 @@ def add(
         jd.id = store.add_jd(conn, jd)
         log_attribution(ws.runs_log_path, client.context.run_id, jd.id)
         seen_before = history.company_history(conn, jd)
+    # An ad an alert suggested has now been saved: record the decision.
+    from jobagent.services import alerts
+
+    alerts.link_ad(ws, jd, datetime.now(timezone.utc))
     return AddResult(jd=jd, history=seen_before, thin_chars=ad.thin_chars)
 
 

@@ -606,6 +606,59 @@ you exported it from.
 Applications made outside the tool: `jobagent outside add|list|link` (see
 *Applying again*).
 
+### Job alerts from SEEK and LinkedIn
+
+`jobagent alerts` reads your SEEK and LinkedIn alert emails and lists only
+the jobs worth a look, with a plain link to each. Free, no model calls. It
+reads the emails, never the job pages: you open the link, give the ad a
+once-over, and save it as usual.
+
+```
+jobagent alerts                          # read new alert emails, list what to look at
+jobagent alerts decide nr 14 15          # record what you made of them
+jobagent alerts decide nq 17 --note "needs Go"
+jobagent alerts list --skipped           # what the filter left out, and why
+jobagent alerts report                   # how good the suggestions have been
+jobagent alerts fetch --since 2026-10-20 # or --dir FOLDER for saved .eml files
+```
+
+**Setup.** In `.env`: `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD`, an app password
+(Google Account → Security → 2-Step Verification → App passwords), never your
+real password. The mailbox is opened read-only: nothing is marked read, moved
+or deleted. All Mail and the bin are both searched, because alerts get binned
+once read. Each run reads from the day before the last run (a week the first
+time).
+
+**What gets suggested.** Every listing is kept, one row per job however many
+emails it came in, and judged:
+
+- *Skipped* when the title matches `never_titles` in `assets.yaml`, when a
+  stated salary or day rate tops out under your floors, when the title is no
+  target role, when the ad is already in JobAgent (by its link, or the same
+  company and title), when you decided on the same job before, or when it is
+  the same job as another listing (the same role on SEEK and LinkedIn is
+  suggested once).
+- *Worth a look* when the title matches `want_titles`; *Maybe* for
+  `maybe_titles`, and for `contract_titles` (hands-on roles) only with a day
+  rate at or above `min_day_rate_aud`.
+- Earlier ads from the same company are shown beside a suggestion, never used
+  to drop it. Undecided suggestions drop off after 21 days.
+
+**Decisions** (short form in brackets):
+
+| Decision | Means | What it teaches |
+|---|---|---|
+| `saved` (s) | Saved the ad to process | Set by itself when `jd add` reads an ad whose link an alert suggested |
+| `not_relevant` (nr) | Wrong kind of job; the title misled | Candidates for `never_titles` (`report` lists them) |
+| `not_qualified` (nq) | Right kind of job, missing a must-have | A gap that recurs belongs in the profile, or is a real hole; add `--note` |
+| `not_interested` (ni) | Could do it, don't want it: pay, company, terms, location | Preferences |
+| `already_applied` (aa) | Applied elsewhere or before | |
+| `expired` (x) | Closed or gone | |
+| `later` (l) | Not decided; stays on the list | |
+
+If an alert email yields no jobs at all, `alerts` says so: that is how a
+changed email layout shows up.
+
 ### Contacts and follow-ups
 
 Agency recruiters and contract desks are where the human replies come from,

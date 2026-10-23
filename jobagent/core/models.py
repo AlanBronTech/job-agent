@@ -410,12 +410,30 @@ class ContractOffer(_Base):
     note_for_scorer: str | None = None
 
 
+class AlertRules(_Base):
+    """Which job-alert listings are worth a look (`jobagent alerts`).
+
+    Matched against the listing's title as whole words, case and punctuation
+    folded. `never_titles` wins over everything; `want_titles` are suggested;
+    `maybe_titles` are suggested lower down; `contract_titles` (hands-on roles)
+    only when the listing states a day rate at or above the floor. A title
+    matching none of them is not suggested. Alan's preference, so it lives in
+    the profile, not in code.
+    """
+
+    want_titles: list[str] = Field(default_factory=list)
+    maybe_titles: list[str] = Field(default_factory=list)
+    contract_titles: list[str] = Field(default_factory=list)
+    never_titles: list[str] = Field(default_factory=list)
+
+
 class AssetsFile(_Base):
     narrative: Narrative = Field(default_factory=Narrative)
     differentiators: list[Differentiator] = Field(default_factory=list)
     contract_offers: list[ContractOffer] = Field(default_factory=list)
     target_roles: list[str] = Field(default_factory=list)
     target_filters: TargetFilters
+    alerts: AlertRules | None = None
     positive_signals: list[str] = Field(default_factory=list)
     negative_signals: list[str] = Field(default_factory=list)
 
@@ -935,6 +953,59 @@ class Contact(_Base):
     notes: str = ""
     jd_id: int | None = None
     created_at: datetime
+
+
+class AlertVerdict(str, Enum):
+    """What the code made of a listing. Advice; Alan's decision is separate."""
+
+    suggest = "suggest"
+    maybe = "maybe"
+    skip = "skip"
+
+
+class AlertDecision(str, Enum):
+    """What Alan decided after a look at a suggested listing.
+
+    Kept apart because each answers a different question later:
+    `not_relevant` says the title filter let through the wrong kind of job;
+    `not_qualified` names a gap in the profile, the signal the security gap
+    came from; `not_interested` is a preference (pay, company, terms,
+    location); `saved` is the funnel into `jd add`.
+    """
+
+    saved = "saved"
+    not_relevant = "not_relevant"
+    not_qualified = "not_qualified"
+    not_interested = "not_interested"
+    already_applied = "already_applied"
+    expired = "expired"
+    later = "later"
+
+
+class AlertListing(_Base):
+    """One job seen in a SEEK or LinkedIn alert email, deduplicated by its id.
+
+    Only what the email says: nothing here comes from opening the job page
+    (CLAUDE.md, hard rule 1).
+    """
+
+    id: int | None = None
+    source: str  # "seek" | "linkedin"
+    job_id: str
+    title: str
+    company: str = ""
+    location: str = ""
+    pay: str = ""
+    url: str
+    first_seen: datetime
+    last_seen: datetime
+    times_seen: int = 1
+    verdict: AlertVerdict = AlertVerdict.skip
+    reason: str = ""
+    decision: AlertDecision | None = None
+    decided_at: datetime | None = None
+    note: str = ""
+    jd_id: int | None = None
 
 
 class RevisionNote(_Base):

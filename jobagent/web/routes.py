@@ -930,3 +930,78 @@ async def settings_save(request: Request):
     form = await checked_form(request)
     settings.save(request.app.state.config, settings.from_form(form))
     return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+# --------------------------------------------------------------------------- #
+# Job alerts
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/alerts")
+def alerts_page(request: Request, show: str = "pending", fetched: str = "", error: str = ""):
+    from datetime import timezone
+
+    from jobagent.core.models import AlertDecision, AlertVerdict
+    from jobagent.services import alerts
+
+    ws, now = workspace(request), datetime.now(timezone.utc)
+    if show == "skipped":
+        rows, items = alerts.listings(ws, verdict=AlertVerdict.skip), []
+    elif show == "decided":
+        rows, items = [r for r in alerts.listings(ws) if r.decision is not None], []
+    else:
+        show, rows, items = "pending", [], alerts.pending(ws, now)
+    return render(request, "alerts.html", {
+        "nav": "alerts", "show": show, "items": items, "rows": rows,
+        "decisions": list(AlertDecision), "fetched": fetched, "error": error,
+    })
+
+
+@router.post("/alerts/fetch")
+async def alerts_fetch(request: Request):
+    from datetime import timezone
+    from urllib.parse import quote
+
+    from jobagent.services import alerts
+
+    await checked_form(request)
+    ws, config, now = workspace(request), config_of(request), datetime.now(timezone.utc)
+    try:
+        result = alerts.fetch(
+            ws, address=config.gmail_address, app_password=config.gmail_app_password,
+            since=alerts.default_since(ws, now.date()), now=now,
+        )
+    except alerts.NoMailbox:
+        return RedirectResponse("/alerts?error=" + quote(
+            "Set GMAIL_ADDRESS and GMAIL_APP_PASSWORD in .env, then restart the UI."), status_code=303)
+    except (alerts.MailboxFailed, ProfileInvalid) as refusal:
+        return RedirectResponse("/alerts?error=" + quote(refusal.detail), status_code=303)
+    except (alerts.NoAlertRules, ProfileMissing):
+        return RedirectResponse("/alerts?error=" + quote(
+            "No `alerts:` section in assets.yaml, or no profile configured."), status_code=303)
+    summary = (
+        f"Read {result.emails} email(s): {result.listings} listing(s), {result.new} new, "
+        f"{result.suggested} to look at."
+        + (f" Could not read jobs from: {'; '.join(result.unread)}." if result.unread else "")
+    )
+    return RedirectResponse("/alerts?fetched=" + quote(summary), status_code=303)
+
+
+@router.post("/alerts/{listing_id:int}/decide")
+async def alerts_decide(request: Request, listing_id: int):
+    from datetime import timezone
+
+    from jobagent.core.models import AlertDecision
+    from jobagent.services import alerts
+
+    form = await checked_form(request)
+    try:
+        decision = AlertDecision(str(form.get("decision", "")))
+    except ValueError:
+        return PlainTextResponse("Unknown decision.", status_code=400)
+    try:
+        alerts.decide(workspace(request), [listing_id], decision,
+                      note=str(form.get("note", "")), now=datetime.now(timezone.utc))
+    except alerts.NoSuchListing:
+        return PlainTextResponse(f"No alert listing {listing_id}.", status_code=404)
+    return RedirectResponse(f"/alerts?show={form.get('show') or 'pending'}", status_code=303)

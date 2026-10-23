@@ -89,3 +89,12 @@ negative_signals:
   - Job ad has been reposted repeatedly over months
   - No salary band disclosed
   - Seniority materially below target with no compensating factor
+
+# `jobagent alerts`: which jobs in alert emails are worth a look. Whole words,
+# case and punctuation ignored. never_titles wins; contract_titles only with a
+# stated day rate at or above min_day_rate_aud.
+alerts:
+  want_titles: [engineering manager, head of engineering, delivery lead, delivery manager, technical project manager]
+  maybe_titles: [tech lead, project manager, solution architect]
+  contract_titles: [software engineer, developer]
+  never_titles: [network, civil, data scientist, junior, sales]

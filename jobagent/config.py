@@ -100,6 +100,11 @@ class Config(BaseSettings):
 
     db_path: Path = Field(default=Path("~/.job-agent/jobagent.db"))
 
+    # `jobagent alerts`: SEEK and LinkedIn alert emails read over IMAP,
+    # read-only. A Gmail app password, never the account password.
+    gmail_address: str | None = None
+    gmail_app_password: str | None = None
+
     @field_validator(
         "profile_dir", "db_path", "runs_log_path", "output_dir", "jd_dir", mode="after"
     )
