@@ -14,7 +14,7 @@
       <a href="/" {% if nav == "ads" %}aria-current="page"{% endif %}>Jobs</a>
       <a href="/ads/new" {% if nav == "add" %}aria-current="page"{% endif %}>Add a job</a>
       <a href="/batch" {% if nav == "batch" %}aria-current="page"{% endif %}>Batch</a>
-      <a href="/alerts" {% if nav == "alerts" %}aria-current="page"{% endif %}>Alerts</a>
+      <a href="/alerts" {% if nav == "alerts" %}aria-current="page"{% endif %}>Alerts{% if alerts_pending %} <span class="pill warn" title="Jobs from your alert emails to look at">{{ alerts_pending }}</span>{% endif %}</a>
       <a href="/settings" {% if nav == "settings" %}aria-current="page"{% endif %}>Settings</a>
     </nav>
   </header>

@@ -10,6 +10,9 @@
     <a href="/?sort=score" {% if sort == "score" %}aria-current="true"{% endif %}>score</a>
   </div>
 </div>
+{% if alerts_pending %}
+  <div class="banner warn"><a href="/alerts">{{ alerts_pending }} job{{ "s" if alerts_pending != 1 }} from your alert emails to look at →</a></div>
+{% endif %}
 {% if not rows %}
   <p class="empty">No jobs yet. Add one with <code>jobagent jd add --latest</code>.</p>
 {% else %}

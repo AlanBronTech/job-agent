@@ -119,11 +119,19 @@ def render(request: Request, name: str, context: dict, status_code: int = 200):
         unseen = runs.unseen_finished(workspace(request))
     except Exception:  # the banner must never take a page down with it
         unseen = []
-    from jobagent.services import pipeline
+    from jobagent.services import alerts, pipeline
+
+    try:
+        from datetime import datetime, timezone
+
+        alerts_pending = alerts.pending_count(workspace(request), datetime.now(timezone.utc))
+    except Exception:  # nor must the alerts count
+        alerts_pending = 0
 
     context = {
         "token": request.app.state.token,
         "unseen": unseen,
+        "alerts_pending": alerts_pending,
         "pipeline": {
             "statuses": pipeline.STATUS_LABELS,
             "channels": pipeline.CHANNELS,

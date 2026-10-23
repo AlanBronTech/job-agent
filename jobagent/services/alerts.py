@@ -233,6 +233,18 @@ def pending(ws: Workspace, now: datetime) -> list[Pending]:
     return [Pending(row, _history(row, ads, applications)) for row in rows]
 
 
+def pending_count(ws: Workspace, now: datetime) -> int:
+    """How many suggestions wait for a look. Cheap: no profile, no mailbox."""
+    with store.open_store(ws.db_path) as conn:
+        return len(_pending_rows(store.list_alerts(conn), now))
+
+
+def last_fetch(ws: Workspace) -> datetime | None:
+    with store.open_store(ws.db_path) as conn:
+        value = store.get_meta(conn, LAST_FETCH)
+    return datetime.fromisoformat(value) if value else None
+
+
 def _pending_rows(rows: list[AlertListing], now: datetime) -> list[AlertListing]:
     cutoff = now - STALE_AFTER
     keep = [

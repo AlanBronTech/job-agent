@@ -954,6 +954,7 @@ def alerts_page(request: Request, show: str = "pending", fetched: str = "", erro
     return render(request, "alerts.html", {
         "nav": "alerts", "show": show, "items": items, "rows": rows,
         "decisions": list(AlertDecision), "fetched": fetched, "error": error,
+        "last_fetch": alerts.last_fetch(ws),
     })
 
 

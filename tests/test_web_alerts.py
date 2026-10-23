@@ -63,3 +63,13 @@ def test_a_decision_takes_it_off_the_list(ws, client):
 def test_check_email_without_a_mailbox_says_what_to_set(client):
     response = client.post("/alerts/fetch", data={"csrf": TOKEN})
     assert response.status_code == 303 and "GMAIL_ADDRESS" in response.headers["location"].replace("%20", " ")
+
+
+def test_the_nav_and_the_jobs_page_say_how_many_wait(ws, client):
+    assert "from your alert emails" not in client.get("/").text
+    seed(ws)
+    n = alerts.pending_count(ws, datetime.now(timezone.utc))
+    jobs = client.get("/").text
+    assert f"{n} jobs from your alert emails to look at" in jobs
+    assert f'title="Jobs from your alert emails to look at">{n}</span>' in client.get("/settings").text
+    assert "Last checked" in client.get("/alerts").text

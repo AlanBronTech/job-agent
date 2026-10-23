@@ -11,6 +11,7 @@
 <p class="detail">Jobs from your SEEK and LinkedIn alert emails that are worth a look. Only the emails are read;
   open each link yourself, give the ad a once-over, and record what you made of it. Saving the ad and adding it
   marks it saved by itself. Free.</p>
+<p class="muted">{% if last_fetch %}Last checked {{ last_fetch | local("%-d %b %Y, %H:%M") }}.{% else %}Not checked yet.{% endif %}</p>
 <div class="sort">
   Show:
   <a href="/alerts" {% if show == "pending" %}aria-current="true"{% endif %}>to look at</a>
