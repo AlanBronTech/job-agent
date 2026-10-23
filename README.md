@@ -128,7 +128,7 @@ A contract or fixed-term ad is scored the way a contractor is bought:
   with no figure is asked for the day rate.
 - **The ad is matched to one of your `contract_offers`** in `assets.yaml`
   (delivery lead, interim EM, .NET modernisation, AI coding-tool adoption,
-  senior engineer, Scrum adoption), shown as *Contract offer* on the
+  senior full-stack engineer, AI application engineer, Scrum adoption), shown as *Contract offer* on the
   assessment. No match is usually a skip.
 - **Short contracts count for you, not against you**, and the scorer judges
   whether the work is deliverable in three to six months.
