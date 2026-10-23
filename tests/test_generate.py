@@ -727,3 +727,20 @@ def test_the_resume_hands_its_prose_to_the_claim_check(jd, profile, assessment) 
     sentences = resume_sentences(chosen)
     assert [s.cites for s in sentences] == [["a"], ["b", "c"], [chosen.highlights[0].source_ref]]
     assert sentences[2].text.startswith("AI in production — ")
+
+
+def test_the_catalogue_shows_which_story_a_bullet_tells(profile) -> None:
+    """The writer cannot keep to the reuse caps without seeing the links they count."""
+    from jobagent.core.generate import _render_catalogue, build_catalogue
+
+    linked = [
+        (entry.id, i, b.linked_story)
+        for entry in profile.roles.roles
+        for i, b in enumerate(entry.bullets)
+        if b.linked_story
+    ]
+    assert linked, "profile.example should link at least one bullet to a story"
+    text = _render_catalogue(profile, build_catalogue(profile))
+    entry_id, index, story = linked[0]
+    line = next(l for l in text.splitlines() if l.strip().startswith(f"{entry_id}.{index} "))
+    assert line.endswith(f"(story: {story})")

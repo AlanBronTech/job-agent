@@ -1,4 +1,4 @@
-# generate_resume — v6
+# generate_resume — v7
 
 Select and order profile content for one specific job advertisement.
 
@@ -133,11 +133,21 @@ Skill category keys available: {skills}
     AI-capability entries are not roles. Their bullets are still yours to use
     as a highlight `source_ref`, which is where the master resume puts the
     strongest of them.
-12. **One story, at most twice.** A story — a story id, or any bullet linked
-    to it — appears at most twice on the resume: a short highlight and one
-    experience bullet. Never also in the PROFILE paragraphs when it has a
-    bullet. List in `profile_refs` the ids each PROFILE paragraph draws on, so
-    this can be checked. Reuse past the cap is rejected.
+12. **One story, at most twice.** A story — a story id, any bullet tagged
+    with it, or an untagged bullet on its own — appears at most twice on the
+    resume: a short highlight and one experience bullet. Reuse past the cap
+    is rejected. **Work in this order, because this rule fails more drafts
+    than any other:**
+    1. Choose the EXPERIENCE bullets.
+    2. Choose the highlights. A highlight may share a story with one chosen
+       bullet, no more.
+    3. Write the PROFILE last, **only from evidence that is not among the
+       chosen bullets**: entry ids cited bare (a bare entry id does not count
+       against the cap), earlier-career ids, or stories with no chosen
+       bullet. If a PROFILE sentence needs a chosen bullet's story, cut the
+       sentence or drop the bullet — never both.
+    4. Before answering, compare `profile_refs` with `roles[].bullet_refs`
+       and their story tags. Any overlap is rejected.
 13. **Every PROFILE paragraph cites.** `profile_refs` has one non-empty list
     per paragraph, and every claim in the paragraph comes from what those ids
     say. A paragraph with no ids is rejected. Context or a revision note

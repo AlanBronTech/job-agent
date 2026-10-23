@@ -1,4 +1,4 @@
-# generate_answers — v2
+# generate_answers — v3
 
 Answer the free-text application questions for one job, in Alan Bron's voice.
 
@@ -83,7 +83,8 @@ Character limit per answer: {limit}
    exactly as the evidence gives them.
 4. **A `why_company` answer uses only the ad's own words** (cite `"ad"`) or
    Alan's bank entry. Nothing about the company that the ad does not say.
-5. **No story twice across the form.** One story, one answer.
+5. **No story twice across the form.** One story, one answer — a story's id,
+   any bullet tagged with it, and an untagged bullet each count as one.
 6. **A question about something the profile does not evidence gets an honest
    answer** naming what he has done instead. Never fabricate, never dodge.
 7. **Where `stories.explanations` covers the question, use its wording.**

@@ -1346,6 +1346,9 @@ def _render_catalogue(
         "may be written about. It is not content: never copy it onto the page. "
         "It binds every highlight, PROFILE sentence and letter sentence that "
         "draws on that material.)\n"
+        "(A `story:` tag means the bullet tells that story. Bullets with the "
+        "same tag, and the story itself, are one story for every reuse cap; a "
+        "bullet with no tag is its own story.)\n"
     )
     lines.append("## Roles (EXPERIENCE section)")
     for role in roles.roles:
@@ -1358,7 +1361,7 @@ def _render_catalogue(
                 continue
             lines.append(
                 f"  {role.id}.{index}  [{bullet.evidence_strength.value}] "
-                f"{bullet.text}"
+                f"{bullet.text}{_story_tag(bullet)}"
             )
             _append_writer_note(lines, bullet.note_for_writer, "    ")
 
@@ -1378,7 +1381,7 @@ def _render_catalogue(
         for index, bullet in enumerate(entry.bullets):
             if f"{entry.id}.{index}" not in catalogue:
                 continue
-            lines.append(f"  {entry.id}.{index}  {bullet.text}")
+            lines.append(f"  {entry.id}.{index}  {bullet.text}{_story_tag(bullet)}")
             _append_writer_note(lines, bullet.note_for_writer, "    ")
 
     lines.append(
@@ -1394,7 +1397,7 @@ def _render_catalogue(
         for index, bullet in enumerate(entry.bullets):
             if f"{entry.id}.{index}" not in catalogue:
                 continue
-            lines.append(f"  {entry.id}.{index}  {bullet.text}")
+            lines.append(f"  {entry.id}.{index}  {bullet.text}{_story_tag(bullet)}")
             _append_writer_note(lines, bullet.note_for_writer, "    ")
 
     lines.append(
@@ -1408,6 +1411,16 @@ def _render_catalogue(
         lines.append(f"  {entry.id} — {entry.company}: {entry.summary}")
 
     return "\n".join(lines)
+
+
+def _story_tag(bullet) -> str:
+    """Which story a bullet tells, so the writer can see what the reuse caps count.
+
+    Half of the drafts rejected in October were rejected for telling one story
+    twice, and the writer could not have known: the link between a bullet and
+    its story lived only in the profile, never in what it was shown.
+    """
+    return f"  (story: {bullet.linked_story})" if bullet.linked_story else ""
 
 
 def _append_writer_note(lines: list[str], note: str | None, indent: str) -> None:

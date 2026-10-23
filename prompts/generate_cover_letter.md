@@ -1,4 +1,4 @@
-# generate_cover_letter — v6
+# generate_cover_letter — v7
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -127,8 +127,12 @@ from what you are shown. Do not refer to it from memory.
    {on_resume}
    </on_resume>
 
-9. **Each story once.** A story (or a bullet linked to it) is told in one
-   paragraph only; a second paragraph citing it is rejected.
+9. **Each story once.** A story — its id, any bullet tagged with it, or an
+   untagged bullet on its own — is told in one paragraph only; a second
+   paragraph citing it is rejected. Plan the paragraphs first, one story
+   each, and before answering check that no two paragraphs cite the same
+   story or the same untagged bullet. Do not refer back to a story told in
+   an earlier paragraph: give the later paragraph a different story.
 10. **Do not open by reading the ad back.** No sentence may begin "You're
    hiring", "You are looking for", "You want someone" — rejected, and every
    letter opened that way reads as a template. Open on the strongest evidence.
