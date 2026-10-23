@@ -802,8 +802,8 @@ Roughly half of that is judgement that has to stay human. The other half is
 mechanical selection from a fixed set of evidence, which is exactly what an LLM
 does well when it is constrained to a structured source of truth.
 
-The measurable claim is in `evals/`: the fit scorer is graded against fourteen
-real applications with known outcomes, on whether applying was worth the day
-rather than on whether the employer said yes. It currently agrees with your
-judgment on 10 of 14, and every one of its errors is in the same direction.
-That number, and knowing which way it is wrong, is the point of the project.
+The scorer is graded in `evals/` against real applications, on whether
+applying was worth the day rather than on whether the employer said yes. The
+set is too small to measure quality; it detects a prompt edit that moves
+verdicts beyond the noise floor. `docs/WRITEUP.md` explains the design for
+someone outside the project; `docs/decisions.md` keeps why each rule exists.
