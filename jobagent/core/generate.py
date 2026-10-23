@@ -97,6 +97,47 @@ RESUME_MAX_TOKENS = 32768
 # voice.md: "Under 350 words. One page."
 COVER_LETTER_MAX_WORDS = 350
 
+
+@dataclass(frozen=True)
+class ResumeLength:
+    """How long a resume should render, in pages (Alan, 2026-10-23).
+
+    `low`..`high` is the target; `limit` is the most that may go out, and a
+    resume over it is a blocker. Measured after rendering
+    (`adapters/pages.py`), because only a layout engine knows.
+    """
+
+    low: float
+    high: float
+    limit: float
+    rule: str
+
+
+FULL_TIME_LENGTH = ResumeLength(
+    low=2.0, high=2.75, limit=3.0,
+    rule=(
+        "**About two and a half pages, never more than three.** That is roughly "
+        "22-28 role bullets in total across all roles, plus the highlights. Cut, "
+        "do not cram — a bullet that does not answer something in this ad is "
+        "taking space from one that does."
+    ),
+)
+CONTRACT_LENGTH = ResumeLength(
+    low=1.5, high=1.75, limit=1.75,
+    rule=(
+        "**A contractor CV: one and a half to one and three-quarter pages.** A "
+        "contractor is bought for a specific piece of work, so this is shorter "
+        "than a permanent resume. Roughly 10-14 role bullets in total: two or "
+        "three for the roles that evidence this contract, one for the rest. "
+        "Choose at most three `earlier_career_ids`, the most relevant. Cut "
+        "everything that does not answer this ad."
+    ),
+)
+
+
+def resume_length(contract: bool) -> ResumeLength:
+    return CONTRACT_LENGTH if contract else FULL_TIME_LENGTH
+
 # CLAUDE.md, hard rule 4: "If a draft contains banned phrases, regenerate."
 # One retry, with the specific failures named. A second retry has not been
 # worth it in practice — a model that misses twice is missing something the
@@ -238,6 +279,7 @@ def build_resume(
     kind: RoleClassification | None = None,
     instructions: str | None = None,
     feedback: str | None = None,
+    length: ResumeLength = FULL_TIME_LENGTH,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
@@ -262,6 +304,7 @@ def build_resume(
         selection = _ask_for_selection(
             jd, profile, assessment, catalogue, client=client, kind=kind,
             excluded=excluded, retry_note=retry_note, instructions=instructions,
+            length=length,
         )
         built = _check_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
@@ -416,6 +459,7 @@ def _ask_for_selection(
     excluded: set[str] = frozenset(),
     retry_note: str | None = None,
     instructions: str | None = None,
+    length: ResumeLength = FULL_TIME_LENGTH,
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
@@ -429,6 +473,7 @@ def _ask_for_selection(
             catalogue=_render_catalogue(profile, catalogue, excluded),
             skills=", ".join(profile.roles.skills),
             voice=profile.voice,
+            length_rule=length.rule,
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc

@@ -214,6 +214,8 @@ def generate(
         console.print(f"[dim]Earlier documents kept in {config.output_dir / result.superseded}[/]")
     _report_coverage(result.coverage)
     _report(result.folder, result.written, result.issues, result.unused)
+    if result.resume_pages is not None:
+        console.print(f"Resume: {result.resume_pages:.2f} pages, measured.")
     _report_readiness(result)
 
 

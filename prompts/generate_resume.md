@@ -1,4 +1,4 @@
-# generate_resume — v5
+# generate_resume — v6
 
 Select and order profile content for one specific job advertisement.
 
@@ -90,9 +90,7 @@ Skill category keys available: {skills}
 
 ## Rules
 
-1. **Two pages maximum.** That is roughly 20-24 role bullets in total across
-   all roles, plus the highlights. Cut, do not cram — a bullet that does not
-   answer something in this ad is taking space from one that does.
+1. {length_rule} The rendered page count is measured afterwards.
 2. **Reverse chronological, all of it.** The catalogue lists roles newest
    first; keep that order. Do not promote an older role because it fits better
    — promote its bullets within the role instead, and lead the PROFILE
@@ -127,7 +125,7 @@ Skill category keys available: {skills}
    no "since 2006", no decades. Role dates are added by the renderer; you do
    not write them.
 10. **`earlier_career_ids`** — all of them, in catalogue order, unless one is
-    genuinely irrelevant to this ad. **Closed founder ventures go here too**,
+    genuinely irrelevant to this ad or rule 1 limits them. **Closed founder ventures go here too**,
     interleaved in catalogue order; each renders as one dated line. An entry
     marked `[ongoing]` has no line — it is not employment history. Cite it in
     the highlights instead.

@@ -48,4 +48,4 @@ No defensive or self-referential phrasing: "not a claim", "not advisory",
 
 - A letter names one gap honestly, in one sentence. That is deliberate.
 - Founder ventures in EARLIER CAREER show their years, e.g. "(2006–16)".
-- The resume's format, section order and two-to-three-page length are fixed.
+- The resume's format and section order are fixed; its length is measured in code (about 2.5 pages, never over 3; a contractor CV 1.5-1.75).

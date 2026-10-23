@@ -83,6 +83,8 @@ class GenerateResult:
     review: object = None
     # No blockers, the claim check did not fail, and the review found nothing.
     ready: bool = False
+    # The resume's rendered length; None without a resume or LibreOffice.
+    resume_pages: float | None = None
 
 
 @dataclass

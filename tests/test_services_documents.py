@@ -419,3 +419,56 @@ def test_a_resume_mismatch_that_survives_marks_it_not_ready(ws, ids, fake_model,
     result = run(ws, ids["acme"])
     assert result.written[0].name.endswith("_NOT-READY.docx")
     assert any(i.rule == "claim mismatch" for i in result.issues)
+
+
+def test_a_resume_over_the_page_limit_is_selected_again(ws, ids, fake_model, monkeypatch):
+    drafts = []
+
+    def resume(*a, feedback=None, length=None, **k):
+        drafts.append((feedback, length))
+        return SimpleNamespace(content=object(), issues=[], unused=[])
+    monkeypatch.setattr(documents, "build_resume", resume)
+    monkeypatch.setattr(documents, "write_resume", lambda content, path: (path.write_bytes(b"x"), path)[1])
+    monkeypatch.setattr(documents, "resume_text", lambda content: "resume")
+    measured = [3.4, 2.6]
+    monkeypatch.setattr(documents, "count_pages", lambda path: measured.pop(0))
+
+    result = run(ws, ids["acme"])
+    assert drafts[0][0] is None and "3.40 pages" in drafts[1][0]
+    assert drafts[0][1] is documents.resume_length(False)
+    assert result.resume_pages == 2.6
+    assert not any(i.rule == "resume length" for i in result.issues)
+    assert not result.written[0].name.endswith("_NOT-READY.docx")
+
+
+def test_a_resume_still_over_the_limit_is_not_ready(ws, ids, fake_model, monkeypatch):
+    monkeypatch.setattr(documents, "build_resume", lambda *a, **k: SimpleNamespace(
+        content=object(), issues=[], unused=[]))
+    monkeypatch.setattr(documents, "write_resume", lambda content, path: (path.write_bytes(b"x"), path)[1])
+    monkeypatch.setattr(documents, "resume_text", lambda content: "resume")
+    monkeypatch.setattr(documents, "count_pages", lambda path: 3.3)
+
+    result = run(ws, ids["acme"])
+    assert [i.severity for i in result.issues if i.rule == "resume length"] == [Severity.blocker]
+    assert result.written[0].name.endswith("_NOT-READY.docx")
+
+
+def test_inside_the_limit_but_off_target_is_a_warning_and_no_rewrite(ws, ids, fake_model, monkeypatch):
+    calls = []
+    monkeypatch.setattr(documents, "build_resume", lambda *a, **k: calls.append(1) or SimpleNamespace(
+        content=object(), issues=[], unused=[]))
+    monkeypatch.setattr(documents, "write_resume", lambda content, path: (path.write_bytes(b"x"), path)[1])
+    monkeypatch.setattr(documents, "resume_text", lambda content: "resume")
+    monkeypatch.setattr(documents, "count_pages", lambda path: 2.9)
+
+    result = run(ws, ids["acme"])
+    assert calls == [1]
+    assert [i.severity for i in result.issues if i.rule == "resume length"] == [Severity.warning]
+
+
+def test_the_page_lengths():
+    from jobagent.core.generate import resume_length
+
+    full, contract = resume_length(False), resume_length(True)
+    assert (full.low, full.high, full.limit) == (2.0, 2.75, 3.0)
+    assert (contract.low, contract.high, contract.limit) == (1.5, 1.75, 1.75)

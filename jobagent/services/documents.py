@@ -17,7 +17,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import tempfile
+
 from jobagent.adapters import docs
+from jobagent.adapters.pages import count_pages
 from jobagent.adapters.docx_writer import (
     CoverLetterContent,
     DocxError,
@@ -34,8 +37,10 @@ from jobagent.core.generate import (
     build_answers,
     build_cover_letter,
     build_resume,
+    ResumeLength,
     contract_block,
     instructions_block,
+    resume_length,
     resume_text,
 )
 from jobagent.core.validation import banned_phrases
@@ -240,6 +245,7 @@ def generate(
     unused = []
     coverage = []
     claims = None  # None: not run (switched off, or nothing to check)
+    resume_pages = None
     on_resume: dict[str, str] = {}  # what the letter must not repeat
     rendered: dict[str, str] = {}  # what the reviewer reads
 
@@ -252,39 +258,53 @@ def generate(
             raise GenerationFailed("classify", exc, written) from exc
 
     if resume:
-        try:
-            built = build_resume(
-                jd, profile, assessment, client=client, today=today, kind=kind,
-                instructions=instructions("resume", "resume"),
-            )
-        except GenerateError as exc:
-            raise GenerationFailed("resume", exc, written) from exc
-        rewrites["resume"] = list(getattr(built, "rejected", []))
-        found = None
-        sentences = getattr(built, "sentences", [])
-        if check_claims and sentences:
-            found = checks.check_claims(
+        # A contract matched to an offer gets the shorter contractor CV.
+        length = resume_length(contract_block(profile, assessment.contract_offer, letter=False) is not None)
+
+        def select(feedback: str | None = None):
+            try:
+                return build_resume(
+                    jd, profile, assessment, client=client, today=today, kind=kind,
+                    instructions=instructions("resume", "resume"), feedback=feedback,
+                    length=length,
+                )
+            except GenerateError as exc:
+                raise GenerationFailed("resume", exc, written) from exc
+
+        def claim_check(draft):
+            sentences = getattr(draft, "sentences", [])
+            if not (check_claims and sentences):
+                return None
+            return checks.check_claims(
                 config, ctx, sentences, profile, client_factory=lambda: review_client
             )
-            if isinstance(found, list) and found:
-                # As the letter: a mismatch is a blocker, so select again once
-                # with the mismatches named, then check the new draft.
-                rewrites["resume"] += [claim_issues(found)]
-                try:
-                    built = build_resume(
-                        jd, profile, assessment, client=client, today=today, kind=kind,
-                        instructions=instructions("resume", "resume"),
-                        feedback=claims_feedback(found, "resume"),
-                    )
-                except GenerateError as exc:
-                    raise GenerationFailed("resume", exc, written) from exc
-                rewrites["resume"] += list(getattr(built, "rejected", []))
-                found = checks.check_claims(
-                    config, ctx, getattr(built, "sentences", []), profile,
-                    client_factory=lambda: review_client,
-                )
+
+        built = select()
+        rewrites["resume"] = list(getattr(built, "rejected", []))
+        found = claim_check(built)
+        if isinstance(found, list) and found:
+            # As the letter: a mismatch is a blocker, so select again once
+            # with the mismatches named, then check the new draft.
+            rewrites["resume"] += [claim_issues(found)]
+            built = select(claims_feedback(found, "resume"))
+            rewrites["resume"] += list(getattr(built, "rejected", []))
+            found = claim_check(built)
+        # Length is measured on the rendered page, so only after a draft
+        # exists; one more selection if it is over the limit or short.
+        pages = measure_pages(built.content)
+        if pages is not None and (pages > length.limit or pages < length.low):
+            rewrites["resume"] += [[length_issue(pages, length)]]
+            built = select(length_feedback(pages, length))
+            rewrites["resume"] += list(getattr(built, "rejected", []))
+            found = claim_check(built)
+            pages = measure_pages(built.content)
+        if found is not None:
             claims = merge_claims(claims, found)
         resume_issues = list(built.issues) + claim_issues(found)
+        if pages is not None:
+            resume_pages = pages
+            if pages > length.limit or not (length.low <= pages <= length.high):
+                resume_issues.append(length_issue(pages, length))
         issues += resume_issues
         per_document["resume"] = resume_issues
         unused = built.unused
@@ -438,6 +458,7 @@ def generate(
         claims=claims,
         review=reviewed,
         ready=is_ready(issues, claims, reviewed),
+        resume_pages=resume_pages,
     )
 
 
@@ -466,6 +487,52 @@ def _name(kind: str, jd, today, *, blocked: bool) -> str:
     """
     name = docs.document_name(kind, jd, when=today)
     return name.replace(".docx", "_NOT-READY.docx") if blocked else name
+
+
+def measure_pages(content) -> float | None:
+    """Render the resume to a scratch file and count its pages. None if it cannot be counted."""
+    if isinstance(content, str):  # a resume that was never assembled
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "resume.docx"
+        try:
+            write_resume(content, path)
+        except DocxError:
+            return None
+        return count_pages(path)
+
+
+def length_issue(pages: float, length: ResumeLength):
+    """Over the limit is a blocker; otherwise outside the target is a warning."""
+    from jobagent.core.validation import Severity, ValidationIssue
+
+    over = pages > length.limit
+    return ValidationIssue(
+        rule="resume length",
+        severity=Severity.blocker if over else Severity.warning,
+        detail=(
+            f"The resume renders at {pages:.2f} pages; the target is "
+            f"{length.low:g}-{length.high:g}" + (f" and the limit {length.limit:g}." if over else ".")
+        ),
+    )
+
+
+def length_feedback(pages: float, length: ResumeLength) -> str:
+    if pages > length.limit:
+        ask = (
+            f"It must come down to {length.low:g}-{length.high:g} pages: drop the "
+            "role bullets and earlier-career lines that answer this ad least, and "
+            "shorten nothing that you keep (bullets are copied verbatim)."
+        )
+    else:
+        ask = (
+            f"It should be {length.low:g}-{length.high:g} pages: add role bullets "
+            "that answer this ad, from roles that already have the fewest."
+        )
+    return (
+        "## Your previous selection rendered at the wrong length\n\n"
+        f"Measured on the rendered page: {pages:.2f} pages. {ask} Same JSON."
+    )
 
 
 def claims_feedback(mismatches, document: str) -> str:

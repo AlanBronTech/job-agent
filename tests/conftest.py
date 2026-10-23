@@ -30,6 +30,17 @@ def no_api_keys(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_libreoffice(monkeypatch):
+    """No test renders through LibreOffice: slow, and absent in most places.
+
+    A test that wants a page count patches `count_pages` where it is used.
+    """
+    from jobagent.adapters import pages
+
+    monkeypatch.setattr(pages, "soffice", lambda: None)
+
+
 @pytest.fixture
 def example_dir() -> Path:
     return EXAMPLE_DIR

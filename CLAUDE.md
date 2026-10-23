@@ -70,7 +70,9 @@ may do I/O through `adapters/`, but has no `print`, no `typer`, no
 - Python 3.12, `uv` for env and deps
 - `typer` (CLI), `pydantic` v2 (models), `rich` (output)
 - `anthropic` (LLM), `python-docx` (documents), `PyYAML` (profile)
-- `pypdf` (reading job ads saved as PDF)
+- `pypdf` (reading job ads saved as PDF; counting rendered resume pages)
+- LibreOffice, optional and outside the dependency list: `soffice --headless`
+  renders a resume so its pages can be counted
 - `sqlite3` from stdlib — plain SQL, no ORM
 - `fastapi`, `uvicorn`, `jinja2`, `python-multipart` (the local UI); HTMX
   vendored as one static file, no build step, nothing loaded from a CDN
@@ -131,7 +133,10 @@ on a tab stop at **16.93cm**.
 
 - Cover letters: one page, body under 350 words (contract notes 220).
   Measure the body, not the rendered page (D24).
-- Resumes: two pages preferred, three acceptable (Alan, 2026-09-25).
+- Resumes: about 2.5 pages, never more than 3; a contractor CV (contract ad
+  matched to an offer) 1.5-1.75 pages (Alan, 2026-10-23). Measured by
+  rendering through LibreOffice (`adapters/pages.py`); over the limit is a
+  blocker after one reselection.
 
 ## LLM usage
 
@@ -155,14 +160,15 @@ Built and merged on `main`: phases 0-5 and 7; specs 001 (local UI), 002
 (reapplication, batch), 003 (generation quality); the demo, Settings, cheap
 defaults, the first-pass screen; REVIEW-2026-10-16 fixes; REVIEW-2026-10-18
 tasks 1 (sent copies, `diff`), 2 (`revise`, `context`), 3 (story mechanism
-fields), 5 (contacts), 7 (contract framing, day-rate filter, cover note), 9
+fields), 5 (contacts), 7 (contract framing, day-rate filter, cover note,
+contractor CV), 9
 (`checklists/final-review.md`), 11 (this file; history in
 `docs/decisions.md`); the claim check on the resume's PROFILE and highlights.
 Phase 6 (Gmail triage) and the Drive upload were dropped (`BUILD_PLAN.md`).
 
 Not built: the edits classification table and `edits report` (task 1 — wait
 until enough edited pairs exist to read by hand first), task 8 (needs that
-data), the one-page contractor CV (task 7), 001's pipeline board and prep in
+data), 001's pipeline board and prep in
 the UI, run-log rotation. Task 4 was cut to the write-up only; task 6 waits;
 REVIEW-2026-10-16 D7 is rejected.
 
