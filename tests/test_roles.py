@@ -50,6 +50,30 @@ def test_an_excluded_entry_takes_every_bullet(profile_factory):
     assert roles.is_excluded(f"{entry.id}.0", {entry.id})
 
 
+def test_a_gated_story_is_out_unless_the_ad_names_a_phrase(profile_factory):
+    """Alan, 2026-10-23: the underperformer story only where the ad is about it."""
+    from tests.quality_seed import northwind
+
+    def mutate(path):
+        def change(data):
+            story = next(s for s in data["stories"] if s["id"] == "underperformer")
+            story["exclude_for"] = []
+            story["only_if_ad_mentions"] = ["performance management"]
+        edit_yaml(path / "stories.yaml", change)
+
+    profile = load_profile(profile_factory(mutate))
+    jd = northwind()
+    plain = jd.model_copy(update={"raw_text": "Lead a platform team."})
+    asks = jd.model_copy(update={"raw_text": "You will own Performance Management for the team."})
+    assert {"underperformer", "recent_manager.3"} <= roles.excluded_ids(profile, set(), plain)
+    assert {"underperformer", "recent_manager.3"} <= roles.excluded_ids(profile, set())
+    assert "underperformer" not in roles.excluded_ids(profile, set(), asks)
+    # A kind exclusion still applies when the gate is open.
+    profile.stories.stories[[s.id for s in profile.stories.stories].index("underperformer")].exclude_for = [
+        RoleKind.people_focused]
+    assert "underperformer" in roles.excluded_ids(profile, {RoleKind.people_focused}, asks)
+
+
 def test_skills_order_by_kind_keeps_the_rest_in_the_models_order():
     keys = ["ai_and_automation", "frontend", "delivery", "leadership"]
     assert roles.order_skills(keys, RoleKind.people_focused) == [

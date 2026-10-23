@@ -385,7 +385,7 @@ def generate(
 
     reviewed = None
     if review:
-        excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+        excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
         reviewed = checks.review(
             config,
             ctx,

@@ -276,6 +276,12 @@ class Story(_Base):
     # See Bullet.note_for_writer.
     note_for_writer: str | None = None
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Left out of every written document unless the ad's text contains one of
+    # these phrases (case-insensitive). For a story that is true and useful in
+    # interview but not something to volunteer: managing out an underperformer
+    # belongs on a resume only when the ad asks about performance management
+    # (Alan, 2026-10-23). Bullets linked to the story go with it.
+    only_if_ad_mentions: list[str] = Field(default_factory=list)
 
 
 class Explanations(_Base):

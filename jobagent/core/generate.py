@@ -248,7 +248,7 @@ def build_resume(
     `feedback` is the claim check's verdict on an earlier draft, sent the same way.
     """
     instructions = "\n\n".join(part for part in (instructions, feedback) if part) or None
-    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
     catalogue = build_catalogue(profile, excluded)
     citable = build_citable(profile, excluded)
     retry_note = None
@@ -658,7 +658,7 @@ def build_cover_letter(
     """`feedback` is appended to the prompt: what a previous draft got wrong
     that only a later check could see (the paid claim check). `instructions`
     is Alan's context and revision note, ahead of it."""
-    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
     try:
         prompt = load_prompt(
             COVER_PROMPT,
@@ -714,7 +714,7 @@ def build_answers(
     """
     if not questions:
         raise GenerateError("No application questions were supplied.")
-    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind))
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
     try:
         prompt = load_prompt(
             ANSWERS_PROMPT,

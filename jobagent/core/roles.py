@@ -80,15 +80,23 @@ def kinds_of(classification: RoleClassification | None) -> set[RoleKind]:
     return set(classification.kinds) if classification else set()
 
 
-def excluded_ids(profile: Profile, kinds: Iterable[RoleKind]) -> set[str]:
-    """Every story id, entry id and `entry.index` bullet id excluded for `kinds`."""
+def excluded_ids(
+    profile: Profile, kinds: Iterable[RoleKind], jd: JobDescription | None = None
+) -> set[str]:
+    """Every story id, entry id and `entry.index` bullet id excluded for `kinds`.
+
+    With `jd`, a story gated by `only_if_ad_mentions` is excluded too unless
+    the ad's text names one of its phrases. Without one the gate is closed:
+    the default is to leave such a story out.
+    """
     kinds = set(kinds)
-    if not kinds:
-        return set()
+    text = ad_text(jd)
     out: set[str] = set()
     for story in profile.stories.stories:
-        if kinds & set(story.exclude_for):
+        if kinds & set(story.exclude_for) or not _gate_open(story.only_if_ad_mentions, text):
             out.add(story.id)
+    if not kinds and not out:
+        return set()
     roles = profile.roles
     for group in (roles.roles, roles.founder_track_record, roles.ai_capability):
         for entry in group:
@@ -106,6 +114,17 @@ def excluded_ids(profile: Profile, kinds: Iterable[RoleKind]) -> set[str]:
         if kinds & set(entry.exclude_for):
             out.add(entry.id)
     return out
+
+
+def ad_text(jd: JobDescription | None) -> str:
+    """What a gated story's phrases are looked for in: the ad as saved, and its title."""
+    if jd is None:
+        return ""
+    return f"{jd.title}\n{jd.raw_text}".casefold()
+
+
+def _gate_open(phrases: list[str], text: str) -> bool:
+    return not phrases or any(p.casefold() in text for p in phrases)
 
 
 def is_excluded(ref: str, excluded: set[str]) -> bool:

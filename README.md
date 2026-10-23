@@ -373,7 +373,10 @@ technical lead or AI enablement — and `score` shows it with the assessment.
 The kind decides what leads the resume and the order of the skills table, and
 anything you mark `exclude_for: [people_focused]` (on a story, an entry or a
 bullet in `profile/`) is never shown to the writer for that kind of ad; citing
-it anyway is a blocker. Interview prep still uses it.
+it anyway is a blocker. Interview prep still uses it. A story can instead
+carry `only_if_ad_mentions: [performance management, underperform, …]`: it is
+then left out of every resume, letter and answer unless the ad's text contains
+one of those phrases (bullets linked to it go with it).
 
 After the folder list you get:
 
