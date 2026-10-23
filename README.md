@@ -735,27 +735,30 @@ generated copies it is measured against, neither of which regenerates.
 
 ## Costs, roughly
 
-Measured, not estimated — the mean per call from `runs.jsonl`. These figures
-predate the cheap-model defaults and the per-step reasoning levels of
-2026-10-14; reading an ad should now cost nothing on the free tier, and the
-estimate each command prints is the current one.
+Measured from `runs.jsonl`: the mean per successful call from 2026-10-14 (the
+cheap-model defaults and per-step reasoning levels) to 2026-10-23, real work
+only. Re-run `jobagent spend` before quoting any of these.
 
-| Action | Cost |
-|---|---|
-| `jd add` | ~$0.03 |
-| `score` | ~$0.11 |
-| `generate --resume --cover` | ~$0.13 |
-| first-pass screen, per ad | ~$0.002 (65 real calls) |
-| role kind, once per ad | ~$0.003 |
-| claim check, per generate | ~$0.01 |
-| independent review, when asked for | ~$0.12 |
-| `prep` | ~$0.11 |
-| Everything else, `spend` included | free |
+| Call | Mean | Calls |
+|---|---|---|
+| parse an ad (`jd add`) | ~$0.03 | 21 |
+| first-pass screen, per ad | ~$0.002 | 6 |
+| role kind, once per ad | ~$0.005 | 21 |
+| `score` | ~$0.12 | 22 |
+| resume selection, per draft | ~$0.19 | 21 |
+| cover letter, per draft | ~$0.08 | 36 |
+| claim check, per document | ~$0.02 | 18 |
+| independent review, when asked for | ~$0.15 | 2 |
+| Everything else, `spend` included | free | |
 
-**About 28 cents per application end to end.** The figure used to read 60 cents,
-which was two errors compounding: the estimates were conservative, and the
-hardcoded price table costed Sonnet 5 at Sonnet 4.6's rate and overstated every
-logged call by a third.
+**A generate is not one call per document.** A draft with a surviving blocker
+is written again, a claim-check mismatch has it written again, and each
+`revise` is another generate. In the same period the eight applications that
+had documents generated cost **$0.38 to $2.43 each, median about $0.92**, end
+to end; the most expensive had 8 resume and 13 letter drafts across revises.
+`jobagent rewrites` shows which checks reject first drafts. The figure of 28
+cents per application quoted until October predates rewrites, revises and the
+checks.
 
 **Every paid command says what it expects to cost before it spends** —
 `jd add`, `score`, `generate` and `prep` print a line like `Expected cost ~$0.11
