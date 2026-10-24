@@ -35,6 +35,7 @@ from jobagent.services.refusals import (
 )
 from jobagent.cli.reapply import refuse as refuse_reapply
 from jobagent.services.workspace import Workspace
+from jobagent.timefmt import local
 
 console = Console()
 err_console = Console(stderr=True)
@@ -108,6 +109,28 @@ def revise(
     _report_readiness(result)
 
 
+def edited(
+    jd_id: int = typer.Argument(..., help="The JD id."),
+    resume: bool = typer.Option(False, "--resume", help="The resume was edited."),
+    cover: bool = typer.Option(False, "--cover", help="The cover letter was edited."),
+    note: str = typer.Option(..., "--note", help="What was changed and why."),
+) -> None:
+    """Record a change you made to a document by hand. Free: nothing is regenerated."""
+    if resume == cover:
+        _refuse("One document at a time: --resume or --cover.")
+    kind = DocumentKind.resume if resume else DocumentKind.cover_letter
+    try:
+        record = revise_service.record_hand_edit(
+            Workspace.from_config(get_config()), jd_id, kind, note, datetime.now().astimezone()
+        )
+    except NoSuchAd:
+        _refuse(f"No job description with id {jd_id}.", code=1)
+    except ValueError:
+        _refuse("Say what was changed with --note.")
+    label = "resume" if resume else "cover letter"
+    console.print(f"Recorded a hand edit to JD {jd_id}'s {label}: {escape(record.note)}")
+
+
 def notes(
     jd_id: int | None = typer.Option(None, "--jd", help="One job's notes only."),
 ) -> None:
@@ -130,7 +153,8 @@ def notes(
         console.print(f"\n{head}")
         for n in group.notes:
             label = "resume" if n.kind is DocumentKind.resume else "letter"
-            console.print(f"  JD {n.jd_id:<4} {label:<6} {n.created_at:%Y-%m-%d}  {escape(n.note)}")
+            how = " [dim](by hand)[/]" if n.result == revise_service.HAND_EDIT else ""
+            console.print(f"  JD {n.jd_id:<4} {label:<6} {local(n.created_at):%Y-%m-%d}  {escape(n.note)}{how}")
 
 
 def context(

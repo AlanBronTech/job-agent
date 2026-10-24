@@ -239,3 +239,26 @@ def test_notes_command_flags_a_recurring_note(wired, ids):
             store.add_revision_note(conn, note(jd_id, "Drop the mission opener"))
     result = runner.invoke(app, ["notes"])
     assert result.exit_code == 0 and "promote to voice.md" in result.output
+
+
+def test_a_hand_edit_is_recorded_free_and_listed_with_the_notes(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from typer.testing import CliRunner
+
+    from jobagent.cli import revise as revise_cli
+    from jobagent.cli.main import app
+    from jobagent.config import Config
+    from jobagent.core import store as core_store
+    from tests.ui_seed import jd as seed_jd
+
+    config = Config(_env_file=None, db_path=tmp_path / "j.db", output_dir=tmp_path / "out")
+    monkeypatch.setattr(revise_cli, "get_config", lambda: config)
+    with core_store.open_store(config.db_path) as conn:
+        jd_id = core_store.add_jd(conn, seed_jd("Engineering Manager", "Contoso", 0))
+    runner = CliRunner()
+    result = runner.invoke(app, ["edited", str(jd_id), "--cover", "--note", "a couple of weeks to choose, not a year"])
+    assert result.exit_code == 0, result.output
+    listed = runner.invoke(app, ["notes"]).output
+    assert "a couple of weeks to choose" in listed and "(by hand)" in listed
+    assert runner.invoke(app, ["edited", "999", "--resume", "--note", "x"]).exit_code == 1

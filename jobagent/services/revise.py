@@ -147,6 +147,26 @@ def revise(
     return result, record
 
 
+HAND_EDIT = "edited by hand"
+
+
+def record_hand_edit(ws: Workspace, jd_id: int, kind: DocumentKind, note: str, now: datetime) -> RevisionNote:
+    """Record a change made to a document by hand. Free; nothing is regenerated.
+
+    Kept with the revision notes, so `jobagent notes` counts it with the rest:
+    a correction made in Word is the same evidence as one given to `revise`,
+    and it recurs the same way.
+    """
+    if not note.strip():
+        raise ValueError("say what was changed")
+    with store.open_store(ws.db_path) as conn:
+        if store.get_jd(conn, jd_id) is None:
+            raise NoSuchAd(jd_id)
+        record = RevisionNote(jd_id=jd_id, kind=kind, note=note.strip(), created_at=now, result=HAND_EDIT)
+        record.id = store.add_revision_note(conn, record)
+    return record
+
+
 def notes(ws: Workspace, jd_id: int | None = None) -> list[RevisionNote]:
     with store.open_store(ws.db_path) as conn:
         return store.list_revision_notes(conn, jd_id)

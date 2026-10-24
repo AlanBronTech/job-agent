@@ -449,6 +449,14 @@ document costs. The note is kept; the previous version stays in
 so — put the edit in the note instead, or pass `--replace-edits` to keep the
 edited file under `.edited/` and revise anyway.
 
+A small fix is cheaper made by hand in Word. Record it, free, so it counts
+with the revise notes and a correction that keeps recurring shows up in
+`jobagent notes`:
+
+```
+jobagent edited 102 --cover --note "a couple of weeks to choose a tool, not a year"
+```
+
 Context is what you know that the ad does not say. It is kept with the ad,
 given to every writer from then on, and never to the scorer. `notes` groups
 your revision notes: one you have given across three applications is a rule
@@ -595,7 +603,8 @@ assessment is what shapes the selection.
 | `jobagent diff --generated F --sent F` | Any two files, no records needed. |
 | `jobagent revise <jd_id> --resume\|--cover --note "…"` | Write one document again, changed as the note says. Paid, as generating it. |
 | `jobagent context <jd_id> ["…"]` | Show, or add a line to, what you know that the ad does not say. `--set`, `--clear`. |
-| `jobagent notes [--jd N]` | Revision notes, grouped; recurring ones flagged. |
+| `jobagent edited <jd_id> --resume\|--cover --note "…"` | Record a change made by hand. Free. |
+| `jobagent notes [--jd N]` | Revision notes and hand edits, grouped; recurring ones flagged. |
 | `jobagent rewrites` | Which checks rejected first drafts. Each rejection means the document was written twice, doubling its time and cost. |
 
 `apply` options: `--on YYYY-MM-DD` (defaults to today), `--channel <text>`,
