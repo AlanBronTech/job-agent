@@ -40,6 +40,8 @@ from jobagent.services.workspace import Workspace
 # What counts as a saved ad. Everything else in the drop folder — the README,
 # outcomes.yaml, .DS_Store — is furniture and must not be matchable.
 AD_SUFFIXES = frozenset({".pdf", ".mhtml", ".txt"})
+# Add a job offers only an ad saved in the last fortnight.
+NEW_AD_DAYS = 14
 
 
 def ads_in(jd_dir: Path) -> list[Path]:
@@ -65,10 +67,13 @@ def latest_ad(jd_dir: Path) -> Path:
 def newest_new_ad(ws: Workspace) -> Path | None:
     """The most recently saved ad that is not in JobAgent yet. Free.
 
-    Skips files already added, and saved ads whose alert was decided against
-    (closed, not interested): offering an ad already reviewed invites adding
-    it twice.
+    Skips files already added, saved ads whose alert was decided against
+    (closed, not interested), and ads stored from another file or pasted with
+    the same link or text: offering an ad already reviewed invites adding it
+    twice. Files older than `NEW_AD_DAYS` were passed over, not forgotten;
+    they stay reachable by name.
     """
+    cutoff = datetime.now(timezone.utc).timestamp() - NEW_AD_DAYS * 86400
     with store.open_store(ws.db_path) as conn:
         done = {
             r[0] for r in conn.execute(
@@ -81,7 +86,18 @@ def newest_new_ad(ws: Workspace) -> Path | None:
                 "AND decision NOT IN ('interested', 'later')"
             )
         }
-    return next((p for p in ads_in(ws.jd_dir) if p.name not in done), None)
+        for path in ads_in(ws.jd_dir):
+            if path.stat().st_mtime < cutoff:
+                return None  # newest first: everything after this is older
+            if path.name in done:
+                continue
+            try:
+                if already_stored(conn, read_ad(file=path)):
+                    continue
+            except UnreadableAd:
+                continue
+            return path
+    return None
 
 
 def guess_source(name: str) -> str:

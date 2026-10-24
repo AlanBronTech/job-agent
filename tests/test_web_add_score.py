@@ -279,13 +279,16 @@ def test_an_ad_already_added_is_refused_at_the_confirm_step(client, ws, model):
 
 
 def test_the_newest_saved_job_offered_is_one_not_yet_added(client, ws, model):
-    save(ws, "older - SEEK.txt", age=600)
+    save(ws, "older - SEEK.txt", text=AD + " A different role.", age=600)
+    save(ws, "ancient.txt", text=AD + " Saved weeks ago.", age=30 * 86400)
     save(ws, "newer.txt")
     response = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "newer.txt"})
     client.get(response.headers["location"])
     page = client.get("/ads/new").text
     assert 'value="older - SEEK.txt"' in page and 'value="seek"' in page
     assert 'value="newer.txt"' not in page
+    client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "older - SEEK.txt"})
+    assert "ancient.txt" not in client.get("/ads/new").text  # passed over, not offered weeks later
 
 
 def test_when_every_saved_job_is_added_it_says_so(client, ws, model):
