@@ -57,7 +57,7 @@ def test_a_decision_takes_it_off_the_list(ws, client):
     assert first.title not in client.get("/alerts").text.split("Show:")[1]
     decided = client.get("/alerts?show=decided").text
     assert "not qualified" in decided and "needs Go" in decided
-    assert client.post(f"/alerts/{first.id}/decide", data={"csrf": "wrong", "decision": "saved"}).status_code == 403
+    assert client.post(f"/alerts/{first.id}/decide", data={"csrf": "wrong", "decision": "interested"}).status_code == 403
 
 
 def test_check_email_without_a_mailbox_says_what_to_set(client):
@@ -81,3 +81,28 @@ def test_job_links_open_in_their_own_window(ws, client):
     assert 'href="https://au.seek.com/job/90000001" target="_blank" rel="noopener noreferrer" data-window' in page
     assert '/static/window.js' in page
     assert "window.open" in client.get("/static/window.js").text
+
+
+def test_review_shows_one_job_and_a_key_decision_moves_on(ws, client):
+    seed(ws)
+    page = client.get("/alerts/review").text
+    total = alerts.pending_count(ws, datetime.now(timezone.utc))
+    assert f"{total} left" in page and 'id="open-ad"' in page and 'data-key="i"' in page
+    first = [i for i in alerts.pending(ws, datetime.now(timezone.utc))][0].listing
+    response = client.post(f"/alerts/{first.id}/decide",
+                           data={"csrf": TOKEN, "decision": "interested", "show": "review"})
+    assert response.status_code == 303 and response.headers["location"].startswith("/alerts/review?flash=")
+    after = client.get(response.headers["location"]).text
+    assert f"{total - 1} left" in after
+    assert "print it to PDF" in after
+    assert "still need" in after and first.url in after  # the reminder until the ad is saved
+    assert "keydown" in client.get("/static/review.js").text
+
+
+def test_a_saved_ad_offers_add_to_jobagent(ws, client):
+    from tests.test_alerts import _saved_page
+
+    seed(ws)
+    _saved_page(ws.jd_dir, "Delivery Manager.mhtml", "https://au.seek.com/job/90000002")
+    page = client.get("/alerts").text
+    assert "Add to JobAgent" in page and 'value="Delivery Manager.mhtml"' in page

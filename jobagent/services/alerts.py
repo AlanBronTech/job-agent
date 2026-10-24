@@ -9,7 +9,10 @@ Alan made of it; `report` says how good the suggestions were, which is the
 only way the title rules get better.
 
 Nothing here opens a job page. Alan opens the link, gives the ad a once-over,
-and saves it for `jd add` himself; `link_ad` then marks the listing saved.
+and prints it to PDF into JD_DIR himself. `match_saved_files` finds that file
+by the job address the saved page records, so he never has to come back and
+say he did it; `waiting_for_file` is the list of jobs he marked interested and
+has not saved yet, because that step is the one that gets forgotten.
 """
 
 from __future__ import annotations
@@ -307,8 +310,10 @@ def link_ad(ws: Workspace, jd: JobDescription, now: datetime) -> AlertListing | 
         if row is None:
             return None
         row.jd_id = jd.id
+        if jd.source_file and not row.saved_file:
+            row.saved_file = jd.source_file
         if row.decision in (None, AlertDecision.later):
-            row.decision, row.decided_at = AlertDecision.saved, now
+            row.decision, row.decided_at = AlertDecision.interested, now
         store.save_alert(conn, row)
     return row
 
@@ -346,3 +351,60 @@ def _reason_kind(reason: str) -> str:
         return reason
     return next((label for prefix, label in _REASON_LABELS.items() if reason.startswith(prefix)),
                 reason or "(none)")
+
+
+# --------------------------------------------------------------------------- #
+# The saved ad, found by itself
+# --------------------------------------------------------------------------- #
+
+
+def match_saved_files(ws: Workspace, now: datetime) -> list[AlertListing]:
+    """Link ads saved into JD_DIR to the listings they came from. Returns the newly linked.
+
+    A SEEK print records the job address in its footer and a saved LinkedIn
+    page in its header, so the match is exact. Files are read once per
+    modification time. A file that matches marks an undecided listing
+    interested: saving the ad is the decision.
+    """
+    from jobagent.services.ads import ads_in, extract_saved_page
+
+    linked = []
+    with store.open_store(ws.db_path) as conn:
+        for path in ads_in(ws.jd_dir):
+            if path.suffix.lower() == ".txt":
+                continue
+            mtime = path.stat().st_mtime_ns
+            known = store.scanned_file(conn, path.name)
+            if known and known[0] == mtime:
+                key = (known[1], known[2]) if known[1] else None
+            else:
+                try:
+                    page = extract_saved_page(path)
+                except Exception:  # noqa: BLE001 - an unreadable file is simply not matched
+                    page = None
+                key = core.job_key(page.source_url) if page else None
+                store.record_scanned_file(conn, path.name, mtime, key)
+            if key is None:
+                continue
+            row = store.find_alert(conn, *key)
+            if row is None or row.saved_file:
+                continue
+            row.saved_file = path.name
+            if row.decision in (None, AlertDecision.later):
+                row.decision, row.decided_at = AlertDecision.interested, now
+            store.save_alert(conn, row)
+            linked.append(row)
+    return linked
+
+
+def waiting_for_file(ws: Workspace) -> list[AlertListing]:
+    """Marked interested, with no saved ad yet: the step that gets forgotten."""
+    return [
+        r for r in listings(ws)
+        if r.decision is AlertDecision.interested and not r.saved_file and r.jd_id is None
+    ]
+
+
+def ready_to_add(ws: Workspace) -> list[AlertListing]:
+    """The ad is saved; it is not in JobAgent yet."""
+    return [r for r in listings(ws) if r.saved_file and r.jd_id is None]

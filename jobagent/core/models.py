@@ -970,10 +970,11 @@ class AlertDecision(str, Enum):
     `not_relevant` says the title filter let through the wrong kind of job;
     `not_qualified` names a gap in the profile, the signal the security gap
     came from; `not_interested` is a preference (pay, company, terms,
-    location); `saved` is the funnel into `jd add`.
+    location); `interested` is the funnel into `jd add`, followed by the
+    saved ad landing in JD_DIR. Was `saved` until 2026-10-24.
     """
 
-    saved = "saved"
+    interested = "interested"
     not_relevant = "not_relevant"
     not_qualified = "not_qualified"
     not_interested = "not_interested"
@@ -1006,6 +1007,9 @@ class AlertListing(_Base):
     decided_at: datetime | None = None
     note: str = ""
     jd_id: int | None = None
+    # The ad Alan saved for it (PDF or .mhtml in JD_DIR), matched by the job
+    # address the saved page records. Empty until it arrives.
+    saved_file: str = ""
 
 
 class RevisionNote(_Base):

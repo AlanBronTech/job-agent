@@ -4,14 +4,17 @@
 <script src="/static/window.js" defer></script>
 <div class="heading-row">
   <h1>Job alerts {% if show == "pending" %}<span class="muted count">{{ items | length }}</span>{% endif %}</h1>
-  <form method="post" action="/alerts/fetch" class="inline">
-    <input type="hidden" name="csrf" value="{{ token }}">
-    <button class="primary" type="submit">Check email now</button>
-  </form>
+  <div>
+    <a class="button" href="/alerts/review">Review one at a time</a>
+    <form method="post" action="/alerts/fetch" class="inline">
+      <input type="hidden" name="csrf" value="{{ token }}">
+      <button class="primary" type="submit">Check email now</button>
+    </form>
+  </div>
 </div>
 <p class="detail">Jobs from your SEEK and LinkedIn alert emails that are worth a look. Only the emails are read;
-  open each link yourself, give the ad a once-over, and record what you made of it. Saving the ad and adding it
-  marks it saved by itself. Free.</p>
+  open each link yourself, give the ad a once-over, and record what you made of it. An ad you print to PDF into
+  the saved-ads folder is matched to its job by itself. Free.</p>
 <p class="muted">{% if last_fetch %}Last checked {{ last_fetch | local("%-d %b %Y, %H:%M") }}.{% else %}Not checked yet.{% endif %}</p>
 <div class="sort">
   Show:
@@ -20,6 +23,7 @@
   <a href="/alerts?show=skipped" {% if show == "skipped" %}aria-current="true"{% endif %}>left out by the filter</a>
 </div>
 {% if fetched %}<div class="banner done">{{ fetched }}</div>{% endif %}
+{% include "_alert_followups.html" %}
 {% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
 
 {% if show == "pending" %}

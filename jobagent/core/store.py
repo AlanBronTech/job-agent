@@ -42,13 +42,15 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
 # not a migration framework and is not pretending to be one: it handles the only
 # kind of change that is safe to make without one.
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    # v18 — the saved ad an alert listing led to.
+    "alert_listings": [("saved_file", "TEXT NOT NULL DEFAULT ''")],
     # v15 — the contract offer a contract ad was matched to (task 7).
     "fit_assessments": [("contract_offer", "TEXT")],
     "applications": [
@@ -235,6 +237,15 @@ CREATE TABLE IF NOT EXISTS alert_listings (
     UNIQUE (source, job_id)
 );
 
+-- v18. Files in JD_DIR already looked at for a job address, by modification
+-- time, so a folder of PDFs is not re-read on every page load.
+CREATE TABLE IF NOT EXISTS scanned_files (
+    name     TEXT PRIMARY KEY,
+    mtime_ns INTEGER NOT NULL,
+    source   TEXT,
+    job_id   TEXT
+);
+
 -- v17. Alert emails already read, so a re-run over the same days does not
 -- count a job as seen twice.
 CREATE TABLE IF NOT EXISTS alert_emails (
@@ -342,6 +353,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA)
         _apply_added_columns(conn)
         _normalise_seniority(conn)
+        # v18: the `saved` decision was renamed `interested`.
+        conn.execute("UPDATE alert_listings SET decision = 'interested' WHERE decision = 'saved'")
         conn.execute(
             "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -1364,14 +1377,14 @@ def save_alert(conn: sqlite3.Connection, a: AlertListing) -> int:
         a.source, a.job_id, a.title, a.company, a.location, a.pay, a.url,
         a.first_seen.isoformat(), a.last_seen.isoformat(), a.times_seen,
         a.verdict.value, a.reason, a.decision.value if a.decision else None,
-        a.decided_at.isoformat() if a.decided_at else None, a.note, a.jd_id,
+        a.decided_at.isoformat() if a.decided_at else None, a.note, a.jd_id, a.saved_file,
     )
     try:
         if a.id is None:
             cur = conn.execute(
                 "INSERT INTO alert_listings (source, job_id, title, company, location, pay, url, "
-                "first_seen, last_seen, times_seen, verdict, reason, decision, decided_at, note, jd_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "first_seen, last_seen, times_seen, verdict, reason, decision, decided_at, note, jd_id, "
+                "saved_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 values,
             )
             a.id = int(cur.lastrowid)
@@ -1379,8 +1392,8 @@ def save_alert(conn: sqlite3.Connection, a: AlertListing) -> int:
             conn.execute(
                 "UPDATE alert_listings SET source = ?, job_id = ?, title = ?, company = ?, "
                 "location = ?, pay = ?, url = ?, first_seen = ?, last_seen = ?, times_seen = ?, "
-                "verdict = ?, reason = ?, decision = ?, decided_at = ?, note = ?, jd_id = ? "
-                "WHERE id = ?",
+                "verdict = ?, reason = ?, decision = ?, decided_at = ?, note = ?, jd_id = ?, "
+                "saved_file = ? WHERE id = ?",
                 (*values, a.id),
             )
         conn.commit()
@@ -1396,6 +1409,7 @@ def _row_to_alert(row: sqlite3.Row) -> AlertListing:
         first_seen=row["first_seen"], last_seen=row["last_seen"], times_seen=row["times_seen"],
         verdict=row["verdict"], reason=row["reason"], decision=row["decision"],
         decided_at=row["decided_at"], note=row["note"], jd_id=row["jd_id"],
+        saved_file=row["saved_file"],
     )
 
 
@@ -1425,5 +1439,20 @@ def alert_email_read(conn: sqlite3.Connection, message_id: str) -> bool:
 def mark_alert_email(conn: sqlite3.Connection, message_id: str, read_at: str) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO alert_emails (message_id, read_at) VALUES (?, ?)", (message_id, read_at)
+    )
+    conn.commit()
+
+
+def scanned_file(conn: sqlite3.Connection, name: str) -> tuple[int, str | None, str | None] | None:
+    row = conn.execute("SELECT mtime_ns, source, job_id FROM scanned_files WHERE name = ?", (name,)).fetchone()
+    return (row["mtime_ns"], row["source"], row["job_id"]) if row else None
+
+
+def record_scanned_file(conn: sqlite3.Connection, name: str, mtime_ns: int, key: tuple[str, str] | None) -> None:
+    conn.execute(
+        "INSERT INTO scanned_files (name, mtime_ns, source, job_id) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(name) DO UPDATE SET mtime_ns = excluded.mtime_ns, source = excluded.source, "
+        "job_id = excluded.job_id",
+        (name, mtime_ns, key[0] if key else None, key[1] if key else None),
     )
     conn.commit()

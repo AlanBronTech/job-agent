@@ -1,7 +1,7 @@
 """`jobagent alerts` — SEEK and LinkedIn alert emails, down to the jobs worth a look. Free.
 
     jobagent alerts                       read new alert emails, list what to look at
-    jobagent alerts decide saved 12 15    record what you made of them
+    jobagent alerts decide i 12 15        record what you made of them
     jobagent alerts report                how good the suggestions have been
 
 Reads the emails only; the job pages are never opened (CLAUDE.md, hard rule 1).
@@ -33,7 +33,7 @@ err_console = Console(stderr=True)
 
 # Short forms, so a decision is quick to type.
 _ALIASES = {
-    "s": "saved", "save": "saved",
+    "i": "interested", "s": "interested", "save": "interested", "saved": "interested",
     "nr": "not_relevant", "irrelevant": "not_relevant",
     "nq": "not_qualified",
     "ni": "not_interested", "no": "not_interested",
@@ -126,6 +126,8 @@ def list_pending(
         if not rows:
             console.print("[dim]Nothing.[/]")
         return
+    alerts.match_saved_files(ws, now)
+    _print_follow_ups(ws)
     items = alerts.pending(ws, now)
     if not items:
         console.print("[dim]Nothing to look at. `jobagent alerts list --skipped` shows what was left out.[/]")
@@ -145,15 +147,30 @@ def list_pending(
             console.print(f"      [yellow]Before: {escape('; '.join(item.history))}[/]")
     console.print(
         "\n[dim]Then: jobagent alerts decide <decision> ID [ID …] [--note …]\n"
-        "  saved (s) · not_relevant (nr) · not_qualified (nq) · not_interested (ni)\n"
+        "  interested (i) · not_relevant (nr) · not_qualified (nq) · not_interested (ni)\n"
         "  already_applied (aa) · expired (x) · later (l)\n"
-        "Saving the ad and running `jd add` marks it saved by itself.[/]"
+        "Print an ad you want to PDF into the saved-ads folder: it is matched to its job by itself.[/]"
     )
+
+
+def _print_follow_ups(ws: Workspace) -> None:
+    """The steps that get forgotten: an ad not yet saved, a saved ad not yet added."""
+    waiting = alerts.waiting_for_file(ws)
+    if waiting:
+        console.print(f"\n[bold yellow]Interested, ad not saved yet ({len(waiting)})[/] — open it, Cmd+P, save as PDF")
+        for row in waiting:
+            console.print(f"[cyan]{row.id:>4}[/]  {escape(row.title)} — {escape(row.company)}  {row.url}")
+    ready = alerts.ready_to_add(ws)
+    if ready:
+        console.print(f"\n[bold green]Saved, not in JobAgent yet ({len(ready)})[/] — about $0.03 each to read")
+        for row in ready:
+            console.print(f"[cyan]{row.id:>4}[/]  {escape(row.title)} — {escape(row.company)}  "
+                          f"[dim]jobagent jd add --file \"{escape(row.saved_file)}\"[/]")
 
 
 @app.command("decide")
 def decide(
-    decision: str = typer.Argument(..., help="saved, not_relevant, not_qualified, not_interested, already_applied, expired, later — or s, nr, nq, ni, aa, x, l."),
+    decision: str = typer.Argument(..., help="interested, not_relevant, not_qualified, not_interested, already_applied, expired, later — or i, nr, nq, ni, aa, x, l."),
     listing_ids: list[int] = typer.Argument(..., help="Listing ids from `jobagent alerts`."),
     note: str = typer.Option("", "--note", help="Why, in a few words. Worth it for not_qualified."),
     jd: int | None = typer.Option(None, "--jd", help="The JD it became, if you added it already."),

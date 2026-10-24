@@ -170,7 +170,9 @@ contractor CV), 9
 (`checklists/final-review.md`), 11 (this file; history in
 `docs/decisions.md`); the claim check on the resume's PROFILE and highlights;
 `jobagent alerts` (SEEK/LinkedIn alert emails → a filtered list of links,
-and Alan's decision on each, schema v17; UI page Alerts).
+and Alan's decision on each, schema v17-18; UI page Alerts with a keyboard
+review mode; an ad saved into JD_DIR is matched to its listing by the job
+address the saved page records).
 Phase 6 (Gmail triage) and the Drive upload were dropped (`BUILD_PLAN.md`).
 
 Not built: the edits classification table and `edits report` (task 1 — wait

@@ -615,6 +615,7 @@ once-over, and save it as usual.
 
 ```
 jobagent alerts                          # read new alert emails, list what to look at
+jobagent alerts decide i 12               # interested: now print the ad to PDF
 jobagent alerts decide nr 14 15          # record what you made of them
 jobagent alerts decide nq 17 --note "needs Go"
 jobagent alerts list --skipped           # what the filter left out, and why
@@ -648,7 +649,7 @@ emails it came in, and judged:
 
 | Decision | Means | What it teaches |
 |---|---|---|
-| `saved` (s) | Saved the ad to process | Set by itself when `jd add` reads an ad whose link an alert suggested |
+| `interested` (i) | Worth applying to; save the ad | Set by itself when an ad you print to PDF matches the job |
 | `not_relevant` (nr) | Wrong kind of job; the title misled | Candidates for `never_titles` (`report` lists them) |
 | `not_qualified` (nq) | Right kind of job, missing a must-have | A gap that recurs belongs in the profile, or is a real hole; add `--note` |
 | `not_interested` (ni) | Could do it, don't want it: pay, company, terms, location | Preferences |
@@ -658,6 +659,22 @@ emails it came in, and judged:
 
 If an alert email yields no jobs at all, `alerts` says so: that is how a
 changed email layout shows up.
+
+**Review mode** (Alerts → *Review one at a time*, or the banner on the Jobs
+page): one job per screen. **O** opens the ad in its own window; **I** interested,
+**N** not relevant, **Q** not qualified, **U** not interested, **A** already
+applied, **X** expired, **L** later. Each key records the decision and moves to
+the next job. Keys are ignored while you type a note, and Cmd+P still prints.
+
+**Nothing to remember after "interested".** Print the ad to PDF (Cmd+P, Save)
+into the saved-ads folder. A SEEK print records the job's address in its
+footer and a saved LinkedIn page in its header, so JobAgent matches the file
+to the job by itself whenever the Alerts page or `jobagent alerts` is opened.
+Until then the job sits under *still need the ad saved*, on the Alerts page,
+the review page and the Jobs page. Once saved it moves to *Saved, not in
+JobAgent yet*, with an **Add to JobAgent** button (about $0.03, confirmed
+first) or the `jd add --file` line to run. Saving the ad on SEEK or LinkedIn
+themselves is not needed: JobAgent keeps the link and the ad.
 
 ### Contacts and follow-ups
 

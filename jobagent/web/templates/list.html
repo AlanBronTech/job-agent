@@ -11,7 +11,10 @@
   </div>
 </div>
 {% if alerts_pending %}
-  <div class="banner warn"><a href="/alerts">{{ alerts_pending }} job{{ "s" if alerts_pending != 1 }} from your alert emails to look at →</a></div>
+  <div class="banner warn"><a href="/alerts/review">{{ alerts_pending }} job{{ "s" if alerts_pending != 1 }} from your alert emails to look at →</a></div>
+{% endif %}
+{% if alerts_waiting %}
+  <div class="banner warn"><a href="/alerts">{{ alerts_waiting }} job{{ "s" if alerts_waiting != 1 }} you're interested in still need{{ "" if alerts_waiting != 1 else "s" }} the ad saved as PDF →</a></div>
 {% endif %}
 {% if not rows %}
   <p class="empty">No jobs yet. Add one with <code>jobagent jd add --latest</code>.</p>

@@ -945,6 +945,7 @@ def alerts_page(request: Request, show: str = "pending", fetched: str = "", erro
     from jobagent.services import alerts
 
     ws, now = workspace(request), datetime.now(timezone.utc)
+    alerts.match_saved_files(ws, now)
     if show == "skipped":
         rows, items = alerts.listings(ws, verdict=AlertVerdict.skip), []
     elif show == "decided":
@@ -955,6 +956,32 @@ def alerts_page(request: Request, show: str = "pending", fetched: str = "", erro
         "nav": "alerts", "show": show, "items": items, "rows": rows,
         "decisions": list(AlertDecision), "fetched": fetched, "error": error,
         "last_fetch": alerts.last_fetch(ws),
+        "waiting": alerts.waiting_for_file(ws), "ready": alerts.ready_to_add(ws),
+        "jd_dir": ws.jd_dir,
+    })
+
+
+# What each key does on the review page, and the decision it records.
+REVIEW_KEYS = [
+    ("i", "interested"), ("n", "not_relevant"), ("q", "not_qualified"),
+    ("u", "not_interested"), ("a", "already_applied"), ("x", "expired"), ("l", "later"),
+]
+
+
+@router.get("/alerts/review")
+def alerts_review(request: Request, flash: str = ""):
+    """One suggested job at a time, decided with a key press."""
+    from datetime import timezone
+
+    from jobagent.services import alerts
+
+    ws, now = workspace(request), datetime.now(timezone.utc)
+    alerts.match_saved_files(ws, now)
+    items = [i for i in alerts.pending(ws, now) if i.listing.decision is None]
+    return render(request, "alerts_review.html", {
+        "nav": "alerts", "item": items[0] if items else None, "left": len(items),
+        "keys": REVIEW_KEYS, "flash": flash, "jd_dir": ws.jd_dir,
+        "waiting": alerts.waiting_for_file(ws), "ready": alerts.ready_to_add(ws),
     })
 
 
@@ -1001,8 +1028,16 @@ async def alerts_decide(request: Request, listing_id: int):
     except ValueError:
         return PlainTextResponse("Unknown decision.", status_code=400)
     try:
-        alerts.decide(workspace(request), [listing_id], decision,
-                      note=str(form.get("note", "")), now=datetime.now(timezone.utc))
+        [row] = alerts.decide(workspace(request), [listing_id], decision,
+                              note=str(form.get("note", "")), now=datetime.now(timezone.utc))
     except alerts.NoSuchListing:
         return PlainTextResponse(f"No alert listing {listing_id}.", status_code=404)
+    if form.get("show") == "review":
+        from urllib.parse import quote
+
+        if decision is AlertDecision.interested:
+            flash = f"Interested in {row.title}: print it to PDF (Cmd+P, Save) into the saved-ads folder. It is matched to the job by itself."
+        else:
+            flash = f"{row.title}: {decision.value.replace('_', ' ')}."
+        return RedirectResponse("/alerts/review?flash=" + quote(flash), status_code=303)
     return RedirectResponse(f"/alerts?show={form.get('show') or 'pending'}", status_code=303)

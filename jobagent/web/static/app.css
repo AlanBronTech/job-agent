@@ -147,3 +147,6 @@ form.pipeline .fields { display: grid; grid-template-columns: repeat(auto-fit, m
 form.pipeline label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
 form.pipeline select, form.pipeline input { font: inherit; color: var(--ink); }
 form.pipeline input.wide { width: 100%; }
+kbd { display: inline-block; min-width: 1.4em; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; text-align: center; color: var(--muted); background: var(--panel); }
+.panel.review h2 { margin: 0 0 6px; font-size: 22px; }
+.panel.review button { margin: 2px 4px 2px 0; }

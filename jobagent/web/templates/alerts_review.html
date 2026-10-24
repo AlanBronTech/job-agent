@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Review alerts · job-agent{% endblock %}
+{% block main %}
+<script src="/static/window.js" defer></script>
+<script src="/static/review.js" defer></script>
+<div class="heading-row">
+  <h1>Review {% if item %}<span class="muted count">{{ left }} left</span>{% endif %}</h1>
+  <a href="/alerts">Back to the list</a>
+</div>
+{% if flash %}<div class="banner done">{{ flash }}</div>{% endif %}
+{% include "_alert_followups.html" %}
+
+{% if not item %}
+  <p class="empty">Nothing left to review. Check email on the <a href="/alerts">Alerts page</a> for new jobs.</p>
+{% else %}{% set r = item.listing %}
+<div class="panel review">
+  <h2>{{ r.title }}</h2>
+  <p><strong>{{ r.company }}</strong>{% if r.location %} · {{ r.location }}{% endif %}{% if r.pay %} · {{ r.pay }}{% endif %}
+    <span class="pill {% if r.verdict.value != 'suggest' %}muted{% endif %}">{{ "worth a look" if r.verdict.value == "suggest" else "maybe" }}</span></p>
+  <p class="muted">{{ r.source }} · seen {{ r.times_seen }}× · {{ r.reason }}</p>
+  {% if item.history %}<p class="muted">Before: {{ item.history | join("; ") }}</p>{% endif %}
+  <p><a id="open-ad" class="button primary" href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window>Open the ad <kbd>O</kbd></a></p>
+  <form id="decide" method="post" action="/alerts/{{ r.id }}/decide">
+    <input type="hidden" name="csrf" value="{{ token }}">
+    <input type="hidden" name="show" value="review">
+    <p><input type="text" name="note" placeholder="note (optional), e.g. needs Go" size="40"></p>
+    <p>{% for key, d in keys %}
+      <button type="submit" name="decision" value="{{ d }}" data-key="{{ key }}">{{ d.replace("_", " ") }} <kbd>{{ key | upper }}</kbd></button>
+    {% endfor %}</p>
+  </form>
+  <p class="muted">Keys: O opens the ad; the letter on each button records it and moves to the next job. Typing in the note box doesn't trigger them.</p>
+</div>
+{% endif %}
+{% endblock %}

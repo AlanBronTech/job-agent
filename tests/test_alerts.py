@@ -172,7 +172,7 @@ def test_decisions_take_listings_off_the_list_and_later_keeps_them(ws):
     ids = [p.listing.id for p in alerts.pending(ws, NOW)]
     assert first not in ids and second in ids
     with pytest.raises(alerts.NoSuchListing):
-        alerts.decide(ws, [second, 999], AlertDecision.saved, now=NOW)
+        alerts.decide(ws, [second, 999], AlertDecision.interested, now=NOW)
     assert store.get_alert(store.connect(ws.db_path), second).decision is AlertDecision.later
     report = alerts.report(ws)
     assert [r.id for r in report.not_relevant] == [first]
@@ -195,7 +195,7 @@ def test_saving_the_ad_marks_the_listing_saved(ws):
     with store.open_store(ws.db_path) as conn:
         ad.id = store.add_jd(conn, ad)
     row = alerts.link_ad(ws, ad, NOW)
-    assert row.decision is AlertDecision.saved and row.jd_id == ad.id
+    assert row.decision is AlertDecision.interested and row.jd_id == ad.id
 
 
 def test_an_alert_email_that_yields_nothing_is_reported(ws):
@@ -334,3 +334,50 @@ def test_reading_the_same_email_twice_does_not_count_it_twice(ws):
     alerts.ingest(ws, [m], now=NOW)
     alerts.ingest(ws, [m], now=NOW + timedelta(minutes=5))
     assert {r.times_seen for r in alerts.listings(ws)} == {1}
+
+
+def _saved_page(folder, name, url):
+    """A saved LinkedIn-style .mhtml page recording the job address, as Chrome writes it."""
+    folder.mkdir(parents=True, exist_ok=True)
+    body = (
+        "From: <Saved by Blink>\r\nSnapshot-Content-Location: " + url + "\r\n"
+        "Subject: Job\r\nMIME-Version: 1.0\r\n"
+        'Content-Type: multipart/related; type="text/html"; boundary="B"\r\n\r\n'
+        "--B\r\nContent-Type: text/html\r\nContent-Location: " + url + "\r\n\r\n"
+        "<html><body><h1>Delivery Manager</h1><p>" + "About the role. " * 60 + "</p></body></html>\r\n--B--\r\n"
+    )
+    (folder / name).write_text(body)
+
+
+def test_a_saved_ad_is_matched_to_its_listing_and_marks_it_interested(ws):
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    _saved_page(ws.jd_dir, "Delivery Manager _ Fabrikam.mhtml", "https://au.seek.com/job/90000002")
+    linked = alerts.match_saved_files(ws, NOW)
+    assert [r.job_id for r in linked] == ["90000002"]
+    row = linked[0]
+    assert row.saved_file == "Delivery Manager _ Fabrikam.mhtml" and row.decision is AlertDecision.interested
+    assert [r.id for r in alerts.ready_to_add(ws)] == [row.id]
+    assert row.id not in [p.listing.id for p in alerts.pending(ws, NOW)]
+    assert alerts.match_saved_files(ws, NOW) == []  # read once; already linked
+
+
+def test_interested_without_a_saved_ad_is_waiting(ws):
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    row = next(r for r in alerts.listings(ws) if r.job_id == "90000001")
+    alerts.decide(ws, [row.id], AlertDecision.interested, now=NOW)
+    assert [r.id for r in alerts.waiting_for_file(ws)] == [row.id]
+    _saved_page(ws.jd_dir, "Engineering Manager.mhtml", "https://au.seek.com/job/90000001")
+    alerts.match_saved_files(ws, NOW)
+    assert alerts.waiting_for_file(ws) == []
+
+
+def test_the_old_saved_decision_reads_as_interested(tmp_path):
+    db = tmp_path / "j.db"
+    conn = store.connect(db)
+    conn.execute(
+        "INSERT INTO alert_listings (source, job_id, title, url, first_seen, last_seen, verdict, decision) "
+        "VALUES ('seek', '1', 'T', 'u', '2026-10-20T00:00:00+00:00', '2026-10-20T00:00:00+00:00', 'suggest', 'saved')"
+    )
+    conn.commit()
+    conn.close()
+    assert store.list_alerts(store.connect(db))[0].decision is AlertDecision.interested

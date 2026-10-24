@@ -1,0 +1,25 @@
+{# The steps that get forgotten, on every Alerts page until they are done. #}
+{% if waiting %}
+<div class="banner warn">
+  <strong>{{ waiting | length }} job{{ "s" if waiting | length != 1 }} you're interested in still need{{ "" if waiting | length != 1 else "s" }} the ad saved.</strong>
+  Open it, press Cmd+P, and save it as PDF into <code>{{ jd_dir }}</code>. It is matched to the job by itself.
+  <ul>{% for r in waiting %}
+    <li><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window>{{ r.title }}</a> — {{ r.company }}</li>
+  {% endfor %}</ul>
+</div>
+{% endif %}
+{% if ready %}
+<div class="banner done">
+  <strong>Saved, not in JobAgent yet.</strong> Adding one reads the ad (about $0.03); you confirm the cost first.
+  <ul>{% for r in ready %}
+    <li>{{ r.title }} — {{ r.company }} <span class="muted">({{ r.saved_file }})</span>
+      <form method="post" action="/ads/new/confirm" class="inline">
+        <input type="hidden" name="csrf" value="{{ token }}">
+        <input type="hidden" name="mode" value="saved">
+        <input type="hidden" name="name" value="{{ r.saved_file }}">
+        <input type="hidden" name="source" value="{{ r.source }}">
+        <button type="submit">Add to JobAgent</button>
+      </form></li>
+  {% endfor %}</ul>
+</div>
+{% endif %}

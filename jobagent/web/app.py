@@ -125,13 +125,15 @@ def render(request: Request, name: str, context: dict, status_code: int = 200):
         from datetime import datetime, timezone
 
         alerts_pending = alerts.pending_count(workspace(request), datetime.now(timezone.utc))
+        alerts_waiting = len(alerts.waiting_for_file(workspace(request)))
     except Exception:  # nor must the alerts count
-        alerts_pending = 0
+        alerts_pending = alerts_waiting = 0
 
     context = {
         "token": request.app.state.token,
         "unseen": unseen,
         "alerts_pending": alerts_pending,
+        "alerts_waiting": alerts_waiting,
         "pipeline": {
             "statuses": pipeline.STATUS_LABELS,
             "channels": pipeline.CHANNELS,
