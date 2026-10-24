@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Alerts · job-agent{% endblock %}
 {% block main %}
+<script src="/static/window.js" defer></script>
 <div class="heading-row">
   <h1>Job alerts {% if show == "pending" %}<span class="muted count">{{ items | length }}</span>{% endif %}</h1>
   <form method="post" action="/alerts/fetch" class="inline">
@@ -30,7 +31,7 @@
     <div><strong>{{ r.title }}</strong> — {{ r.company }}{% if r.location %} · {{ r.location }}{% endif %}{% if r.pay %} · {{ r.pay }}{% endif %}
       <span class="pill {% if r.verdict.value == 'suggest' %}{% else %}muted{% endif %}">{{ "worth a look" if r.verdict.value == "suggest" else "maybe" }}</span>
       {% if r.decision and r.decision.value == "later" %}<span class="pill muted">later</span>{% endif %}</div>
-    <div><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
+    <div><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window>{{ r.url }}</a>
       <span class="muted">{{ r.source }} · seen {{ r.times_seen }}× · {{ r.reason }}</span></div>
     {% if item.history %}<div class="muted">Before: {{ item.history | join("; ") }}</div>{% endif %}
     <form method="post" action="/alerts/{{ r.id }}/decide" class="inline">
@@ -51,7 +52,7 @@
     {% for r in rows %}
       <tr>
         <td class="num muted">{{ r.id }}</td>
-        <td><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer"><strong>{{ r.title }}</strong></a>
+        <td><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window><strong>{{ r.title }}</strong></a>
           <div class="muted">{{ r.company }}{% if r.pay %} · {{ r.pay }}{% endif %}</div></td>
         <td>{% if show == "decided" %}{{ r.decision.value.replace("_", " ") }}{% if r.note %} <span class="muted">— {{ r.note }}</span>{% endif %}{% if r.jd_id %} · <a href="/ads/{{ r.jd_id }}">JD {{ r.jd_id }}</a>{% endif %}
             {% else %}<span class="muted">{{ r.reason }}</span>{% endif %}</td>

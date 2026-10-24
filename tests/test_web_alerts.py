@@ -73,3 +73,11 @@ def test_the_nav_and_the_jobs_page_say_how_many_wait(ws, client):
     assert f"{n} jobs from your alert emails to look at" in jobs
     assert f'title="Jobs from your alert emails to look at">{n}</span>' in client.get("/settings").text
     assert "Last checked" in client.get("/alerts").text
+
+
+def test_job_links_open_in_their_own_window(ws, client):
+    seed(ws)
+    page = client.get("/alerts").text
+    assert 'href="https://au.seek.com/job/90000001" target="_blank" rel="noopener noreferrer" data-window' in page
+    assert '/static/window.js' in page
+    assert "window.open" in client.get("/static/window.js").text
