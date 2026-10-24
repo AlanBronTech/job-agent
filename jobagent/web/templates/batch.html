@@ -97,7 +97,7 @@
       <td><input type="checkbox" name="jd" value="{{ r.jd_id }}" aria-label="Select JD {{ r.jd_id }}"></td>
       <td class="num muted">{{ r.number }}</td>
       <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
-        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div>
+        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}{% if r.added_singly %} · added on its own{% endif %}</div>
         {% if r.reapply == "same" %}<span class="pill verdict-skip">same job as an earlier application</span>{% endif %}
         {% if r.reapply == "possibly_same" %}<span class="pill warn">possibly the same job</span>{% endif %}
         {% if r.same_requisition_as %}<span class="pill warn">same requisition as row {{ r.same_requisition_as }}</span>{% endif %}

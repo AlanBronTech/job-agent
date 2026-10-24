@@ -188,3 +188,34 @@ def test_a_failed_parse_is_retried_on_the_next_parse(ws, parser, monkeypatch):
     batches.parse(ws, CONFIG, batch)
     row = batches.rows(ws, batch, TODAY)[0]
     assert row.refusal is None and row.state == "parsed"
+
+
+def test_ads_added_on_their_own_after_the_batch_show_in_its_table(ws, parser):
+    save(ws, "acme.txt", AD.format(co="Acme Logistics"))
+    batch = batches.start(ws)
+    batches.parse(ws, CONFIG, batch)
+    with store.open_store(ws.db_path) as conn:
+        single = seed_jd("Delivery Lead", "Litware", 0)
+        single.ingested_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+        single.source_file = "litware.pdf"
+        single_id = store.add_jd(conn, single)
+    table = batches.rows(ws, batch, TODAY)
+    extra = [r for r in table if r.added_singly]
+    assert [r.jd_id for r in extra] == [single_id] and extra[0].company == "Litware"
+    assert extra[0].number == len(table)
+
+
+def test_a_saved_ad_whose_alert_was_decided_against_is_not_offered(ws):
+    from jobagent.core.models import AlertDecision, AlertListing, AlertVerdict
+
+    save(ws, "closed.pdf", AD.format(co="Latitude"))
+    save(ws, "wanted.pdf", AD.format(co="Woodgrove"))
+    now = datetime.now(timezone.utc)
+    with store.open_store(ws.db_path) as conn:
+        for job_id, name, decision in (("1", "closed.pdf", AlertDecision.expired),
+                                       ("2", "wanted.pdf", AlertDecision.interested)):
+            store.save_alert(conn, AlertListing(
+                source="linkedin", job_id=job_id, title="Engineering Manager", url="u",
+                first_seen=now, last_seen=now, verdict=AlertVerdict.suggest,
+                decision=decision, saved_file=name))
+    assert [p.name for p in batches.new_files(ws)] == ["wanted.pdf"]

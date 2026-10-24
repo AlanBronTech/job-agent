@@ -78,6 +78,9 @@ class BatchRow:
     recruiter_score: int | None = None
     has_documents: bool = False
     status: str | None = None
+    # Added on its own (Add a job, `jd add`, Alerts) after the batch began,
+    # shown here so it can be screened and scored with the rest.
+    added_singly: bool = False
     # The first-pass screen, when it has run: "score" or "skip", and why.
     screen_decision: str | None = None
     screen_reason: str | None = None
@@ -116,6 +119,14 @@ def new_files(ws: Workspace) -> list[Path]:
         taken = {
             r[0] for r in conn.execute(
                 "SELECT source_file FROM job_descriptions WHERE source_file IS NOT NULL"
+            )
+        }
+        # A saved ad whose alert was decided against (closed, not interested)
+        # is not offered for parsing.
+        taken |= {
+            r[0] for r in conn.execute(
+                "SELECT saved_file FROM alert_listings WHERE saved_file != '' AND decision IS NOT NULL "
+                "AND decision NOT IN ('interested', 'later')"
             )
         }
         last_row = {
@@ -260,6 +271,20 @@ def rows(ws: Workspace, batch_id: int, today: date) -> list[BatchRow]:
             jd = store.get_jd(conn, r["jd_id"]) if r["jd_id"] else None
             if jd is not None:
                 _fill(conn, ws, row, jd, profile, today)
+            result.append(row)
+        in_batch = {r["jd_id"] for r in raw if r["jd_id"]}
+        started = conn.execute("SELECT started_at FROM batches WHERE id = ?", (batch_id,)).fetchone()
+        later = conn.execute(
+            "SELECT id FROM job_descriptions WHERE ingested_at >= ? ORDER BY ingested_at",
+            (started[0],),
+        ).fetchall() if started else []
+        for r in later:
+            if r["id"] in in_batch:
+                continue
+            jd = store.get_jd(conn, r["id"])
+            row = BatchRow(number=len(result) + 1, file_name=jd.source_file or "", jd_id=jd.id,
+                           state="parsed", added_singly=True)
+            _fill(conn, ws, row, jd, profile, today)
             result.append(row)
     _flag_shared_requisitions(result)
     return result
