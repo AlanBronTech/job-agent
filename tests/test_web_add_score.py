@@ -276,3 +276,20 @@ def test_an_ad_already_added_is_refused_at_the_confirm_step(client, ws, model):
     assert again.status_code == 409 and "already in JobAgent as JD" in flat(again)
     started = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "acme.txt"})
     assert started.status_code == 409 and model.parsed == []
+
+
+def test_the_newest_saved_job_offered_is_one_not_yet_added(client, ws, model):
+    save(ws, "older - SEEK.txt", age=600)
+    save(ws, "newer.txt")
+    response = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "newer.txt"})
+    client.get(response.headers["location"])
+    page = client.get("/ads/new").text
+    assert 'value="older - SEEK.txt"' in page and 'value="seek"' in page
+    assert 'value="newer.txt"' not in page
+
+
+def test_when_every_saved_job_is_added_it_says_so(client, ws, model):
+    save(ws, "only.txt")
+    response = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "only.txt"})
+    client.get(response.headers["location"])
+    assert "already in JobAgent" in flat(client.get("/ads/new"))

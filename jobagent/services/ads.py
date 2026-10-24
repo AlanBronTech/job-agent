@@ -62,6 +62,38 @@ def latest_ad(jd_dir: Path) -> Path:
     return ads[0]
 
 
+def newest_new_ad(ws: Workspace) -> Path | None:
+    """The most recently saved ad that is not in JobAgent yet. Free.
+
+    Skips files already added, and saved ads whose alert was decided against
+    (closed, not interested): offering an ad already reviewed invites adding
+    it twice.
+    """
+    with store.open_store(ws.db_path) as conn:
+        done = {
+            r[0] for r in conn.execute(
+                "SELECT source_file FROM job_descriptions WHERE source_file IS NOT NULL"
+            )
+        }
+        done |= {
+            r[0] for r in conn.execute(
+                "SELECT saved_file FROM alert_listings WHERE saved_file != '' AND decision IS NOT NULL "
+                "AND decision NOT IN ('interested', 'later')"
+            )
+        }
+    return next((p for p in ads_in(ws.jd_dir) if p.name not in done), None)
+
+
+def guess_source(name: str) -> str:
+    """seek or linkedin, from the title a browser gives a printed job page."""
+    lowered = name.lower()
+    if "seek" in lowered:
+        return "seek"
+    if "linkedin" in lowered:
+        return "linkedin"
+    return ""
+
+
 def resolve_ad(value: Path, jd_dir: Path) -> Path:
     """Resolve `--file` to a real path.
 

@@ -517,11 +517,11 @@ def run_view(request: Request, run_id: int):
 @router.get("/ads/new")
 def add_form(request: Request, problem: str | None = None):
     ws = workspace(request)
-    try:
-        newest = ads.latest_ad(ws.jd_dir).name
-    except AdNotFound:
-        newest = None
+    newest_path = ads.newest_new_ad(ws)
+    newest = newest_path.name if newest_path else None
     return render(request, "add.html", {"nav": "add", "newest": newest, "jd_dir": ws.jd_dir,
+                                        "newest_source": ads.guess_source(newest or ""),
+                                        "any_saved": bool(ads.ads_in(ws.jd_dir)),
                                         "accepted": ", ".join(sorted(ads.AD_SUFFIXES)),
                                         "problem": problem},
                   status_code=409 if problem else 200)

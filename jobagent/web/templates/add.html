@@ -7,15 +7,18 @@
   Nothing here fetches a page. Each option shows the cost before anything is spent.</p>
 
 <div class="panel">
-  <h2 class="inline-h">Newest saved job</h2>
+  <h2 class="inline-h">Newest saved job not in JobAgent yet</h2>
   {% if newest %}
   <form method="post" action="/ads/new/confirm">
     <input type="hidden" name="csrf" value="{{ token }}">
-    <input type="hidden" name="mode" value="latest">
+    <input type="hidden" name="mode" value="saved">
+    <input type="hidden" name="name" value="{{ newest }}">
     <p><code>{{ newest }}</code> <span class="muted">in {{ jd_dir }}</span></p>
-    <p><label>Source <input type="text" name="source" placeholder="seek, linkedin, recruiter email"></label>
+    <p><label>Source <input type="text" name="source" value="{{ newest_source }}" placeholder="seek, linkedin, recruiter email"></label>
       <button type="submit" class="primary">Review…</button></p>
   </form>
+  {% elif any_saved %}
+  <p class="muted">Every job saved in {{ jd_dir }} is already in JobAgent, or was decided against on the Alerts page.</p>
   {% else %}
   <p class="muted">Nothing saved in {{ jd_dir }} yet.</p>
   {% endif %}
