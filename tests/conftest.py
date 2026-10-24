@@ -41,6 +41,25 @@ def no_libreoffice(monkeypatch):
     monkeypatch.setattr(pages, "soffice", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def no_caffeinate(monkeypatch):
+    """No test holds the Mac awake: every faked model call would spawn one."""
+    from jobagent.adapters import desktop
+
+    monkeypatch.setattr(desktop, "_caffeinate", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def no_real_run_log(monkeypatch, tmp_path_factory):
+    """No test writes to the real runs.jsonl.
+
+    A Config built without RUNS_LOG_PATH defaults to the repository's own log,
+    and tests with faked calls had been appending thousands of 1-token records
+    to it since mid-October, inflating `jobagent spend` call counts.
+    """
+    monkeypatch.setenv("RUNS_LOG_PATH", str(tmp_path_factory.mktemp("runs") / "runs.jsonl"))
+
+
 @pytest.fixture
 def example_dir() -> Path:
     return EXAMPLE_DIR

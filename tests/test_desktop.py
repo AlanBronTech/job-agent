@@ -61,3 +61,29 @@ def test_missing_file_is_refused(root):
     with pytest.raises(FileNotFoundError):
         desktop.open_file(root / "2026-09_Acme_EM" / "gone.docx", root=root, run=run)
     assert run.calls == []
+
+
+def test_keep_awake_runs_caffeinate_for_the_duration(monkeypatch):
+    import shutil
+
+    from jobagent.adapters import desktop
+
+    events = []
+
+    class Proc:
+        def terminate(self):
+            events.append("stopped")
+
+    monkeypatch.setattr(desktop, "_caffeinate", lambda: "/usr/bin/caffeinate")
+    with desktop.keep_awake(spawn=lambda args, **k: events.append(args) or Proc()):
+        events.append("work")
+    assert events == [["caffeinate", "-i"], "work", "stopped"]
+
+
+def test_keep_awake_does_nothing_without_caffeinate(monkeypatch):
+    import shutil
+
+    from jobagent.adapters import desktop
+
+    with desktop.keep_awake(spawn=lambda *a, **k: (_ for _ in ()).throw(AssertionError("spawned"))):
+        pass

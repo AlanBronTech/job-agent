@@ -264,12 +264,17 @@ class LLMClient(ABC):
         max_tokens: int,
         label: str | None = None,
     ) -> LLMResponse:
+        from jobagent.adapters.desktop import keep_awake
+
         delay = RETRY_BASE_DELAY
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
-                return self._complete(
-                    system=system, prompt=prompt, max_tokens=max_tokens
-                )
+                # The Mac idling into sleep froze a resume call for four hours
+                # (2026-10-25); held awake for each call, CLI and UI alike.
+                with keep_awake():
+                    return self._complete(
+                        system=system, prompt=prompt, max_tokens=max_tokens
+                    )
             except LLMError as exc:
                 if not isinstance(exc, RetryableLLMError):
                     # Terminal: a 401, or a daily quota that backing off cannot

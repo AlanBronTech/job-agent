@@ -36,3 +36,39 @@ def _inside(path: Path, root: Path) -> Path:
     if not resolved.exists():
         raise FileNotFoundError(path)
     return resolved
+
+
+class keep_awake:
+    """Hold off idle sleep while a long model call runs, on macOS.
+
+    A resume generate started at 01:53 on 2026-10-25 sat frozen until 06:12:
+    the Mac idled into sleep on battery, the streaming connection stalled, and
+    the call only timed out once the lid was opened. `caffeinate -i` holds an
+    idle-sleep assertion for as long as it runs. Closing the lid still sleeps,
+    as it should. Elsewhere, or if caffeinate is missing, this does nothing.
+    """
+
+    def __init__(self, spawn: Callable[..., object] = subprocess.Popen) -> None:
+        self._spawn = spawn
+        self._process = None
+
+    def __enter__(self) -> "keep_awake":
+        if _caffeinate():
+            try:
+                self._process = self._spawn(
+                    ["caffeinate", "-i"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            except OSError:
+                self._process = None
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if self._process is not None:
+            self._process.terminate()
+            self._process = None
+
+
+def _caffeinate() -> str | None:
+    import shutil
+
+    return shutil.which("caffeinate")
