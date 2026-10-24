@@ -264,3 +264,15 @@ def test_score_is_logged_as_ui(client, ws, ids, model, monkeypatch):
     monkeypatch.setattr(scoring, "score", spy)
     client.post(f"/ads/{ids['contoso']}/score", data={"csrf": TOKEN, "confirmed": "1"})
     assert seen == [("ui", "score")]
+
+
+def test_an_ad_already_added_is_refused_at_the_confirm_step(client, ws, model):
+    save(ws, "acme.txt")
+    response = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved",
+                                             "name": "acme.txt", "source": "seek"})
+    client.get(response.headers["location"])  # let the parse finish
+    model.parsed.clear()
+    again = client.post("/ads/new/confirm", data={"csrf": TOKEN, "mode": "saved", "name": "acme.txt"})
+    assert again.status_code == 409 and "already in JobAgent as JD" in flat(again)
+    started = client.post("/ads/new", data={"csrf": TOKEN, "confirmed": "1", "mode": "saved", "name": "acme.txt"})
+    assert started.status_code == 409 and model.parsed == []

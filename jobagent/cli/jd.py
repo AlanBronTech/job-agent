@@ -27,7 +27,7 @@ from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
 from jobagent.services import ads, reapply
-from jobagent.services.refusals import NoSuchAd, UnreadableAd
+from jobagent.services.refusals import AlreadyAdded, NoSuchAd, UnreadableAd
 from jobagent.services.workspace import Workspace
 from jobagent.core import history, store
 from jobagent.core.jd import JDError, parse_jd
@@ -142,6 +142,16 @@ def add(
                 client=client,
                 before_spend=lambda: print_estimate(config, "add_ad"),
             )
+    except AlreadyAdded as refusal:
+        err_console.print(
+            f"[bold yellow]Already in JobAgent as JD {refusal.jd_id}[/] ({refusal.reason})."
+            + ("" if refusal.spent else " Nothing was spent.")
+        )
+        err_console.print(
+            f"[dim]If the ad has changed since, update that JD instead: "
+            f"jobagent jd amend {refusal.jd_id} --file …[/]"
+        )
+        raise typer.Exit(code=1)
     except JDError as exc:
         err_console.print("[bold red]Could not parse the job description.[/]")
         err_console.print(str(exc))

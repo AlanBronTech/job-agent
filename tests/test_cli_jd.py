@@ -258,8 +258,10 @@ def test_the_second_ad_from_a_company_says_so(wired, jd_file) -> None:
     """The Nuix case: an ad from a company already in the pipeline must say so
     while the JD id is still on screen, before $0.20 is spent scoring it."""
     runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+    second = jd_file.with_name("jd2.txt")
+    second.write_text(SAMPLE_TEXT + "\nA second role in the same team.", encoding="utf-8")
 
-    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+    result = runner.invoke(app, ["jd", "add", "--file", str(second)])
 
     output = " ".join(result.output.split())
     assert result.exit_code == 0, result.output
@@ -288,3 +290,11 @@ def test_backfill_command_reports(wired, tmp_path, monkeypatch) -> None:
     result = runner.invoke(app, ["jd", "backfill"])
     assert result.exit_code == 0, result.output
     assert "Requisition numbers set: 1" in result.output and "JR_000123" in result.output
+
+
+def test_the_same_ad_twice_is_refused_before_spending(wired, jd_file) -> None:
+    runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+    result = runner.invoke(app, ["jd", "add", "--file", str(jd_file)])
+    output = " ".join(result.output.split())
+    assert result.exit_code == 1
+    assert "Already in JobAgent as JD 1" in output and "Nothing was spent" in output

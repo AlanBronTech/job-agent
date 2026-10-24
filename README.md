@@ -199,6 +199,12 @@ when it sees it, and `score` refuses to read a stub.
 jobagent jd add --latest --source seek
 ```
 
+**The same ad is never added twice.** `jd add`, Add a job, Batch and the
+Alerts page's Add to JobAgent all refuse, before spending anything, an ad
+already in JobAgent: the same job link, the same saved file, or the same text.
+The message names the JD. If the ad has changed since, `jd amend <id>` updates
+that one instead.
+
 `--latest` takes the ad you just saved. To pick an older one, give `--file`
 enough of its name to be unambiguous — `--file acme` — rather than typing a
 filename full of spaces and parentheses. A real path still works.

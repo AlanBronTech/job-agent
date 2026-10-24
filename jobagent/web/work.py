@@ -16,6 +16,7 @@ from jobagent.core.store import StoreError
 from jobagent.services import ads, batches, documents, scoring
 from jobagent.services import revise as revise_service
 from jobagent.services.documents import GenerationFailed
+from jobagent.services.refusals import AlreadyAdded
 from jobagent.services.workspace import Workspace
 from jobagent.web.runner import RunFailed
 
@@ -116,6 +117,11 @@ def add_ad(ws: Workspace, config, ctx: RunContext, ad, *, source: str | None):
     def work() -> dict:
         try:
             result = ads.add(ws, config, ctx, ad, source=source)
+        except AlreadyAdded as refusal:
+            raise RunFailed(
+                f"This ad is already in JobAgent as JD {refusal.jd_id} ({refusal.reason})."
+                + ("" if refusal.spent else " Nothing was spent.")
+            ) from refusal
         except JDError as exc:
             raise RunFailed(f"Could not parse the job description: {exc}") from exc
         except StoreError as exc:

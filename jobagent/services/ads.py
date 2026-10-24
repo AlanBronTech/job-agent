@@ -29,6 +29,7 @@ from jobagent.core.requisition import extract_requisition, requisition_candidate
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
+    AlreadyAdded,
     CaptureTruncated,
     NoModel,
     UnreadableAd,
@@ -186,6 +187,8 @@ def add(
     """
     if ad.truncated:
         raise CaptureTruncated()
+    with store.open_store(ws.db_path) as conn:
+        _refuse_if_stored(conn, ad)
     if client is None:
         try:
             client = get_client(CallType.parse_jd, config, ctx)
@@ -202,6 +205,11 @@ def add(
     jd.source_file = ad.name
 
     with store.open_store(ws.db_path) as conn:
+        # Again, after the parse: a second submit of the same ad may have
+        # been stored while this one was being read.
+        found = already_stored(conn, ad)
+        if found:
+            raise AlreadyAdded(*found, spent=True)
         jd.id = store.add_jd(conn, jd)
         log_attribution(ws.runs_log_path, client.context.run_id, jd.id)
         seen_before = history.company_history(conn, jd)
@@ -249,6 +257,34 @@ def saved_ad(ws: Workspace, name: str) -> Path:
     if not path.is_file():
         raise AdNotFound(f"No saved ad called {path.name} in {ws.jd_dir}.")
     return path
+
+
+def already_stored(conn, ad: AdInput) -> tuple[int, str] | None:
+    """The stored ad this one duplicates, and how it was recognised. Free.
+
+    Same job link (SEEK or LinkedIn job id, or the same address), same saved
+    file, or the same text. JD 94 and 95 were one CBA ad added twice in a
+    minute (2026-10-24). An ad that has changed since it was stored is an
+    amendment (`jd amend`), not a second ad.
+    """
+    from jobagent.core.alerts import job_key
+
+    key = job_key(ad.source_url)
+    for jd in store.list_jds(conn):
+        if ad.source_url and (jd.source_url == ad.source_url or (key and job_key(jd.source_url) == key)):
+            return jd.id, "same job link"
+        if ad.name and jd.source_file == ad.name:
+            return jd.id, "same saved file"
+    row = conn.execute(
+        "SELECT id FROM job_descriptions WHERE raw_text = ? ORDER BY id LIMIT 1", (ad.raw_text,)
+    ).fetchone()
+    return (row[0], "same text") if row else None
+
+
+def _refuse_if_stored(conn, ad: AdInput) -> None:
+    found = already_stored(conn, ad)
+    if found:
+        raise AlreadyAdded(*found)
 
 
 def input_key(ad: AdInput) -> str:

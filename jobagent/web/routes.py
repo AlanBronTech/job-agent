@@ -577,7 +577,21 @@ async def add_confirm(request: Request):
         ad, name = await _add_input(request, form, ws)
     except (BadUpload, AdNotFound, UnreadableAd) as refusal:
         return add_form(request, problem=str(refusal))
+    existing = _already_stored(ws, ad)
+    if existing:
+        return add_form(request, problem=existing)
     return _add_confirm(request, ad, name, str(form.get("source") or ""))
+
+
+def _already_stored(ws, ad) -> str | None:
+    from jobagent.core import store as core_store
+
+    with core_store.open_store(ws.db_path) as conn:
+        found = ads.already_stored(conn, ad)
+    if not found:
+        return None
+    return (f"This ad is already in JobAgent as JD {found[0]} ({found[1]}). Nothing was started. "
+            f"If the ad has changed since, amend that JD instead: jobagent jd amend {found[0]} --file ….")
 
 
 @router.post("/ads/new")
@@ -594,6 +608,9 @@ async def add_start(request: Request):
         return _add_confirm(request, ad, name, source or "", "Nothing was started: confirm the cost first.")
     if ad.truncated:
         return _add_confirm(request, ad, name, source or "", "This capture is incomplete; nothing was started.")
+    existing = _already_stored(ws, ad)
+    if existing:
+        return add_form(request, problem=existing)
     missing = readiness.missing(ws, config, "add_ad")
     if missing:
         return _add_confirm(request, ad, name, source or "", "Nothing was started: " + " ".join(missing))

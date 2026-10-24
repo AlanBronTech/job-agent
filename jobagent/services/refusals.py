@@ -48,6 +48,17 @@ class ThinAd(Refusal):
         self.chars = chars
 
 
+class AlreadyAdded(Refusal):
+    """The same ad is already stored: same job link, same saved file, or same text."""
+
+    def __init__(self, jd_id: int, reason: str, *, spent: bool = False) -> None:
+        super().__init__(f"already in JobAgent as JD {jd_id} ({reason})")
+        self.jd_id = jd_id
+        self.reason = reason
+        # True only when a simultaneous submit stored it during this parse.
+        self.spent = spent
+
+
 class CaptureTruncated(Refusal):
     """The saved page ends at a '…more' toggle."""
 

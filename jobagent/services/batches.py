@@ -30,7 +30,7 @@ from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.requisition import normalise_requisition
 from jobagent.core.scoring import check_constraints
 from jobagent.services import ads, outputs, reapply
-from jobagent.services.refusals import NoModel, UnreadableAd
+from jobagent.services.refusals import AlreadyAdded, NoModel, UnreadableAd
 from jobagent.services.workspace import Workspace
 
 _DDL = """
@@ -238,6 +238,9 @@ def parse(
             )
         except NoModel as exc:
             _refuse(ws, batch_id, name, NO_MODEL, exc.detail)
+            continue
+        except AlreadyAdded as refusal:
+            _refuse(ws, batch_id, name, DUPLICATE, str(refusal.jd_id))
             continue
         except (JDError, store.StoreError) as exc:
             _refuse(ws, batch_id, name, PARSE_FAILED, str(exc))

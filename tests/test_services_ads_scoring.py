@@ -116,10 +116,11 @@ def test_add_stores_attributes_and_reports_history(ws, monkeypatch):
         return make_jd("Platform Engineer", "Northwind Freight", 20)
     monkeypatch.setattr(ads, "parse_jd", parse)
 
-    result = ads.add(ws, CONFIG, ctx, ads.AdInput(raw_text=AD, source_url="https://example.invalid/2"),
+    text = AD + " A Platform Engineer role."
+    result = ads.add(ws, CONFIG, ctx, ads.AdInput(raw_text=text, source_url="https://example.invalid/2"),
                      source="seek", before_spend=lambda: spent.append("estimate"))
 
-    assert spent == ["estimate", AD]
+    assert spent == ["estimate", text]
     with store.open_store(ws.db_path) as conn:
         stored = store.get_jd(conn, result.jd.id)
     assert stored.source_url == "https://example.invalid/2"
@@ -240,3 +241,22 @@ def test_backfill_sets_exactly_and_reports_ambiguity(ws, monkeypatch):
         assert (got.requisition_id, got.source_file) == ("JR_000123", "fabrikam.txt")
         assert store.get_jd(conn, two_id).requisition_id is None
     assert ads.backfill(ws).requisitions_set == []  # idempotent
+
+
+@pytest.mark.parametrize("ad_input, reason", [
+    (dict(raw_text="Something else entirely.", source_url="https://au.seek.com/job/95448156?tracking=x"), "same job link"),
+    (dict(raw_text="Something else entirely.", name="cba.pdf"), "same saved file"),
+    (dict(raw_text="The stored ad text."), "same text"),
+])
+def test_an_ad_already_stored_is_refused_before_any_spend(ws, monkeypatch, ad_input, reason):
+    from jobagent.services.refusals import AlreadyAdded
+
+    with store.open_store(ws.db_path) as conn:
+        stored = make_jd("Engineering Manager", "Commonwealth Bank", 0)
+        stored.raw_text, stored.source_file = "The stored ad text.", "cba.pdf"
+        stored.source_url = "https://au.seek.com/job/95448156"
+        jd_id = store.add_jd(conn, stored)
+    monkeypatch.setattr(ads, "get_client", lambda *a, **k: (_ for _ in ()).throw(AssertionError("spent")))
+    with pytest.raises(AlreadyAdded) as refused:
+        ads.add(ws, CONFIG, RunContext(command="jd add"), ads.AdInput(**ad_input))
+    assert (refused.value.jd_id, refused.value.reason, refused.value.spent) == (jd_id, reason, False)
