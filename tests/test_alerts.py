@@ -381,3 +381,21 @@ def test_the_old_saved_decision_reads_as_interested(tmp_path):
     conn.commit()
     conn.close()
     assert store.list_alerts(store.connect(db))[0].decision is AlertDecision.interested
+
+
+def test_a_saved_ad_that_says_it_has_closed_is_marked_expired(ws):
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    _saved_page(ws.jd_dir, "Delivery Manager.mhtml", "https://au.seek.com/job/90000002")
+    path = ws.jd_dir / "Delivery Manager.mhtml"
+    path.write_text(path.read_text().replace("About the role.", "No longer accepting applications. About the role.", 1))
+    [row] = alerts.match_saved_files(ws, NOW)
+    assert row.decision is AlertDecision.expired and "closed" in row.note
+    assert alerts.ready_to_add(ws) == []
+
+
+def test_deciding_against_a_saved_ad_takes_it_off_the_add_list(ws):
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    _saved_page(ws.jd_dir, "Delivery Manager.mhtml", "https://au.seek.com/job/90000002")
+    [row] = alerts.match_saved_files(ws, NOW)
+    alerts.decide(ws, [row.id], AlertDecision.expired, now=NOW)
+    assert alerts.ready_to_add(ws) == []

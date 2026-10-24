@@ -51,6 +51,7 @@ SCHEMA_VERSION = 18
 _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     # v18 — the saved ad an alert listing led to.
     "alert_listings": [("saved_file", "TEXT NOT NULL DEFAULT ''")],
+    "scanned_files": [("closed", "INTEGER NOT NULL DEFAULT 0")],
     # v15 — the contract offer a contract ad was matched to (task 7).
     "fit_assessments": [("contract_offer", "TEXT")],
     "applications": [
@@ -1443,16 +1444,20 @@ def mark_alert_email(conn: sqlite3.Connection, message_id: str, read_at: str) ->
     conn.commit()
 
 
-def scanned_file(conn: sqlite3.Connection, name: str) -> tuple[int, str | None, str | None] | None:
-    row = conn.execute("SELECT mtime_ns, source, job_id FROM scanned_files WHERE name = ?", (name,)).fetchone()
-    return (row["mtime_ns"], row["source"], row["job_id"]) if row else None
+def scanned_file(conn: sqlite3.Connection, name: str) -> tuple[int, str | None, str | None, bool] | None:
+    row = conn.execute(
+        "SELECT mtime_ns, source, job_id, closed FROM scanned_files WHERE name = ?", (name,)
+    ).fetchone()
+    return (row["mtime_ns"], row["source"], row["job_id"], bool(row["closed"])) if row else None
 
 
-def record_scanned_file(conn: sqlite3.Connection, name: str, mtime_ns: int, key: tuple[str, str] | None) -> None:
+def record_scanned_file(
+    conn: sqlite3.Connection, name: str, mtime_ns: int, key: tuple[str, str] | None, closed: bool = False
+) -> None:
     conn.execute(
-        "INSERT INTO scanned_files (name, mtime_ns, source, job_id) VALUES (?, ?, ?, ?) "
+        "INSERT INTO scanned_files (name, mtime_ns, source, job_id, closed) VALUES (?, ?, ?, ?, ?) "
         "ON CONFLICT(name) DO UPDATE SET mtime_ns = excluded.mtime_ns, source = excluded.source, "
-        "job_id = excluded.job_id",
-        (name, mtime_ns, key[0] if key else None, key[1] if key else None),
+        "job_id = excluded.job_id, closed = excluded.closed",
+        (name, mtime_ns, key[0] if key else None, key[1] if key else None, int(closed)),
     )
     conn.commit()

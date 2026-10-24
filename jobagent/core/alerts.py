@@ -68,6 +68,18 @@ class Listing:
 # --------------------------------------------------------------------------- #
 
 
+_CLOSED = re.compile(
+    r"no longer accepting applications|applications have closed|"
+    r"this job is no longer (?:advertised|available)|this job has expired|job ad has expired",
+    re.I,
+)
+
+
+def says_closed(page_text: str) -> bool:
+    """Whether a saved job page says the ad has stopped taking applications."""
+    return bool(_CLOSED.search(page_text or ""))
+
+
 def has_job_links(text: str) -> bool:
     """Whether an email links to individual jobs at all: if it does and nothing
     was read from it, the layout has changed."""

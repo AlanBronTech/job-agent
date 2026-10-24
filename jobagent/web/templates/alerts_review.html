@@ -8,7 +8,7 @@
   <a href="/alerts">Back to the list</a>
 </div>
 {% if flash %}<div class="banner done">{{ flash }}</div>{% endif %}
-{% include "_alert_followups.html" %}
+{% set followups_back = "review" %}{% include "_alert_followups.html" %}
 
 {% if not item %}
   <p class="empty">Nothing left to review. Check email on the <a href="/alerts">Alerts page</a> for new jobs.</p>

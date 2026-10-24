@@ -44,6 +44,8 @@ FIRST_LOOKBACK = timedelta(days=7)
 # the pending list (it stays in the table and in `--all`).
 STALE_AFTER = timedelta(days=21)
 PENDING = (AlertVerdict.suggest, AlertVerdict.maybe)
+# Decisions that still leave something to do.
+OPEN_DECISIONS = (None, AlertDecision.later, AlertDecision.interested)
 
 
 class NoMailbox(Refusal):
@@ -376,21 +378,26 @@ def match_saved_files(ws: Workspace, now: datetime) -> list[AlertListing]:
             mtime = path.stat().st_mtime_ns
             known = store.scanned_file(conn, path.name)
             if known and known[0] == mtime:
-                key = (known[1], known[2]) if known[1] else None
+                key, closed = ((known[1], known[2]) if known[1] else None), known[3]
             else:
                 try:
                     page = extract_saved_page(path)
                 except Exception:  # noqa: BLE001 - an unreadable file is simply not matched
                     page = None
                 key = core.job_key(page.source_url) if page else None
-                store.record_scanned_file(conn, path.name, mtime, key)
+                closed = bool(page) and core.says_closed(page.full_text)
+                store.record_scanned_file(conn, path.name, mtime, key, closed)
             if key is None:
                 continue
             row = store.find_alert(conn, *key)
             if row is None or row.saved_file:
                 continue
             row.saved_file = path.name
-            if row.decision in (None, AlertDecision.later):
+            if closed and row.jd_id is None and row.decision in OPEN_DECISIONS:
+                # The page saved says the ad has closed: nothing left to do.
+                row.decision, row.decided_at = AlertDecision.expired, now
+                row.note = row.note or "the saved ad says applications have closed"
+            elif row.decision in (None, AlertDecision.later):
                 row.decision, row.decided_at = AlertDecision.interested, now
             store.save_alert(conn, row)
             linked.append(row)
@@ -406,5 +413,11 @@ def waiting_for_file(ws: Workspace) -> list[AlertListing]:
 
 
 def ready_to_add(ws: Workspace) -> list[AlertListing]:
-    """The ad is saved; it is not in JobAgent yet."""
-    return [r for r in listings(ws) if r.saved_file and r.jd_id is None]
+    """The ad is saved and still wanted; it is not in JobAgent yet.
+
+    A job decided against after its ad was saved (closed, say) drops off.
+    """
+    return [
+        r for r in listings(ws)
+        if r.saved_file and r.jd_id is None and r.decision in OPEN_DECISIONS
+    ]

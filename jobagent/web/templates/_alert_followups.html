@@ -4,7 +4,13 @@
   <strong>{{ waiting | length }} job{{ "s" if waiting | length != 1 }} you're interested in still need{{ "" if waiting | length != 1 else "s" }} the ad saved.</strong>
   Open it, press Cmd+P, and save it as PDF into <code>{{ jd_dir }}</code>. It is matched to the job by itself.
   <ul>{% for r in waiting %}
-    <li><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window>{{ r.title }}</a> — {{ r.company }}</li>
+    <li><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-window>{{ r.title }}</a> — {{ r.company }}
+      <form method="post" action="/alerts/{{ r.id }}/decide" class="inline">
+        <input type="hidden" name="csrf" value="{{ token }}">
+        <input type="hidden" name="show" value="{{ followups_back | default('pending') }}">
+        <button type="submit" name="decision" value="expired" title="No longer taking applications">Closed</button>
+        <button type="submit" name="decision" value="not_interested">Not interested</button>
+      </form></li>
   {% endfor %}</ul>
 </div>
 {% endif %}
@@ -19,6 +25,12 @@
         <input type="hidden" name="name" value="{{ r.saved_file }}">
         <input type="hidden" name="source" value="{{ r.source }}">
         <button type="submit">Add to JobAgent</button>
+      </form>
+      <form method="post" action="/alerts/{{ r.id }}/decide" class="inline">
+        <input type="hidden" name="csrf" value="{{ token }}">
+        <input type="hidden" name="show" value="{{ followups_back | default('pending') }}">
+        <button type="submit" name="decision" value="expired" title="No longer taking applications">Closed</button>
+        <button type="submit" name="decision" value="not_interested">Not interested</button>
       </form></li>
   {% endfor %}</ul>
 </div>
