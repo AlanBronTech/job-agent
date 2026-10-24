@@ -472,3 +472,52 @@ def test_the_page_lengths():
     full, contract = resume_length(False), resume_length(True)
     assert (full.low, full.high, full.limit) == (2.0, 2.75, 3.0)
     assert (contract.low, contract.high, contract.limit) == (1.5, 1.75, 1.75)
+
+
+def test_a_flagged_letter_sentence_is_repaired_instead_of_rewriting_the_letter(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.generate import GeneratedText, Sentence
+    from jobagent.services import checks
+
+    drafts = []
+
+    def letter(*a, feedback=None, **k):
+        drafts.append(feedback)
+        return GeneratedText(text="I gave them a year. Two.", issues=[],
+                             paragraphs=[[Sentence(text="I gave them a year.", cites=["x.0"]),
+                                          Sentence(text="Two.", cites=["x.0"])]],
+                             recheck=lambda paragraphs: [])
+    monkeypatch.setattr(documents, "build_cover_letter", letter)
+    verdicts = [[checks.Mismatch(sentence="I gave them a year.", problem="invented sequence")], []]
+    checked = []
+    monkeypatch.setattr(documents.checks, "check_claims",
+                        lambda c, x, sentences, *a, **k: checked.append([s.text for s in sentences]) or verdicts.pop(0))
+    monkeypatch.setattr(documents.checks, "repair_sentences",
+                        lambda *a, **k: {"I gave them a year.": "I gave them a couple of weeks."})
+
+    result = run(ws, ids["acme"], cover=True)
+    assert drafts == [None]  # never written twice
+    assert checked[-1] == ["I gave them a couple of weeks."]  # only the repaired sentence re-checked
+    assert result.claims == []
+    assert any(i.rule == "sentence repaired" for i in result.issues)
+    assert any(p.name == "AlanBron_CoverLetter_AcmeLogistics_202609.docx" for p in result.written)
+
+
+def test_a_repair_that_still_fails_the_check_falls_back_to_the_rewrite(ws, ids, fake_model, monkeypatch):
+    from jobagent.core.generate import GeneratedText, Sentence
+    from jobagent.services import checks
+
+    drafts = []
+
+    def letter(*a, feedback=None, **k):
+        drafts.append(feedback)
+        return GeneratedText(text="One.", issues=[], paragraphs=[[Sentence(text="One.", cites=["x.0"])]],
+                             recheck=lambda paragraphs: [])
+    monkeypatch.setattr(documents, "build_cover_letter", letter)
+    bad = [checks.Mismatch(sentence="One.", problem="unsupported detail")]
+    verdicts = [bad, [checks.Mismatch(sentence="Uno.", problem="still wrong")], []]
+    monkeypatch.setattr(documents.checks, "check_claims", lambda *a, **k: verdicts.pop(0))
+    monkeypatch.setattr(documents.checks, "repair_sentences", lambda *a, **k: {"One.": "Uno."})
+
+    result = run(ws, ids["acme"], cover=True)
+    assert len(drafts) == 2 and "unsupported detail" in drafts[1]
+    assert result.claims == []

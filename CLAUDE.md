@@ -233,6 +233,10 @@ it protects.
 - The six-month rule is a refusal before spending, not a hard filter (D32).
 - Excluded evidence is removed from the writer's input and re-checked on
   output (D33).
+- Repair before rewrite: a flagged sentence is rewritten alone on the repair
+  route (Haiku) and re-checked; duplicate bullets are dropped in code. A full
+  rewrite only when that fails. Saving money is a standing priority (Alan,
+  2026-10-25).
 - A paid check never loses the documents (D34). A surviving blocker puts
   `_NOT-READY` in the file name (D35). Reuse caps bind because failing
   forces a rewrite (D36).

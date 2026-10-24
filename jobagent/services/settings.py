@@ -48,6 +48,7 @@ STEPS: tuple[Step, ...] = (
     Step("generate", CallType.generate, "llm_generate", "Write documents", "the ad and your full profile"),
     Step("prep", CallType.prep, "llm_prep", "Interview prep", "the ad and your full profile"),
     Step("review", CallType.review, "llm_review", "Claim check and review", "the documents and their evidence"),
+    Step("repair", CallType.repair, "llm_repair", "Repair a flagged sentence", "the sentence and its evidence"),
 )
 
 

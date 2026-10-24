@@ -88,6 +88,9 @@ class CallType(str, Enum):
     # generation (claim check and independent review).
     classify = "classify"
     review = "review"
+    # 2026-10-25: rewriting one flagged sentence against its evidence, instead
+    # of the whole document. Small and cheap by design.
+    repair = "repair"
 
 
 
@@ -99,6 +102,9 @@ CHEAP_DEFAULTS: dict[CallType, tuple[str, ...]] = {
     CallType.parse_jd: (FREE_MODEL, CHEAP_MODEL),
     CallType.classify: (FREE_MODEL, CHEAP_MODEL),
     CallType.triage: (CHEAP_MODEL,),
+    # Sees the flagged sentences and the profile evidence they cite, so a paid
+    # model whose terms do not allow training on the input.
+    CallType.repair: (CHEAP_MODEL,),
 }
 
 
@@ -145,6 +151,7 @@ DEFAULT_EFFORT: dict[str, str] = {
     "generate": "medium",
     "prep": "medium",
     "review": "medium",
+    "repair": "low",
 }
 
 def _has_key(config: "Config", provider: Provider) -> bool:
@@ -755,6 +762,7 @@ def resolve_route(config: "Config", call_type: CallType) -> CallRoute:
         CallType.prep: config.llm_prep,
         CallType.classify: config.llm_classify,
         CallType.review: config.llm_review,
+        CallType.repair: config.llm_repair,
     }[call_type]
 
     if per_call:

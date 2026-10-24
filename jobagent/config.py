@@ -55,6 +55,7 @@ class Config(BaseSettings):
     llm_prep: str | None = None
     llm_classify: str | None = None
     llm_review: str | None = None
+    llm_repair: str | None = None
     # Reasoning effort per call type, "score=high,generate=medium"; unset uses
     # adapters/llm.py:DEFAULT_EFFORT. "default" lets the model decide.
     llm_effort: str | None = None

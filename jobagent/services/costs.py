@@ -40,6 +40,7 @@ _LABEL_CALL = {
     "screen_fit": CallType.triage,
     "check_claims": CallType.review,
     "review_documents": CallType.review,
+    "repair_sentences": CallType.repair,
 }
 
 

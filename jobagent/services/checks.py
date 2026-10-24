@@ -182,3 +182,78 @@ def review_markdown(result: Review | NotReviewed) -> str:
             lines += ["", f"## {title}", ""]
             lines += [f"- **{f.document or 'documents'}**: {f.finding}" for f in findings]
     return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# Repairing a flagged sentence instead of rewriting the document
+# --------------------------------------------------------------------------- #
+
+REPAIR_PROMPT = "repair_sentences"
+REPAIR_MAX_TOKENS = 8192
+
+
+class _Repair(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    original: str
+    text: str
+
+
+class _Repairs(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    repairs: list[_Repair] = Field(default_factory=list)
+
+
+def repair_sentences(
+    config,
+    ctx: RunContext,
+    mismatches: list[Mismatch],
+    sentences: list[Sentence],
+    profile: Profile,
+    *,
+    banned: list[str] = (),
+    client_factory: Callable[[], object] | None = None,
+) -> dict[str, str] | NotChecked:
+    """Rewrite only the sentences the claim check flagged, against their evidence.
+
+    One small call on a cheap model, where a full rewrite of the document cost
+    $0.10-0.28 and could get another sentence wrong (JD 102, 2026-10-25).
+    Returns {flagged sentence: rewritten sentence}. Never raises: a failed
+    repair falls back to the full rewrite.
+    """
+    by_text = {s.text.strip(): s for s in sentences}
+    items = []
+    for m in mismatches:
+        sentence = by_text.get(m.sentence.strip())
+        if sentence is None:
+            continue
+        lines = [f"SENTENCE: {sentence.text}", f"PROBLEM: {m.problem}"]
+        for ref in sentence.cites:
+            if ref != AD:
+                lines.append(f"  [{ref}] {evidence_text(profile, ref) or '(no such evidence)'}")
+        items.append("\n".join(lines))
+    if not items:
+        return NotChecked("no flagged sentence matched the document")
+    try:
+        client = (client_factory or (lambda: get_client(CallType.repair, config, ctx)))()
+        parsed, _ = client.complete_json(
+            prompt=load_prompt(
+                REPAIR_PROMPT,
+                items="\n\n".join(items),
+                banned=", ".join(f'"{b}"' for b in banned) or "(none)",
+            ),
+            label=REPAIR_PROMPT,
+            max_tokens=REPAIR_MAX_TOKENS,
+        )
+        repairs = _Repairs.model_validate(parsed).repairs
+    except ValidationError as exc:
+        return NotChecked(f"the repair did not match the contract: {exc.error_count()} error(s)")
+    except Exception as exc:  # noqa: BLE001 - a failed repair falls back to a rewrite
+        return NotChecked(str(exc))
+    out = {
+        r.original.strip(): r.text.strip()
+        for r in repairs
+        if r.original.strip() in by_text and r.text.strip()
+    }
+    return out or NotChecked("the repair returned no usable sentence")

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -258,6 +258,9 @@ class GeneratedText:
     paragraphs: list[list[Sentence]] = field(default_factory=list)
     # As GeneratedResume.rejected.
     rejected: list[list[ValidationIssue]] = field(default_factory=list)
+    # The code checks again, on changed sentences: a repaired sentence must
+    # pass them as a first draft would.
+    recheck: object = field(default=None, repr=False, compare=False)
 
     @property
     def sentences(self) -> list[Sentence]:
@@ -310,6 +313,21 @@ def build_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
             today=today or date.today(),
         )
+        # Repetition is repaired in code where it can be: dropping a duplicate
+        # bullet costs nothing, and a rewrite for it cost $0.19-0.28.
+        if any(i.rule in _REPAIRABLE for i in built.issues if i.severity is Severity.blocker):
+            repaired, notes = _repair_repeats(selection, profile, catalogue)
+            if notes:
+                again = _check_resume(
+                    repaired, jd, profile, assessment, catalogue, citable, excluded, kind,
+                    today=today or date.today(),
+                )
+                if _blockers(again) < _blockers(built):
+                    again.issues += [
+                        ValidationIssue(rule="repaired in code", severity=Severity.warning, detail=n)
+                        for n in notes
+                    ]
+                    built = again
         failures = [i for i in built.issues if i.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
             break
@@ -411,6 +429,57 @@ def _uncited_paragraphs(selection: _ResumeSelection) -> list[ValidationIssue]:
                 )
             )
     return issues
+
+
+_REPAIRABLE = {"highlight repeats a bullet", "story reused"}
+
+
+def _blockers(built: GeneratedResume) -> int:
+    return sum(1 for i in built.issues if i.severity is Severity.blocker)
+
+
+def _repair_repeats(selection: _ResumeSelection, profile: Profile, catalogue: dict[str, str]):
+    """Drop experience bullets that repeat a highlight or a story told elsewhere on the page.
+
+    Only bullets go, and never a role's last one: a highlight or a PROFILE
+    sentence is prose the model wrote for this ad, and an empty role reads as
+    a gap. Returns the repaired selection and a line per bullet dropped.
+    """
+    roles = [(r.role_id, list(r.bullet_refs)) for r in selection.roles]
+    notes: list[str] = []
+
+    def drop(ref: str, why: str) -> bool:
+        for _, refs in roles:
+            if ref in refs and len(refs) > 1:
+                refs.remove(ref)
+                notes.append(f"Dropped bullet {ref} from EXPERIENCE: {why}.")
+                return True
+        return False
+
+    for n, highlight in enumerate(selection.highlights, 1):
+        for _, refs in roles:
+            for ref in list(refs):
+                if ref in catalogue and overlap(highlight.text, catalogue[ref]) >= REPEAT_OVERLAP:
+                    drop(ref, f"highlight {n} says the same")
+
+    def current() -> _ResumeSelection:
+        return selection.model_copy(
+            update={"roles": [_RoleSelection(role_id=r, bullet_refs=list(b)) for r, b in roles]}
+        )
+
+    for story, places in story_uses(_resume_places(current()), profile).items():
+        bullets = [p.removeprefix("bullet ") for p in places if p.startswith("bullet ")]
+        if any(p.startswith("PROFILE") for p in places):
+            for ref in bullets:
+                drop(ref, f"the PROFILE already tells the {story} story")
+            continue
+        extra = len(places) - 2
+        for ref in reversed(bullets):
+            if extra <= 0:
+                break
+            if drop(ref, f"the {story} story was on the page {len(places)} times"):
+                extra -= 1
+    return current(), notes
 
 
 # A highlight and an experience bullet sharing this much of their wording is
@@ -977,23 +1046,9 @@ def _write_cited(
     result = GeneratedText(text="")
     rejected: list[list[ValidationIssue]] = []
     name = profile.roles.person.name
-    for attempt in range(REWRITE_ATTEMPTS + 1):
-        try:
-            parsed, _ = client.complete_json(
-                prompt=attempt_prompt, label=label, max_tokens=MAX_TOKENS
-            )
-        except LLMError as exc:
-            raise GenerateError(f"Model call failed while writing: {exc}") from exc
-        try:
-            letter = _Letter.model_validate(parsed)
-        except ValidationError as exc:
-            raise GenerateError(
-                f"The model's sentences did not match the contract.\n{exc}"
-            ) from exc
-        paragraphs = _story_cites(_drop_furniture(letter.paragraphs, name), profile, known)
+
+    def checks_for(paragraphs: list[list[Sentence]]) -> list[ValidationIssue]:
         text = paragraphs_text(paragraphs)
-        if not text:
-            raise GenerateError("The model returned nothing.")
         issues = validate_prose(text, profile, max_words=max_words, context=context)
         issues += check_citations(paragraphs, known, context=context)
         issues += check_employers(paragraphs, profile)
@@ -1011,7 +1066,27 @@ def _write_cited(
         if ad_text is not None:
             issues += check_company_sentences(paragraphs, ad_text)
         issues += _repeats_resume(paragraphs, on_resume or {})
-        result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs)
+        return issues
+
+    for attempt in range(REWRITE_ATTEMPTS + 1):
+        try:
+            parsed, _ = client.complete_json(
+                prompt=attempt_prompt, label=label, max_tokens=MAX_TOKENS
+            )
+        except LLMError as exc:
+            raise GenerateError(f"Model call failed while writing: {exc}") from exc
+        try:
+            letter = _Letter.model_validate(parsed)
+        except ValidationError as exc:
+            raise GenerateError(
+                f"The model's sentences did not match the contract.\n{exc}"
+            ) from exc
+        paragraphs = _story_cites(_drop_furniture(letter.paragraphs, name), profile, known)
+        text = paragraphs_text(paragraphs)
+        if not text:
+            raise GenerateError("The model returned nothing.")
+        issues = checks_for(paragraphs)
+        result = GeneratedText(text=text, issues=issues, paragraphs=paragraphs, recheck=checks_for)
         failures = [issue for issue in issues if issue.severity is Severity.blocker]
         if not failures or attempt == REWRITE_ATTEMPTS:
             break
@@ -1019,6 +1094,50 @@ def _write_cited(
         attempt_prompt = f"{prompt}\n\n{_rewrite_instruction(failures, json_output=True)}"
     result.rejected = rejected
     return result
+
+
+def apply_text_repairs(written: GeneratedText, repairs: dict[str, str]) -> GeneratedText:
+    """The letter or answers with flagged sentences replaced, and the code checks run again."""
+    paragraphs = [
+        [s.model_copy(update={"text": repairs.get(s.text.strip(), s.text)}) for s in paragraph]
+        for paragraph in written.paragraphs
+    ]
+    issues = written.recheck(paragraphs) if callable(written.recheck) else list(written.issues)
+    return GeneratedText(
+        text=paragraphs_text(paragraphs), issues=issues, paragraphs=paragraphs,
+        rejected=written.rejected, recheck=written.recheck,
+    )
+
+
+def apply_resume_repairs(built: GeneratedResume, repairs: dict[str, str], profile: Profile) -> GeneratedResume:
+    """The resume with flagged PROFILE paragraphs and highlights replaced and checked in code."""
+    content = built.content
+    issues = list(built.issues)
+    paragraphs = []
+    for text in content.profile_paragraphs:
+        new = repairs.get(text.strip())
+        if new:
+            issues += validate_prose(new, profile, context="the PROFILE section")
+            issues += check_third_person(new, "the PROFILE section", name=False, pronouns=True)
+        paragraphs.append(new or text)
+    highlights = []
+    on_page = dict(built.on_page)
+    for n, (label, text) in enumerate(content.highlights, 1):
+        new = repairs.get(f"{label} — {text}".strip())
+        if new:
+            label, _, claim = new.partition(" — ") if " — " in new else (label, "", new)
+            text = claim.strip()
+            issues += validate_prose(f"{label} — {text}", profile, context="a CAREER HIGHLIGHTS bullet")
+            on_page[f"highlight {n}"] = text
+        highlights.append((label.strip(), text))
+    sentences = [
+        s.model_copy(update={"text": repairs.get(s.text.strip(), s.text)}) for s in built.sentences
+    ]
+    return replace(
+        built,
+        content=replace(content, profile_paragraphs=paragraphs, highlights=highlights),
+        issues=issues, on_page=on_page, sentences=sentences,
+    )
 
 
 def paragraphs_text(paragraphs: list[list[Sentence]]) -> str:

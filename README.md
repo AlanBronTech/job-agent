@@ -428,6 +428,14 @@ After the folder list you get:
   the failures named, as the letter always was. If a blocker still survives,
   the file is written as `…_NOT-READY.docx`, so it cannot be sent by
   mistake.
+- **Repaired before rewritten** (2026-10-25), to save money. A sentence the
+  claim check flags is first rewritten on its own by the cheapest model (about
+  half a cent) against the evidence it cites, then checked again; the whole
+  document is written again only if that fails. A highlight that repeats an
+  experience bullet, or a story told in the PROFILE and again in a bullet,
+  has the duplicate bullet dropped in code (never a role's last one), free.
+  Both show as warnings in `assessment.md` ("sentence repaired", "repaired in
+  code") so you read what changed.
 
 **What to do about it:** open the .docx, read it, edit what you want, send it
 yourself. Ten minutes, not two hours.

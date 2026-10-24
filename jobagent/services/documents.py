@@ -38,6 +38,8 @@ from jobagent.core.generate import (
     build_cover_letter,
     build_resume,
     ResumeLength,
+    apply_resume_repairs,
+    apply_text_repairs,
     contract_block,
     instructions_block,
     resume_length,
@@ -283,6 +285,18 @@ def generate(
         rewrites["resume"] = list(getattr(built, "rejected", []))
         found = claim_check(built)
         if isinstance(found, list) and found:
+            # The flagged sentences first, on a cheap model; the whole
+            # resume again only if that does not hold.
+            repaired = _repair(
+                config, ctx, profile, found, getattr(built, "sentences", []),
+                apply=lambda fixes: apply_resume_repairs(built, fixes, profile),
+                sentences_of=lambda doc: doc.sentences,
+                check=lambda changed: checks.check_claims(
+                    config, ctx, changed, profile, client_factory=lambda: review_client),
+            )
+            if repaired is not None:
+                built, found = repaired, []
+        if isinstance(found, list) and found:
             # As the letter: a mismatch is a blocker, so select again once
             # with the mismatches named, then check the new draft.
             rewrites["resume"] += [claim_issues(found)]
@@ -341,6 +355,16 @@ def generate(
             found = checks.check_claims(
                 config, ctx, sentences, profile, client_factory=lambda: review_client
             )
+            if isinstance(found, list) and found:
+                repaired = _repair(
+                    config, ctx, profile, found, sentences,
+                    apply=lambda fixes: apply_text_repairs(letter, fixes),
+                    sentences_of=lambda doc: doc.sentences,
+                    check=lambda changed: checks.check_claims(
+                        config, ctx, changed, profile, client_factory=lambda: review_client),
+                )
+                if repaired is not None:
+                    letter, found = repaired, []
             if isinstance(found, list) and found:
                 rejected_claims = found
                 # A mismatch is a blocker, and a blocker means write it again:
@@ -460,6 +484,41 @@ def generate(
         ready=is_ready(issues, claims, reviewed),
         resume_pages=resume_pages,
     )
+
+
+def _repair(config, ctx, profile, found, sentences, *, apply, sentences_of, check):
+    """The document with its flagged sentences rewritten, or None to fall back to a rewrite.
+
+    Accepted only when the rewritten sentences pass the code checks and the
+    claim check both. The change is kept on the document as a warning, so it
+    is read before the document is sent.
+    """
+    fixes = checks.repair_sentences(
+        config, ctx, found, sentences, profile, banned=banned_phrases(profile.voice)
+    )
+    if not isinstance(fixes, dict):
+        return None
+    try:
+        candidate = apply(fixes)
+    except Exception:  # noqa: BLE001 - an unexpected shape falls back to the rewrite
+        return None
+    if _blocked(candidate.issues):
+        return None
+    new_texts = set(fixes.values())
+    changed = [s for s in sentences_of(candidate) if s.text.strip() in new_texts]
+    if not changed or check(changed) != []:
+        return None
+    from jobagent.core.validation import Severity, ValidationIssue
+
+    candidate.issues = list(candidate.issues) + [
+        ValidationIssue(
+            rule="sentence repaired", severity=Severity.warning,
+            detail=f"The claim check flagged it; rewritten to match its evidence. Was: {old}",
+            excerpt=new,
+        )
+        for old, new in fixes.items()
+    ]
+    return candidate
 
 
 def is_ready(issues, claims, reviewed) -> bool:
