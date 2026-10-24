@@ -1766,7 +1766,11 @@ def evidence_text(profile: Profile, ref: str) -> str | None:
             if entry.id != entry_id:
                 continue
             if index.isdigit() and int(index) < len(entry.bullets):
-                return entry.bullets[int(index)].text
+                # With the entry's heading: a bullet alone does not say whose
+                # it is. "Founder, architect" for a bullet of a Co-founder &
+                # CTO entry was marked unsupported because the checker saw
+                # only "built the initial versions alone as architect".
+                return f"{_entry_label(entry)}: {entry.bullets[int(index)].text}"
             if not index:
                 return f"{_entry_label(entry)}: " + " ".join(b.text for b in entry.bullets)
     for entry in r.earlier_career:

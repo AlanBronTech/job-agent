@@ -49,3 +49,13 @@ def test_a_number_in_a_false_line_licenses_nothing(profile_factory):
 def test_a_story_without_the_fields_renders_as_before(profile_factory):
     rendered = _render_stories(load_profile(profile_factory()))
     assert "NOT TRUE" not in rendered and "sequence, in this order" not in rendered
+
+
+def test_a_bullets_evidence_carries_its_entrys_heading(profile_factory):
+    from jobagent.core.profile import load_profile
+
+    profile = load_profile(profile_factory())
+    entry = profile.roles.roles[0]
+    text = evidence_text(profile, f"{entry.id}.0")
+    assert text.startswith(f"{entry.company} · {entry.title}: ")
+    assert text.endswith(entry.bullets[0].text)
