@@ -22,8 +22,14 @@
 </p>
 {% if jd.source_url or jd.source_metadata %}
 <p class="detail">
-  {# Plain text, never a link: the UI does not open or link through to job boards (FR-007, FR-008). #}
-  {% if jd.source_url %}Source: <code>{{ jd.source_url }}</code>{% endif %}
+  {# A link Alan clicks, to apply on the board's own page (Alan, 2026-10-25,
+     amending FR-008). The UI still never fetches, embeds or fills in that
+     page: it opens in his browser like any link he follows. http(s) only. #}
+  {% if jd.source_url and (jd.source_url.startswith("https://") or jd.source_url.startswith("http://")) %}
+    <script src="/static/window.js" defer></script>
+    <a class="button primary" href="{{ jd.source_url }}" target="_blank" rel="noopener noreferrer" data-window>Open the ad ↗</a>
+    <span class="muted">to apply · <code>{{ jd.source_url }}</code></span>
+  {% elif jd.source_url %}Source: <code>{{ jd.source_url }}</code>{% endif %}
   {% if jd.source_metadata %}<br>{{ jd.source_metadata }}{% endif %}
 </p>
 {% endif %}

@@ -230,6 +230,9 @@ the content shown match `jobagent prep`.
   only as files Alan saved himself or text he pastes.
 - **FR-008**: The UI MUST NOT submit, fill in or link-through to any application
   form. Its output is files in the local output folder.
+  *Amended 2026-10-25:* a job's own ad page may be shown as a link the user
+  clicks (Alerts, and "Open the ad" on a job), so he can apply there himself.
+  The UI still never fetches, embeds or fills in that page.
 - **FR-009**: Generated documents MUST be shown with every validation issue and
   the unused-entry list, on clean runs as well as failing ones.
 

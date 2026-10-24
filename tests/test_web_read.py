@@ -148,15 +148,25 @@ def test_missing_ad_is_404(client, ids):
 # -- FR-008: nothing links off-host --------------------------------------------
 
 
-def test_no_link_leaves_the_machine(client, ids):
+def test_no_link_leaves_the_machine_except_the_ads_own(client, ids):
+    """FR-008, amended 2026-10-25: the one link off the machine is the ad's own
+    page, so Alan can apply on it. Nothing is fetched or embedded."""
     for path in ["/", *(f"/ads/{i}" for i in ids.values())]:
         page = client.get(path).text
         for href in re.findall(r'href="([^"]+)"', page):
-            assert href.startswith("/"), (path, href)
+            assert href.startswith("/") or href == "https://jobs.example.invalid/acme-em", (path, href)
         for src in re.findall(r'src="([^"]+)"', page):
             assert src.startswith("/"), (path, src)
-    # The ad's own URL is shown, as text.
-    assert "https://jobs.example.invalid/acme-em" in client.get(f"/ads/{ids['acme']}").text
+    page = client.get(f"/ads/{ids['acme']}").text
+    assert 'href="https://jobs.example.invalid/acme-em" target="_blank" rel="noopener noreferrer" data-window' in page
+
+
+def test_a_source_that_is_not_a_web_address_is_never_a_link(client, ws, ids):
+    with store.open_store(ws.db_path) as conn:
+        conn.execute("UPDATE job_descriptions SET source_url = 'javascript:alert(1)' WHERE id = ?", (ids["acme"],))
+        conn.commit()
+    page = client.get(f"/ads/{ids['acme']}").text
+    assert 'href="javascript' not in page and "javascript:alert(1)" in page
 
 
 # -- Documents: open and reveal, only what is listed --------------------------
