@@ -150,3 +150,8 @@ form.pipeline input.wide { width: 100%; }
 kbd { display: inline-block; min-width: 1.4em; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; text-align: center; color: var(--muted); background: var(--panel); }
 .panel.review h2 { margin: 0 0 6px; font-size: 22px; }
 .panel.review button { margin: 2px 4px 2px 0; }
+
+/* Jobs page: the status, changed in place */
+.status-cell select { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 2px; max-width: 13em; }
+.status-cell select.status-none { color: var(--muted); }
+.status-cell .problem { color: var(--bad); font-size: 12px; margin-top: 2px; max-width: 18em; }

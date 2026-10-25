@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import verdict, status %}
+{% from "_macros.html" import verdict %}
 {% block title %}Jobs · job-agent{% endblock %}
 {% block main %}
 <div class="heading-row">
@@ -36,7 +36,7 @@
       <td class="muted nowrap">{{ r.captured | local("%-d %b %Y") }}</td>
       <td>{{ verdict(r.verdict) }}{% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
       <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-      <td>{{ status(r.status) }}</td>
+      <td>{% include "_status_cell.html" %}</td>
       <td>{% if r.has_documents %}<span title="Documents on disk">●</span>{% endif %}</td>
     </tr>
   {% endfor %}

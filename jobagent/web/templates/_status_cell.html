@@ -1,0 +1,14 @@
+{# The Jobs page's status, changed in place. Saved on change through the same
+   guards as the job page's pipeline form; a refusal shows here, in the row. #}
+{% set current = r.status.value if r.status else "" %}
+<form class="status-cell" hx-post="/ads/{{ r.jd_id }}/status" hx-trigger="change" hx-swap="outerHTML">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <select name="status" aria-label="Status of JD {{ r.jd_id }}" class="status-{{ current or 'none' }}">
+    {% if not current %}<option value="" selected>—</option>{% endif %}
+    {% for value, label in pipeline.statuses.items() %}
+    <option value="{{ value }}" {% if value == current %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if saved %}<span class="muted" role="status">saved</span>{% endif %}
+  {% if problem %}<div class="problem" role="alert">{{ problem }}{% if problem_link %} <a href="{{ problem_link }}">Open the job</a>{% endif %}</div>{% endif %}
+</form>

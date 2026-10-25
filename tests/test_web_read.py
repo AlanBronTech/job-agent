@@ -91,7 +91,8 @@ def test_list_shows_every_ad_newest_first(client, ids):
     assert order == [ids["contoso"], ids["fabrikam"], ids["acme"], ids["northwind"], ids["northwind_old"]]
     body = text(page)
     assert "78 / 70" in body and "41 / 35" in body
-    assert "rejected screen" in body and "not scored" in body and "stale" in body
+    assert 'value="rejected_screen" selected' in page.text
+    assert "not scored" in body and "stale" in body
 
 
 def test_list_by_score(client, ids):
@@ -303,3 +304,28 @@ def test_applied_with_a_not_ready_document_needs_an_explicit_confirmation(client
     ok = client.post(f"/ads/{ids['contoso']}/pipeline",
                      data={"csrf": TOKEN, "status": "applied", "confirm_blockers": "1"})
     assert ok.status_code == 303
+
+
+# -- The Jobs page: the status changed in place -------------------------------------
+
+
+def test_the_jobs_page_changes_a_status_in_the_row(client, ws, ids):
+    page = client.get("/").text
+    assert f'hx-post="/ads/{ids["contoso"]}/status"' in page and "Chose not to apply" in page
+    cell = client.post(f"/ads/{ids['contoso']}/status", data={"csrf": TOKEN, "status": "not_applied"})
+    assert cell.status_code == 200 and 'value="not_applied" selected' in cell.text and "saved" in cell.text
+    with store.open_store(ws.db_path) as conn:
+        assert store.get_application(conn, ids["contoso"]).status.value == "not_applied"
+
+
+def test_the_jobs_page_status_keeps_the_pipeline_guards(client, ws, ids):
+    assert client.post(f"/ads/{ids['contoso']}/status",
+                       data={"csrf": "wrong", "status": "applied"}).status_code in (400, 403)
+    with store.open_store(ws.db_path) as conn:
+        jd_row = store.get_jd(conn, ids["contoso"])
+    folder = ws.documents.path_for_write(jd_row, TODAY, "x").parent
+    (folder / "AlanBron_CoverLetter_ContosoHealth_202609_NOT-READY.docx").write_bytes(b"x")
+    cell = client.post(f"/ads/{ids['contoso']}/status", data={"csrf": TOKEN, "status": "applied"})
+    assert "NOT-READY" in cell.text and f'href="/ads/{ids["contoso"]}#pipeline"' in cell.text
+    with store.open_store(ws.db_path) as conn:
+        assert store.get_application(conn, ids["contoso"]) is None

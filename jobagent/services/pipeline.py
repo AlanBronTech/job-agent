@@ -88,7 +88,7 @@ STATUS_LABELS: dict[str, str] = {
     "rejected_after_interview": "Rejected after interview",
     "ghosted_after_contact": "Went quiet after contact",
     "withdrew": "Withdrew",
-    "not_applied": "Not applied",
+    "not_applied": "Chose not to apply",
 }
 
 CHANNELS: tuple[str, ...] = (
@@ -114,6 +114,13 @@ class OpenBlockers(Exception):
     def __init__(self, files: list[str]) -> None:
         super().__init__(", ".join(files))
         self.files = files
+
+
+def current_status(ws: Workspace, jd_id: int) -> ApplicationStatus | None:
+    """Where the application stands, or None when nothing is recorded."""
+    with store.open_store(ws.db_path) as conn:
+        application = store.get_application(conn, jd_id)
+    return application.status if application else None
 
 
 def not_ready_documents(ws: Workspace, jd: JobDescription, today: date) -> list[str]:

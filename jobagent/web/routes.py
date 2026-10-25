@@ -133,6 +133,31 @@ async def pipeline_save(request: Request, jd_id: int):
     return RedirectResponse(f"/ads/{jd_id}?saved=1#pipeline", status_code=303)
 
 
+@router.post("/ads/{jd_id:int}/status")
+async def status_save(request: Request, jd_id: int):
+    """The Jobs page's status dropdown: the status alone, through the pipeline form's guards. Free.
+
+    Answers with the cell, for HTMX to swap in; a refusal is shown in the row.
+    """
+    form = await checked_form(request)
+    ws = workspace(request)
+    problem = link = None
+    try:
+        pipeline.update_from_form(ws, jd_id, status=str(form.get("status") or ""),
+                                  today=request.app.state.today())
+    except NoSuchAd:
+        return render(request, "error.html", {"heading": "No such job",
+                      "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except pipeline.OpenBlockers:
+        problem = "Not saved: documents marked NOT-READY are in the folder."
+        link = f"/ads/{jd_id}#pipeline"
+    except ValueError as exc:
+        problem = f"Not saved: {exc}"
+    row = {"jd_id": jd_id, "status": pipeline.current_status(ws, jd_id)}
+    return render(request, "_status_cell.html", {"r": row, "saved": problem is None,
+                                                 "problem": problem, "problem_link": link})
+
+
 async def _sent_files(form, ws, jd_id: int, today):
     """The form's sent documents, checked and held, or None if it named none."""
     files = {}
