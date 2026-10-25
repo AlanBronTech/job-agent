@@ -48,6 +48,11 @@ class Span:
     start: tuple[int, int]
     end: tuple[int, int] | None  # None: present
     management: bool
+    managed_from: tuple[int, int] | None = None  # later than start, when it is
+
+    @property
+    def managing_from(self) -> tuple[int, int]:
+        return max(self.start, self.managed_from or self.start)
 
     @property
     def label(self) -> str:
@@ -82,7 +87,7 @@ def management_months(profile: Profile, *, today: date | None = None) -> int:
         if not span.management:
             continue
         end = span.end or (today.year, today.month)
-        y, m = span.start
+        y, m = span.managing_from
         while (y, m) < end:
             months.add((y, m))
             y, m = (y + 1, 1) if m == 12 else (y, m + 1)
@@ -100,7 +105,7 @@ def roles_in_order(profile: Profile) -> list[Span]:
     for venture in profile.roles.founder_track_record:
         if venture.people_management and venture.start:
             spans.append(Span(venture.id, venture.company, venture.role, _period(venture.start),
-                              _period(venture.end), True))
+                              _period(venture.end), True, _period(venture.management_from)))
     return sorted(spans, key=lambda s: s.start)
 
 
@@ -118,12 +123,13 @@ def render(profile: Profile) -> str:
     spans = roles_in_order(profile)
     lines = [
         f"{_fmt(s.start)} to {_fmt(s.end)}  {s.label}  "
-        f"[{'management' if s.management else 'individual contributor'}]"
+        f"[{'management' if s.management else 'individual contributor'}"
+        + (f", managing people from {_fmt(s.managed_from)}" if s.managed_from else "") + "]"
         for s in spans
     ]
-    first = next((s for s in spans if s.management), None)
+    first = min((s for s in spans if s.management), key=lambda s: s.managing_from, default=None)
     if first:
-        lines.append(f"First management role starts {_fmt(first.start)} ({first.company}).")
+        lines.append(f"First management role starts {_fmt(first.managing_from)} ({first.company}).")
         total = management_months(profile)
         years, rest = divmod(total, 12)
         lines.append(
@@ -136,7 +142,7 @@ def render(profile: Profile) -> str:
                 "Leadership before these, undated and so not in the total: "
                 + ", ".join(earlier) + ". The total is a minimum, not the career."
             )
-    ics_after = [s.company for s in spans if not s.management and first and s.start > first.start]
+    ics_after = [s.company for s in spans if not s.management and first and s.start > first.managing_from]
     if ics_after:
         lines.append(
             "Individual-contributor roles that began after the first management role: "

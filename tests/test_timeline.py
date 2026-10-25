@@ -174,3 +174,13 @@ def test_a_years_at_claim_the_dates_do_not_support_is_caught(profile):
 def test_the_scorer_is_told_not_to_lead_with_contracting_for_a_permanent_role():
     prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
     assert "permanent" in prompt and "contracting pattern" in prompt
+
+
+def test_a_venture_that_hired_later_counts_from_when_the_managing_began(profile):
+    today = __import__("datetime").date(2026, 10, 16)
+    late = _with(profile, founder={"start": "2008-01", "end": "2012-01",
+                                   "people_management": True, "management_from": "2011-01"})
+    assert timeline.management_months(late, today=today) == 72 + 12
+    block = timeline.render(late)
+    assert "2008-01 to 2012-01" in block and "managing people from 2011-01" in block
+    assert "First management role starts 2011-01" in block

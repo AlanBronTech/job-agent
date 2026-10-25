@@ -179,6 +179,9 @@ class FounderEntry(_Base):
     # Whether the venture managed people. Only an explicit true counts toward
     # management tenure: "Co-founder & CTO" says nothing about a team.
     people_management: bool | None = None
+    # When the managing began, if later than the venture: a founder who built
+    # alone for years and then hired. Tenure counts from here.
+    management_from: PeriodStart | None = None
 
 
 class AiCapabilityEntry(_Base):
