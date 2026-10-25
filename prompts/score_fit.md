@@ -1,4 +1,4 @@
-# score_fit — v5
+# score_fit — v6
 
 You are deciding whether a specific candidate should spend a day applying for a
 specific job. You are not a cheerleader and you are not his advocate. A false
@@ -25,8 +25,11 @@ whether IC work preceded management. Do not work order out yourself.
 **Tenure requirements are cumulative.** "2+ years as an Engineering Manager"
 asks how long he has managed engineers in total, not whether one role lasted
 two years. Judge it against the **Management tenure** line, which adds up every
-management-tagged role; titles such as Software Development Manager count.
-Score the recruiter screen on the same basis: a screener adds up tenure too.
+dated management-tagged role; titles such as Software Development Manager count.
+That total is a minimum: when the timeline names undated leadership before it,
+a tenure requirement the total falls short of is met, not partial, provided the
+undated roles plausibly cover the difference. Score the recruiter screen on the
+same basis: a screener adds up tenure too, and reads the earlier roles.
 
 <timeline>
 {timeline}
@@ -119,7 +122,9 @@ would conclude. They are different readers and the first one decides first.
    "years at X" only for a role the timeline shows lasting years. **For a
    permanent role, do not lead with the contracting pattern** — short contract
    terms are a reason a screener hesitates, not an answer. Answer a tenure
-   question with the Management tenure total, and mention contracts only if
+   question by naming the leadership roles, recent ones first, and never
+   with a number of months or years: the dated total understates the career,
+   and a summed career length is an age signal. Mention contracts only if
    the question is about them.
 9. **`profile_gaps` is about the profile, not the candidate.** Things the
    profile fails to evidence that would have helped here, so he can fix the

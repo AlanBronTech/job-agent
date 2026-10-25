@@ -8,7 +8,11 @@ what code is for: `render` hands the scorer the order already worked out, and
 
 A role is management when the profile says so (`people_management`) or, when it
 is silent, when its title names a management job. The title rule is a fallback;
-the flag is the fact.
+the flag is the fact. A founder venture joins the timeline only when flagged:
+"Co-founder & CTO" says nothing about a team. Leadership in `earlier_career`
+is undated, so it cannot be added up; it is named instead, and the total is
+called what it is, a minimum (2026-10-26: the dated total was read as the
+whole career, and a 5+ year bar marked partial).
 """
 
 from __future__ import annotations
@@ -86,14 +90,23 @@ def management_months(profile: Profile, *, today: date | None = None) -> int:
 
 
 def roles_in_order(profile: Profile) -> list[Span]:
-    """Employment roles, earliest start first."""
+    """Employment roles, and dated ventures that managed people, earliest start first."""
     spans = []
     for role in profile.roles.roles:
         if role.visibility is Visibility.scorer_only:
             continue
         spans.append(Span(role.id, role.company, role.title, _period(role.start),
                           _period(role.end), is_management(role)))
+    for venture in profile.roles.founder_track_record:
+        if venture.people_management and venture.start:
+            spans.append(Span(venture.id, venture.company, venture.role, _period(venture.start),
+                              _period(venture.end), True))
     return sorted(spans, key=lambda s: s.start)
+
+
+def undated_leadership(profile: Profile) -> list[str]:
+    """Earlier roles that led people, which no total can include."""
+    return [f"{e.company} ({e.role})" for e in profile.roles.earlier_career if e.people_management]
 
 
 def _fmt(period: tuple[int, int] | None) -> str:
@@ -114,9 +127,15 @@ def render(profile: Profile) -> str:
         total = management_months(profile)
         years, rest = divmod(total, 12)
         lines.append(
-            f"Management tenure, all roles added up: {total} months ({years} years"
+            f"Management tenure, dated roles added up: {total} months ({years} years"
             + (f" {rest} months" if rest else "") + ")."
         )
+        earlier = undated_leadership(profile)
+        if earlier:
+            lines.append(
+                "Leadership before these, undated and so not in the total: "
+                + ", ".join(earlier) + ". The total is a minimum, not the career."
+            )
     ics_after = [s.company for s in spans if not s.management and first and s.start > first.start]
     if ics_after:
         lines.append(

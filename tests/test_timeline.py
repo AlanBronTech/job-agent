@@ -103,7 +103,7 @@ def test_management_tenure_adds_up_across_roles(profile):
     and the total is what a "2+ years as an EM" requirement asks about."""
     months = timeline.management_months(profile, today=__import__("datetime").date(2026, 10, 16))
     assert months == 36 + 12 + 12 + 12
-    assert "Management tenure, all roles added up: 72 months (6 years)" in timeline.render(profile)
+    assert "Management tenure, dated roles added up: 72 months (6 years)" in timeline.render(profile)
 
 
 def test_a_title_on_the_equivalent_list_or_the_flag_counts_as_management(profile):
@@ -120,6 +120,45 @@ def test_a_title_on_the_equivalent_list_or_the_flag_counts_as_management(profile
 def test_the_scorer_is_told_tenure_requirements_are_cumulative():
     prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
     assert "cumulative" in prompt and "Management tenure" in prompt
+
+
+# -- 2026-10-26: the dated total was read as the whole career ----------------------
+
+
+def _with(profile, *, founder=None, earlier=None):
+    roles = profile.roles
+    if founder is not None:
+        roles = roles.model_copy(update={"founder_track_record": [
+            e.model_copy(update=founder) for e in roles.founder_track_record]})
+    if earlier is not None:
+        roles = roles.model_copy(update={"earlier_career": [
+            e.model_copy(update=earlier) for e in roles.earlier_career]})
+    return profile.model_copy(update={"roles": roles})
+
+
+def test_a_venture_counts_only_when_flagged_as_managing_people(profile):
+    today = __import__("datetime").date(2026, 10, 16)
+    dated = {"start": "2010-01", "end": "2012-01"}
+    unflagged = _with(profile, founder=dated)
+    assert timeline.management_months(unflagged, today=today) == 72
+    flagged = _with(profile, founder={**dated, "people_management": True})
+    assert timeline.management_months(flagged, today=today) == 72 + 24
+    assert "First management role starts 2010-01" in timeline.render(flagged)
+
+
+def test_undated_leadership_is_named_and_the_total_called_a_minimum(profile):
+    assert "undated" not in timeline.render(profile)
+    led = _with(profile, earlier={"people_management": True})
+    block = timeline.render(led)
+    assert "Leadership before these, undated and so not in the total" in block
+    assert "The total is a minimum" in block
+    assert timeline.management_months(led) == timeline.management_months(profile)
+
+
+def test_a_tenure_question_is_never_answered_with_a_number():
+    prompt = open(EXAMPLE.parent / "prompts" / "score_fit.md").read()
+    assert "never\n   with a number of months or years" in prompt
+    assert "That total is a minimum" in prompt
 
 
 # -- REVIEW-2026-10-16 D8: push-on answers grounded in dates, and framed for the ad --

@@ -176,6 +176,9 @@ class FounderEntry(_Base):
     note_for_scorer: str | None = None
     note_for_writer: str | None = None
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Whether the venture managed people. Only an explicit true counts toward
+    # management tenure: "Co-founder & CTO" says nothing about a team.
+    people_management: bool | None = None
 
 
 class AiCapabilityEntry(_Base):
@@ -225,6 +228,9 @@ class EarlierRole(_Base):
     tags: list[str] = Field(default_factory=list)
     evidence_strength: EvidenceStrength
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Led people. Undated, so never added to management tenure; the scorer is
+    # told it exists, so the dated total reads as a minimum.
+    people_management: bool | None = None
 
 
 class ExcludedSkill(_Base):
