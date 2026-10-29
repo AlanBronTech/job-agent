@@ -687,7 +687,8 @@ changed email layout shows up.
 page): one job per screen. **O** opens the ad in its own window; **I** interested,
 **N** not relevant, **Q** not qualified, **U** not interested, **A** already
 applied, **X** expired, **L** later. Each key records the decision and moves to
-the next job. Keys are ignored while you type a note, and Cmd+P still prints.
+the next job. Keys are ignored while you type a note; Enter or Esc leaves the note box
+without recording anything, then press the letter. Cmd+P still prints.
 
 **Nothing to remember after "interested".** Print the ad to PDF (Cmd+P, Save)
 into the saved-ads folder. A SEEK print records the job's address in its

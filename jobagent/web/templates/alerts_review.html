@@ -28,7 +28,7 @@
       <button type="submit" name="decision" value="{{ d }}" data-key="{{ key }}">{{ d.replace("_", " ") }} <kbd>{{ key | upper }}</kbd></button>
     {% endfor %}</p>
   </form>
-  <p class="muted">Keys: O opens the ad; the letter on each button records it and moves to the next job. Typing in the note box doesn't trigger them.</p>
+  <p class="muted">Keys: O opens the ad; the letter on each button records it and moves to the next job. Typing in the note box doesn't trigger them; Enter or Esc leaves the box, then press the letter.</p>
 </div>
 {% endif %}
 {% endblock %}
