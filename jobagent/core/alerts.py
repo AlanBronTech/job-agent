@@ -39,6 +39,8 @@ _LINKEDIN_BADGES = {
     "fast growing", "be an early applicant", "actively recruiting", "promoted", "easy apply",
     "early applicant", "in your network",
 }
+# The email's own opening line sits above the first listing with no link between.
+_LINKEDIN_STOP = re.compile(r"^your (?:job alert for|application was sent to)\b", re.I)
 _LOCATION = re.compile(r"\b(?:NSW|VIC|QLD|ACT|SA|WA|TAS|NT|Sydney|Melbourne|Brisbane|Canberra|Perth|Adelaide|Hobart|Remote|Australia)\b")
 
 
@@ -155,7 +157,8 @@ def parse_linkedin(text: str) -> list[Listing]:
             continue
         block: list[str] = []
         for previous in reversed(lines[:index]):
-            if previous.startswith("---") or "http" in previous or previous.endswith("----"):
+            if (previous.startswith("---") or "http" in previous or previous.endswith("----")
+                    or _LINKEDIN_STOP.match(previous)):
                 break
             if previous and previous.lower() not in _LINKEDIN_BADGES:
                 block.insert(0, previous)

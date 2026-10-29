@@ -62,6 +62,16 @@ def test_linkedin_listings_including_the_insights_layout():
     assert got["4000000003"].url == "https://www.linkedin.com/jobs/view/4000000003/"
 
 
+def test_linkedin_email_opening_line_is_not_read_as_a_title():
+    for opening in ("Your job alert for Engineering Manager in Greater Sydney Area",
+                    "Your application was sent to Woodgrove"):
+        text = (f"{opening}\n\nCivil Team Manager\nProseware Civil\nSydney, NSW\n"
+                "View job: https://www.linkedin.com/comm/jobs/view/4000000009/\n")
+        [got] = core.parse_linkedin(text)
+        assert (got.title, got.company, got.location) == (
+            "Civil Team Manager", "Proseware Civil", "Sydney, NSW")
+
+
 def test_parse_email_dispatches_on_the_sender():
     assert core.parse_email("SEEK <jobmail@s.seek.com.au>", SEEK_TEXT)
     assert core.parse_email("LinkedIn <jobalerts-noreply@linkedin.com>", LINKEDIN_TEXT)
