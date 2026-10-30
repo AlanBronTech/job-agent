@@ -15,6 +15,7 @@ import pytest
 from jobagent.adapters.llm import LLMClient, LLMResponse, Provider
 from jobagent.core.generate import (
     GenerateError,
+    _contact_line,
     _founder_dates,
     _founder_line,
     _unknown,
@@ -312,6 +313,23 @@ def test_education_puts_certifications_first(profile, jd, assessment) -> None:
     certs = [c.name for c in profile.roles.person.certifications]
     if certs:
         assert built.content.education[0].startswith(certs[0])
+
+
+def test_the_contact_line_shows_both_links_bare_as_the_master_does(profile) -> None:
+    person = profile.roles.person
+    person.location, person.phone, person.email = "Sydney, NSW", None, "a@example.com"
+    person.linkedin = "https://www.linkedin.com/in/someone/"
+    person.github = "https://github.com/someone"
+
+    assert _contact_line(profile) == (
+        "Sydney, NSW  ·  a@example.com  ·  linkedin.com/in/someone  ·  github.com/someone"
+    )
+
+
+def test_the_contact_line_omits_a_missing_github(profile) -> None:
+    profile.roles.person.github = None
+
+    assert "github" not in _contact_line(profile)
 
 
 def test_the_prompt_carries_the_catalogue_and_the_assessment(

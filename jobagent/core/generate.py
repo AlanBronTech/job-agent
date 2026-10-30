@@ -1680,11 +1680,17 @@ def format_dates(start: str, end: str, *, today: date) -> str:
 
 
 def _contact_line(profile: Profile) -> str:
+    """The master's contact line: links shown bare, GitHub last."""
     person = profile.roles.person
     parts = [person.location, person.phone, person.email]
-    if person.linkedin:
-        parts.append(person.linkedin)
-    return "   ·   ".join(part for part in parts if part)
+    parts += [_bare_url(url) for url in (person.linkedin, person.github) if url]
+    return "  ·  ".join(part for part in parts if part)
+
+
+def _bare_url(url: str) -> str:
+    """`https://www.linkedin.com/in/x/` → `linkedin.com/in/x`, as the master shows it."""
+    bare = url.strip().removeprefix("https://").removeprefix("http://")
+    return bare.removeprefix("www.").rstrip("/")
 
 
 def _education_lines(profile: Profile) -> list[str]:
