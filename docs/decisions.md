@@ -492,7 +492,8 @@ re-run a case that flipped before treating the flip as real.
 
 ### D48. The master resume's format was measured, not chosen
 
-Source of truth: `~/Documents/AlanBronResumeMaster102026.docx`, revised Oct 2026.
+Source of truth: `~/Documents/AlanBronMasterResume112026.docx`, revised Nov 2026
+(content only; the format is unchanged from `AlanBronResumeMaster102026.docx`).
 Every value in `CLAUDE.md`'s Document format section was measured from the master, not chosen, and re-measured on
 2026-09-20 when the September revision superseded the August one — all of them
 held, because that revision changed content rather than format. The October

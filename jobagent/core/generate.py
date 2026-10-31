@@ -1598,7 +1598,7 @@ def _mechanism_lines(story, indent: str) -> list[str]:
 def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     """One EARLIER CAREER line for a closed venture, in the master's format.
 
-    From `AlanBronResumeMaster102026.docx`, which wins over any spec that
+    From `AlanBronMasterResume112026.docx`, which wins over any spec that
     disagrees with it:
 
         Co-founder & CTO, Australian Home Design Directory (2006–16) — sole
