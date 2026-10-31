@@ -57,6 +57,8 @@ def test_a_decision_takes_it_off_the_list(ws, client):
     assert first.title not in client.get("/alerts").text.split("Show:")[1]
     decided = client.get("/alerts?show=decided").text
     assert "not qualified" in decided and "needs Go" in decided
+    assert "<th>Decided</th>" in decided
+    assert datetime.now().astimezone().strftime("%-d %b %Y") in decided
     assert client.post(f"/alerts/{first.id}/decide", data={"csrf": "wrong", "decision": "interested"}).status_code == 403
 
 

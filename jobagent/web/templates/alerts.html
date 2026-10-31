@@ -51,7 +51,7 @@
 {% else %}
   {% if not rows %}<p class="empty">Nothing here yet.</p>{% else %}
   <div class="table-wrap"><table class="ads">
-    <thead><tr><th class="num">id</th><th>Job</th><th>{{ "Decision" if show == "decided" else "Why left out" }}</th></tr></thead>
+    <thead><tr><th class="num">id</th><th>Job</th><th>{{ "Decision" if show == "decided" else "Why left out" }}</th>{% if show == "decided" %}<th>Decided</th>{% endif %}</tr></thead>
     <tbody>
     {% for r in rows %}
       <tr>
@@ -60,6 +60,7 @@
           <div class="muted">{{ r.company }}{% if r.pay %} · {{ r.pay }}{% endif %}</div></td>
         <td>{% if show == "decided" %}{{ r.decision.value.replace("_", " ") }}{% if r.note %} <span class="muted">— {{ r.note }}</span>{% endif %}{% if r.jd_id %} · <a href="/ads/{{ r.jd_id }}">JD {{ r.jd_id }}</a>{% endif %}
             {% else %}<span class="muted">{{ r.reason }}</span>{% endif %}</td>
+        {% if show == "decided" %}<td class="muted nowrap">{{ r.decided_at | local("%-d %b %Y") }}</td>{% endif %}
       </tr>
     {% endfor %}
     </tbody>

@@ -991,7 +991,11 @@ def alerts_page(request: Request, show: str = "pending", fetched: str = "", erro
     if show == "skipped":
         rows, items = alerts.listings(ws, verdict=AlertVerdict.skip), []
     elif show == "decided":
-        rows, items = [r for r in alerts.listings(ws) if r.decision is not None], []
+        rows = [r for r in alerts.listings(ws) if r.decision is not None]
+        # A history: the most recent decision first. Rows decided before
+        # decided_at was recorded sort last.
+        rows.sort(key=lambda r: r.decided_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        items = []
     else:
         show, rows, items = "pending", [], alerts.pending(ws, now)
     return render(request, "alerts.html", {
