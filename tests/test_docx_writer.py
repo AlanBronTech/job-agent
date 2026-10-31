@@ -109,6 +109,12 @@ def test_a_role_heading_carries_three_sizes_and_a_right_tab(rendered) -> None:
     assert round(tabs[0].position.cm, 2) == 16.93
 
 
+def test_headings_stay_with_what_follows_them(rendered) -> None:
+    """A heading alone at the foot of a page, its bullet overleaf, reads as a mistake."""
+    for heading in ("EXPERIENCE", "EARLIER CAREER", "Software Development Manager"):
+        assert find(rendered, heading).paragraph_format.keep_with_next is True, heading
+
+
 def test_bullets_use_the_template_numbering(rendered) -> None:
     para = find(rendered, "Led 15 engineers")
 

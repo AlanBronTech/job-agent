@@ -209,6 +209,8 @@ def _section_heading(doc: Document, text: str) -> None:
     para = _paragraph(doc, text.upper(), size=11.5, bold=True, colour=NAVY)
     para.paragraph_format.space_before = Pt(11.5)
     para.paragraph_format.space_after = Pt(5.5)
+    # A heading never ends a page alone: it moves with what it introduces.
+    para.paragraph_format.keep_with_next = True
 
 
 def _role_heading(doc: Document, title: str, company: str, dates: str) -> None:
@@ -219,6 +221,9 @@ def _role_heading(doc: Document, title: str, company: str, dates: str) -> None:
     """
     para = doc.add_paragraph()
     _format_paragraph(para, space_before=Pt(9.0), space_after=Pt(1.0))
+    # Without this LibreOffice and Word can leave the heading at the foot of
+    # a page and its first bullet on the next (Preacta, 2026-10-31).
+    para.paragraph_format.keep_with_next = True
     para.paragraph_format.tab_stops.add_tab_stop(
         Cm(DATE_TAB_CM), WD_TAB_ALIGNMENT.RIGHT
     )
