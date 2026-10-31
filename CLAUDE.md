@@ -88,7 +88,8 @@ readable stdlib beats clever abstractions.
 
 ## Document format (non-negotiable)
 
-Source of truth: `~/Documents/AlanBronResumeMaster102026.docx`, revised Oct 2026.
+Source of truth: `~/Documents/AlanBronMasterResume112026.docx`, revised Nov 2026
+(content only; the format is unchanged from `AlanBronResumeMaster102026.docx`).
 Every value below was measured from the master, not chosen. If a spec and the
 master disagree, the master wins and this section gets corrected (D48).
 
