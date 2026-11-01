@@ -450,7 +450,7 @@ def founder(**overrides) -> FounderEntry:
         "start": "2006-09",
         "end": "2016-06",
         "bullets": [Bullet(text="Built it.", tags=["founder"], evidence_strength="strong")],
-        "summary": "sole architect; grew it to 1M+ annual visitors.",
+        "summary": "Co-founder & CTO; grew it to 1M+ annual visitors.",
     }
     return FounderEntry.model_validate(data | overrides)
 
@@ -460,8 +460,8 @@ def test_a_closed_venture_renders_in_the_masters_format() -> None:
 
     assert issue is None
     assert line == (
-        "Co-founder & CTO, Australian Home Design Directory (2006–16) — "
-        "sole architect; grew it to 1M+ annual visitors."
+        "Australian Home Design Directory (2006–16) — "
+        "Co-founder & CTO; grew it to 1M+ annual visitors."
     )
 
 
@@ -485,7 +485,8 @@ def test_a_single_year_is_not_rendered_as_a_range() -> None:
 
 
 def test_an_ongoing_venture_is_kept_out_of_earlier_career() -> None:
-    """DataLlama appears in the master exactly once, as a CAREER HIGHLIGHT.
+    """DataLlama is evidence, not record (D1): a CAREER HIGHLIGHT and one
+    part-time line under Bron Consulting, never a dated EARLIER CAREER line.
     Its note_for_scorer forbids presenting it as full-time work or using it to
     fill a timeline gap, and it is still running."""
     line, issue = _founder_line(founder(id="datallama", start="2018", end="present"))

@@ -1601,15 +1601,19 @@ def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     From `AlanBronMasterResume112026.docx`, which wins over any spec that
     disagrees with it:
 
-        Co-founder & CTO, Australian Home Design Directory (2006–16) — sole
-        architect; built the entire platform, grew to 1M+ annual visitors,
-        acquired after a competitive bidding process.
+        Australian Home Design Directory (2006–16) — Co-founder & CTO; built
+        the initial versions alone as architect; grew to 1M+ annual organic
+        visitors; acquired.
 
-    An *ongoing* venture is deliberately not renderable here. The master lists
-    DataLlama once, as a CAREER HIGHLIGHT, and nowhere else — and its
-    `note_for_scorer` says never to present it as full-time work or use it to
-    fill a gap in the employment timeline. A dated line among closed ventures
-    does neither job well. Its bullets still reach the page through highlights.
+    Company first, then the years, then `summary` verbatim. The summary
+    carries the role itself ("Co-founder & CTO; …", "employee #5; …") because
+    the master words it differently per venture; `role` is not rendered here.
+
+    An *ongoing* venture is deliberately not renderable here. DataLlama is
+    evidence, not record (D1): the master gives it a CAREER HIGHLIGHT and one
+    part-time line under Bron Consulting, never a dated line among closed
+    ventures, which would read as full-time work or fill a gap in the
+    employment timeline.
     """
     if _is_ongoing(entry):
         return "", ValidationIssue(
@@ -1635,7 +1639,7 @@ def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
             excerpt=entry.id,
         )
     dates = _founder_dates(entry.start, entry.end)
-    heading = f"{entry.role}, {entry.company}"
+    heading = entry.company
     if dates:
         heading += f" ({dates})"
     return f"{heading} — {entry.summary}", None

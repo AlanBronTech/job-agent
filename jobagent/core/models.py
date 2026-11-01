@@ -167,7 +167,8 @@ class FounderEntry(_Base):
     start: PeriodStart | None = None
     end: PeriodEnd | None = None
     bullets: list[Bullet]
-    # The one condensed line this venture gets in EARLIER CAREER. Stored, not
+    # The one condensed line this venture gets in EARLIER CAREER: everything
+    # after the dash in the master's line, role included, verbatim. Stored, not
     # composed: the model returns references for the resume and never writes
     # experience prose, so a founder entry without a summary is simply not
     # renderable in that section. The bullets remain available to CAREER
