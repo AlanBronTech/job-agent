@@ -105,7 +105,10 @@ def prepare(
         (DocumentKind.resume, resume, generated_resume),
         (DocumentKind.cover_letter, letter, generated_letter),
     ):
-        latest = None if original or folder is None else latest_generated(ws, jd, folder, kind, today)
+        latest = (
+            None if original or folder is None
+            else latest_generated(ws, jd, folder, kind, today, sent_name=given.name if given else None)
+        )
         if as_generated:
             if latest is None:
                 continue
@@ -271,12 +274,31 @@ def _latest_per_kind(rows: list[SentDocument]) -> list[SentDocument]:
 
 
 def latest_generated(
-    ws: Workspace, jd: JobDescription, folder: str, kind: DocumentKind, today: date
+    ws: Workspace,
+    jd: JobDescription,
+    folder: str,
+    kind: DocumentKind,
+    today: date,
+    *,
+    sent_name: str | None = None,
 ) -> str | None:
-    for name in ws.documents.generated_copies(jd, folder, today):
-        if docs.document_kind(Path(name).name) == kind.value:
-            return name
-    return None
+    """The generated copy a document is compared with: the newest of its kind.
+
+    Given the name of the file that was sent, the newest copy with the same
+    name (extension aside) wins first. A later run can leave a newer copy that
+    was not sent: on JD 121 the clean letter of 01:58 went out, and a
+    `_NOT-READY` one from 02:17 was taken as its original.
+    """
+    copies = [
+        name for name in ws.documents.generated_copies(jd, folder, today)
+        if docs.document_kind(Path(name).name) == kind.value
+    ]
+    if sent_name:
+        stem = Path(sent_name).stem
+        for name in copies:
+            if Path(name).stem == stem:
+                return name
+    return copies[0] if copies else None
 
 
 def _existing_folder(ws: Workspace, jd: JobDescription, today: date) -> str | None:

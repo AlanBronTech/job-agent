@@ -249,6 +249,29 @@ def test_an_edited_resume_is_recorded_against_the_newest_generated_copy(ws, ids,
     assert not row.as_generated
 
 
+def test_a_sent_file_is_compared_with_the_copy_of_its_own_name(ws, ids, acme, tmp_path):
+    """JD 121: the clean letter went out; a later run left a NOT-READY one."""
+    (name,) = generate_into(ws, acme, letter=letter_content(["One."]), now=NOW)
+    blocked = name.replace(".docx", "_NOT-READY.docx")
+    write_cover_letter(letter_content(["Two."]), ws.documents.path_for_write(acme, TODAY, blocked))
+    ws.documents.keep_generated(acme, TODAY, blocked, LATER)
+    sent_letter = write_cover_letter(letter_content(["One, edited."]), tmp_path / name)
+
+    (row,) = record(ws, ids["acme"], letter=sent_letter)
+
+    assert row.generated == f".generated/20260929T140000/{name}"
+
+
+def test_a_renamed_sent_file_falls_back_to_the_newest_copy(ws, ids, acme, tmp_path):
+    generate_into(ws, acme, resume=resume_content(), now=NOW)
+    (name,) = generate_into(ws, acme, resume=resume_content(), now=LATER)
+    renamed = write_resume(resume_content(profile_paragraphs=["Edited."]), tmp_path / "Alan Bron CV.docx")
+
+    (row,) = record(ws, ids["acme"], resume=renamed)
+
+    assert row.generated == f".generated/20260929T163000/{name}"
+
+
 def test_the_unedited_file_is_recognised_without_being_told(ws, ids, acme):
     (name,) = generate_into(ws, acme, resume=resume_content())
     (row,) = record(ws, ids["acme"], resume=visible(ws, acme, name))
