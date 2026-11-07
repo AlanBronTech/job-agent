@@ -37,6 +37,9 @@ from jobagent.core.generate import (
     build_answers,
     build_cover_letter,
     build_resume,
+    citizenship_line,
+    salutation_for,
+    letter_recipient,
     ResumeLength,
     apply_resume_repairs,
     apply_text_repairs,
@@ -177,6 +180,7 @@ def generate(
     refuse_if_reapplying(ws, jd_id, today)
     with store.open_store(ws.db_path) as conn:
         context = store.get_context(conn, jd_id)
+        salutation = salutation_for([c for c in store.list_contacts(conn) if c.jd_id == jd_id])
 
     def instructions(kind_name: str, document: str) -> str | None:
         previous, note = (revisions or {}).get(kind_name, (None, None))
@@ -394,8 +398,10 @@ def generate(
             name=profile.roles.person.name,
             contact=contact if contact is not None else contact_line(profile),
             date=f"{today:%-d %B %Y}",
-            recipient=[jd.company] if jd.company else [],
+            recipient=letter_recipient(jd),
+            salutation=salutation,
             paragraphs=[p.strip() for p in letter.text.split("\n\n") if p.strip()],
+            postscript=[line] if (line := citizenship_line(profile)) else [],
         )
         path = ws.documents.path_for_write(
             jd, today, _name("CoverLetter", jd, today, blocked=_blocked(letter_issues))

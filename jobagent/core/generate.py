@@ -92,7 +92,11 @@ MAX_TOKENS = 32768
 # about one thousand. With spec 003's must-cover list and reuse caps added it
 # reached the 16,384 ceiling on the first real 003 regenerate and the paid call was
 # lost. The ceiling still exists to stop a derailed answer, not to shape one.
-RESUME_MAX_TOKENS = 32768
+#
+# Raised to 65,536 on 2026-11-08: the reasoning had kept climbing (20-33k on
+# JDs 111-119, 32,666 on JD 114) and JD 121 hit 32,768 exactly, losing a
+# $0.37 call. The call streams, and Sonnet 5 allows 128K output.
+RESUME_MAX_TOKENS = 65536
 
 # voice.md: "Under 350 words. One page."
 COVER_LETTER_MAX_WORDS = 350
@@ -113,30 +117,44 @@ class ResumeLength:
     rule: str
 
 
+# One length for every resume, permanent or contract (Alan, 2026-11-08): up
+# to three pages, never more. The shorter contractor CV of 2026-10-23 is
+# retired; the recent roles now carry more bullets (`bullet_cap`).
 FULL_TIME_LENGTH = ResumeLength(
-    low=2.0, high=2.75, limit=3.0,
+    low=2.0, high=3.0, limit=3.0,
     rule=(
-        "**About two and a half pages, never more than three.** That is roughly "
-        "22-28 role bullets in total across all roles, plus the highlights. Cut, "
-        "do not cram — a bullet that does not answer something in this ad is "
-        "taking space from one that does."
+        "**Up to three pages, never more.** That is roughly 24-32 role bullets "
+        "in total across all roles, plus the highlights. Spend the space on the "
+        "two most recent roles; cut older material first — a bullet that does "
+        "not answer something in this ad is taking space from one that does."
     ),
 )
-CONTRACT_LENGTH = ResumeLength(
-    low=1.5, high=1.75, limit=1.75,
-    rule=(
-        "**A contractor CV: one and a half to one and three-quarter pages.** A "
-        "contractor is bought for a specific piece of work, so this is shorter "
-        "than a permanent resume. Roughly 10-14 role bullets in total: two or "
-        "three for the roles that evidence this contract, one for the rest. "
-        "Choose at most three `earlier_career_ids`, the most relevant. Cut "
-        "everything that does not answer this ad."
-    ),
-)
+CONTRACT_LENGTH = FULL_TIME_LENGTH
+
+# Bullets per role (Alan, 2026-11-08): the two most recent roles get the room,
+# roles that ended before this year get one or two, the rest one to four.
+RECENT_ROLES = 2
+RECENT_MAX_BULLETS = 6
+OLD_ROLE_BEFORE_YEAR = 2020
+OLD_MAX_BULLETS = 2
+DEFAULT_MAX_BULLETS = 4
+
+
+def bullet_cap(profile: Profile, role_id: str) -> int:
+    """The most bullets one role may carry on a resume."""
+    shown = [r for r in profile.roles.roles if r.visibility is not Visibility.scorer_only]
+    ids = [r.id for r in shown]
+    if role_id in ids[:RECENT_ROLES]:
+        return RECENT_MAX_BULLETS
+    role = next((r for r in shown if r.id == role_id), None)
+    end = str(role.end) if role is not None else ""
+    if end[:4].isdigit() and int(end[:4]) < OLD_ROLE_BEFORE_YEAR:
+        return OLD_MAX_BULLETS
+    return DEFAULT_MAX_BULLETS
 
 
 def resume_length(contract: bool) -> ResumeLength:
-    return CONTRACT_LENGTH if contract else FULL_TIME_LENGTH
+    return FULL_TIME_LENGTH
 
 # CLAUDE.md, hard rule 4: "If a draft contains banned phrases, regenerate."
 # One retry, with the specific failures named. A second retry has not been
@@ -208,6 +226,9 @@ class Sentence(BaseModel):
     text: str
     cites: list[str] = Field(default_factory=list)
     quote: str | None = None
+    # On a paragraph's first sentence: the paragraph is a bullet point. Alan's
+    # own letters list what he brings as bullets (2026-11-08).
+    bullet: bool = False
 
 
 class _Letter(BaseModel):
@@ -612,6 +633,16 @@ def _assemble(
                 continue
             issues += validate_rendered(text, context=f"Bullet {ref}")
             bullets.append(text)
+        cap = bullet_cap(profile, role.id)
+        if len(bullets) > cap:
+            issues.append(
+                ValidationIssue(
+                    rule="repaired in code",
+                    severity=Severity.warning,
+                    detail=f"{role.id} had {len(bullets)} bullets; kept the first {cap}.",
+                )
+            )
+            bullets = bullets[:cap]
         role_blocks.append(
             RoleBlock(
                 title=role.title,
@@ -677,7 +708,9 @@ def _assemble(
 
 # A salutation the model wrote itself. Short, opens with "Dear" or "To", and
 # ends at a comma or colon — a body sentence beginning "Dear" would not.
-_SALUTATION = re.compile(r"^(dear|to)\b[^.]{0,60}[,:]$", re.IGNORECASE)
+# "To whom it may concern," / "To the hiring team:" — but not Alan's own
+# lead-in, "To summarise, my skills and qualifications include:" (2026-11-08).
+_SALUTATION = re.compile(r"^(dear|to\s+(?:whom|the))\b[^.]{0,60}[,:]$", re.IGNORECASE)
 # Bare closings only. A line has to be nothing but the sign-off to match, so a
 # sentence like "Thanks for contacting me." — which one real letter ends on —
 # is left alone.
@@ -1140,10 +1173,48 @@ def apply_resume_repairs(built: GeneratedResume, repairs: dict[str, str], profil
     )
 
 
+BULLET_MARK = "- "
+
+
 def paragraphs_text(paragraphs: list[list[Sentence]]) -> str:
+    """The letter as text: paragraphs apart, a bullet paragraph led by "- "."""
     return "\n\n".join(
-        " ".join(sentence.text.strip() for sentence in paragraph) for paragraph in paragraphs
+        (BULLET_MARK if paragraph and paragraph[0].bullet else "")
+        + " ".join(sentence.text.strip() for sentence in paragraph)
+        for paragraph in paragraphs
+        if paragraph
     )
+
+
+def letter_recipient(jd: JobDescription) -> list[str]:
+    """The address block of Alan's letters: "Recruitment Department", then
+    "Company, Location". Nothing when the ad does not name the company."""
+    if not jd.company:
+        return []
+    return ["Recruitment Department", ", ".join(x for x in (jd.company, jd.location) if x)]
+
+
+# Contacts a letter can be addressed to: the people who read applications.
+_ADDRESSEES = ("hiring_manager", "internal_recruiter", "agency_recruiter")
+
+
+def salutation_for(contacts: list) -> str:
+    """ "Dear Sarah," when a recruiter or hiring manager is recorded against
+    the job, the hiring manager first; otherwise "Dear Hiring Manager,"."""
+    named = [c for c in contacts if getattr(c.kind, "value", c.kind) in _ADDRESSEES and c.name.strip()]
+    named.sort(key=lambda c: _ADDRESSEES.index(getattr(c.kind, "value", c.kind)))
+    if not named:
+        return "Dear Hiring Manager,"
+    return f"Dear {named[0].name.split()[0]},"
+
+
+def citizenship_line(profile: Profile) -> str | None:
+    """"I have dual Australian and Canadian citizenship." — the line Alan ends
+    every letter with, from `person.citizenship`, never written by the model."""
+    raw = (profile.roles.person.citizenship or "").split("—")[0].strip().rstrip(".")
+    if not raw:
+        return None
+    return f"I have {raw[0].lower()}{raw[1:]}."
 
 
 def _story_cites(
@@ -1220,8 +1291,8 @@ def contract_block(profile: Profile, offer_id: str | None, *, letter: bool) -> s
         return None
     evidence = ", ".join(offer.evidence) or "(none listed)"
     rule = (
-        f"\nThe letter is short: three or four brief paragraphs, under "
-        f"{CONTRACT_NOTE_MAX_WORDS} words. Longer is rejected."
+        f"\nThe letter is short: the opening, the lead-in and three or four "
+        f"bullets, under {CONTRACT_NOTE_MAX_WORDS} words. Longer is rejected."
         if letter else ""
     )
     try:
@@ -1473,7 +1544,10 @@ def _render_catalogue(
     for role in roles.roles:
         if role.visibility is Visibility.scorer_only or role.id in excluded:
             continue
-        lines.append(f"\n{role.id} — {role.title} · {role.company} ({role.sector})")
+        lines.append(
+            f"\n{role.id} — {role.title} · {role.company} ({role.sector}) "
+            f"[1-{bullet_cap(profile, role.id)} bullets]"
+        )
         _append_writer_note(lines, role.note_for_writer, "  ")
         for index, bullet in enumerate(role.bullets):
             if f"{role.id}.{index}" not in catalogue:

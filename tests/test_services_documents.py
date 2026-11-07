@@ -453,25 +453,47 @@ def test_a_resume_still_over_the_limit_is_not_ready(ws, ids, fake_model, monkeyp
     assert result.written[0].name.endswith("_NOT-READY.docx")
 
 
-def test_inside_the_limit_but_off_target_is_a_warning_and_no_rewrite(ws, ids, fake_model, monkeypatch):
+def test_up_to_three_pages_passes_with_no_rewrite(ws, ids, fake_model, monkeypatch):
     calls = []
     monkeypatch.setattr(documents, "build_resume", lambda *a, **k: calls.append(1) or SimpleNamespace(
         content=object(), issues=[], unused=[]))
     monkeypatch.setattr(documents, "write_resume", lambda content, path: (path.write_bytes(b"x"), path)[1])
     monkeypatch.setattr(documents, "resume_text", lambda content: "resume")
-    monkeypatch.setattr(documents, "count_pages", lambda path: 2.9)
+    monkeypatch.setattr(documents, "count_pages", lambda path: 2.95)
 
     result = run(ws, ids["acme"])
     assert calls == [1]
-    assert [i.severity for i in result.issues if i.rule == "resume length"] == [Severity.warning]
+    assert not any(i.rule == "resume length" for i in result.issues)
 
 
 def test_the_page_lengths():
     from jobagent.core.generate import resume_length
 
+    # One length for every resume, permanent or contract (Alan, 2026-11-08).
     full, contract = resume_length(False), resume_length(True)
-    assert (full.low, full.high, full.limit) == (2.0, 2.75, 3.0)
-    assert (contract.low, contract.high, contract.limit) == (1.5, 1.75, 1.75)
+    assert (full.low, full.high, full.limit) == (2.0, 3.0, 3.0)
+    assert contract is full
+
+
+def test_the_bullet_caps():
+    from types import SimpleNamespace as NS
+
+    from jobagent.core.generate import bullet_cap
+    from jobagent.core.models import Visibility
+
+    def role(id, end):
+        return NS(id=id, end=end, visibility=Visibility.full)
+    profile = NS(roles=NS(roles=[role("now", "present"), role("last", "2026-01"),
+                                 role("mid", "2022-06"), role("old", "2018-10")]))
+    assert [bullet_cap(profile, r) for r in ("now", "last", "mid", "old")] == [6, 6, 4, 2]
+
+
+def test_a_letter_bullet_is_marked_in_the_text():
+    from jobagent.core.generate import Sentence, paragraphs_text
+
+    text = paragraphs_text([[Sentence(text="To summarise:", cites=["ad"])],
+                            [Sentence(text="Led eight.", cites=["x.0"], bullet=True)]])
+    assert text == "To summarise:\n\n- Led eight."
 
 
 def test_a_flagged_letter_sentence_is_repaired_instead_of_rewriting_the_letter(ws, ids, fake_model, monkeypatch):
@@ -521,3 +543,23 @@ def test_a_repair_that_still_fails_the_check_falls_back_to_the_rewrite(ws, ids, 
     result = run(ws, ids["acme"], cover=True)
     assert len(drafts) == 2 and "unsupported detail" in drafts[1]
     assert result.claims == []
+
+
+def test_the_lead_in_line_is_not_a_salutation():
+    from jobagent.core.generate import _SALUTATION
+
+    assert not _SALUTATION.match("To summarise, my skills and qualifications include:")
+    assert _SALUTATION.match("To whom it may concern,")
+    assert _SALUTATION.match("To the hiring team:")
+    assert _SALUTATION.match("Dear Hiring Manager,")
+
+
+def test_a_letter_is_addressed_to_a_named_contact_when_there_is_one():
+    from types import SimpleNamespace as NS
+
+    from jobagent.core.generate import salutation_for
+
+    assert salutation_for([]) == "Dear Hiring Manager,"
+    assert salutation_for([NS(name="Pat Lee", kind="former_colleague")]) == "Dear Hiring Manager,"
+    assert salutation_for([NS(name="Sam Roe", kind="agency_recruiter"),
+                           NS(name="Pat Lee", kind="hiring_manager")]) == "Dear Pat,"

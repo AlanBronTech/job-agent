@@ -1,4 +1,4 @@
-# generate_resume — v7
+# generate_resume — v8
 
 Select and order profile content for one specific job advertisement.
 
@@ -95,9 +95,12 @@ Skill category keys available: {skills}
    first; keep that order. Do not promote an older role because it fits better
    — promote its bullets within the role instead, and lead the PROFILE
    paragraphs with it.
-3. **Every role in the catalogue appears**, with 1-4 bullets each. A role
-   dropped entirely reads as a gap in the record. A weakly relevant role gets
-   one bullet, not zero.
+3. **Every role in the catalogue appears**, with the number of bullets its
+   heading allows (`[1-6 bullets]`, `[1-4 bullets]`, `[1-2 bullets]`). The two
+   most recent roles may take up to six: use the room when the evidence is
+   there — that is where a reader looks first. A role dropped entirely reads
+   as a gap in the record. A weakly relevant role gets one bullet, not zero.
+   Bullets past a role's limit are cut in code, from the end.
 4. **Order bullets within a role by relevance to this ad**, strongest first.
 5. **Five CAREER HIGHLIGHTS.** Each is a short bold label, then the claim. The
    claim may condense the source bullet but may not add to it: every number in

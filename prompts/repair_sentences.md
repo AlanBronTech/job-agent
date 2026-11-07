@@ -1,4 +1,4 @@
-# repair_sentences — v1
+# repair_sentences — v2
 
 These sentences come from Alan Bron's job application. A checker compared
 each one with the evidence it cites and found a problem. Rewrite each
@@ -24,6 +24,8 @@ sentences only; the rest of the document stays as it is.
    spaced em dash, then the claim. The label may change if it was the
    problem.
 4. Plain, factual, engineering register. None of these phrases: {banned}.
+   A letter or answer sentence never gains a label and colon in front ("AI
+   tool adoption: …"): keep it a plain sentence.
 5. Do not list or explain what you changed.
 
 ## Output

@@ -567,7 +567,7 @@ def _check_chronology(text: str, context: str) -> list[ValidationIssue]:
 def _check_openers(text: str) -> list[ValidationIssue]:
     issues = []
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        stripped = sentence.strip().lower()
+        stripped = sentence.strip().lstrip("-–•* ").lower()
         for opener in _BANNED_OPENERS:
             if stripped.startswith(opener):
                 issues.append(
@@ -650,7 +650,8 @@ def _scorer_only_pattern(label: str) -> re.Pattern[str]:
 
 
 def _check_length(text: str, max_words: int, context: str) -> list[ValidationIssue]:
-    count = len(text.split())
+    # Words, not tokens: a bullet's "- " marker and a spaced dash are not words.
+    count = sum(1 for token in text.split() if any(c.isalnum() for c in token))
     if count <= max_words:
         return []
     return [

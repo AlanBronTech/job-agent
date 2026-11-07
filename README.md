@@ -132,19 +132,17 @@ A contract or fixed-term ad is scored the way a contractor is bought:
   assessment. No match is usually a skip.
 - **Short contracts count for you, not against you**, and the scorer judges
   whether the work is deliverable in three to six months.
-- **The letter is short**: three or four brief paragraphs, under 220
-  words, leading with the matched offer's evidence.
-- **The resume is a contractor CV**: same format, 1.5 to 1.75 pages, roughly
-  10-14 role bullets and at most three earlier-career lines, leading with the
-  offer's evidence.
+- **The letter is short**: the opening, the lead-in and three or four
+  bullets, under 220 words, leading with the matched offer's evidence.
+- **The resume leads with the offer's evidence**, with the same length rule
+  as any other: up to 3 pages.
 
 **Resume length is measured, not guessed.** If LibreOffice is installed
 (`/Applications/LibreOffice.app`), each resume is rendered after selection and
 its pages counted, and `generate` prints `Resume: 2.43 pages, measured.` The
-targets: a permanent resume about 2.5 pages, never over 3; a contractor CV
-1.5-1.75. Over the limit, or under the low end, the resume is selected once
+target, permanent or contract: 2 to 3 pages, never over 3. Over the limit, or under the low end, the resume is selected once
 more with the measurement named (one more ~$0.19 call); over the limit after
-that, the file is `_NOT-READY`. Inside the limit but off target is a warning.
+that, the file is `_NOT-READY`.
 Without LibreOffice nothing is measured.
 
 ## Applying again

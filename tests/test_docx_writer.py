@@ -209,4 +209,23 @@ def test_a_cover_letter_renders_its_parts(tmp_path: Path) -> None:
     assert "Toshiba Global Commerce Solutions" in text
     assert "Dear Hiring Manager," in text
     assert "First paragraph." in text
-    assert text[-1] == "Alan Bron"
+    assert text[-2:] == ["Sincerely,", "Alan Bron"]
+
+
+def test_a_cover_letter_renders_bullets_and_the_postscript(tmp_path: Path) -> None:
+    """Alan's own letters list what he brings as bullets, then the citizenship line."""
+    path = write_cover_letter(
+        CoverLetterContent(
+            name="Alan Bron",
+            contact="Sydney, NSW",
+            date="1 September 2026",
+            paragraphs=["To summarise, my skills include:", "- Led a team of eight.", "- Shipped weekly."],
+            postscript=["I have dual citizenship."],
+        ),
+        tmp_path / "letter.docx",
+    )
+    paragraphs = [p for p in Document(str(path)).paragraphs if p.text.strip()]
+    bullets = [p.text for p in paragraphs if p._p.pPr is not None and p._p.pPr.numPr is not None]
+    assert bullets == ["Led a team of eight.", "Shipped weekly."]
+    texts = [p.text for p in paragraphs]
+    assert texts.index("I have dual citizenship.") == texts.index("Sincerely,") - 1

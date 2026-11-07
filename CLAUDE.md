@@ -118,7 +118,9 @@ Section order, exactly:
    an em dash (`AI in production — ...`)
 4. **CORE SKILLS** — borderless 4×2 table, 8 labelled categories, label in
    caps above a comma-separated list
-5. **EXPERIENCE** — reverse chronological, 1–4 bullets per role
+5. **EXPERIENCE** — reverse chronological; up to 6 bullets for the two most
+   recent roles, 1–2 for roles that ended before 2020, 1–4 for the rest
+   (`bullet_cap`; Alan, 2026-11-08)
 6. **EARLIER CAREER** — one condensed bullet each, undated
 7. **EDUCATION & CERTIFICATIONS** — one line each, certifications first
 
@@ -140,9 +142,13 @@ on a tab stop at **16.93cm**.
 ### Length
 
 - Cover letters: one page, body under 350 words (contract notes 220).
-  Measure the body, not the rendered page (D24).
-- Resumes: about 2.5 pages, never more than 3; a contractor CV (contract ad
-  matched to an offer) 1.5-1.75 pages (Alan, 2026-10-23). Measured by
+  Measure the body, not the rendered page (D24). Shape and voice follow
+  Alan's own letters in `profile/voice.md`: opening, lead-in, 4-7 bullets,
+  citizenship line, "Sincerely," (Alan, 2026-11-08). Addressed "Dear
+  <first name>," to a recruiter or hiring manager recorded against the job,
+  else "Dear Hiring Manager," — never "Dear Sir/Madam" (dated).
+- Resumes: up to 3 pages, never more, permanent or contract alike (Alan,
+  2026-11-08; the 1.5-1.75-page contractor CV is retired). Measured by
   rendering through LibreOffice (`adapters/pages.py`); over the limit is a
   blocker after one reselection.
 

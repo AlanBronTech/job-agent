@@ -96,9 +96,14 @@ class CoverLetterContent:
     contact: str
     date: str
     recipient: list[str] = field(default_factory=list)
+    # "Dear Sir/Madam" is dated (Alan, 2026-11-08): a named recruiter or
+    # hiring manager when the job has one (`salutation_for`), else this.
     salutation: str = "Dear Hiring Manager,"
+    # A paragraph starting "- " renders as a bullet point.
     paragraphs: list[str] = field(default_factory=list)
-    closing: str = "Regards,"
+    # Fixed lines after the body, before the closing: the citizenship line.
+    postscript: list[str] = field(default_factory=list)
+    closing: str = "Sincerely,"
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +141,16 @@ def write_resume(content: ResumeContent, path: Path) -> Path:
     if content.earlier_career:
         _section_heading(doc, "EARLIER CAREER")
         for line in content.earlier_career:
-            _bullet(doc, line)
+            # The master bolds the name before the dash: "**EZ-Leads (2015–17)** — …".
+            name, dash, rest = line.partition(" — ")
+            if dash and len(name) <= 60:
+                para = doc.add_paragraph(style="List Paragraph")
+                _apply_bullet_numbering(para)
+                _format_paragraph(para, space_before=Pt(1.5), space_after=Pt(3.6))
+                _run(para, name, size=10.5, bold=True)
+                _run(para, f" — {rest}", size=10.5)
+            else:
+                _bullet(doc, line)
 
     if content.education:
         _section_heading(doc, "EDUCATION & CERTIFICATIONS")
@@ -161,6 +175,12 @@ def write_cover_letter(content: CoverLetterContent, path: Path) -> Path:
     _paragraph(doc, content.salutation, size=10.5, colour=BLACK)
 
     for text in content.paragraphs:
+        if text.startswith("- "):
+            _bullet(doc, text[2:].strip())
+            continue
+        para = _paragraph(doc, text, size=10.5, colour=BLACK)
+        para.paragraph_format.space_before = Pt(6.0)
+    for text in content.postscript:
         para = _paragraph(doc, text, size=10.5, colour=BLACK)
         para.paragraph_format.space_before = Pt(6.0)
 
