@@ -19,8 +19,10 @@ reviews every generated artefact before it goes anywhere.
    - Permitted: accepting JD text Alan pastes, or a page he has already
      opened and saved himself as PDF, .mhtml or .txt.
    - Permitted: reading the SEEK and LinkedIn alert *emails* sent to Alan
-     (`jobagent alerts`, IMAP, read-only). The email only — never the job
-     page it links to.
+     (`jobagent alerts`, IMAP). The email only — never the job page it
+     links to. The one mailbox write: an alert email whose jobs were saved
+     as listings is moved to the bin (Alan, 2026-11-05); nothing else is
+     moved, marked or deleted.
 2. **No invented experience.** All resume and cover-letter content must be
    selected and reweighted from `profile/`. If the profile lacks material for a
    requirement, the output must say so as a gap, not fabricate. Prompts must
@@ -53,7 +55,7 @@ jobagent/
     docs.py      # writing generated documents to the local output folder
     docx_writer.py  # python-docx rendering to Alan's format
     document_store.py  # where documents live; LocalFolderStore is the only one
-    mailbox.py   # alert emails over IMAP (read-only) or from .eml files
+    mailbox.py   # alert emails over IMAP (bins read alerts) or from .eml files
   services/      # workflows shared by cli/ and web/ (added 2026-09-29)
     workspace.py # whose profile, store, run log, saved ads, document store
   cli/           # typer commands — parse args, call services, render

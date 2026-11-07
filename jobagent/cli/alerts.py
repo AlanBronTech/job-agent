@@ -102,6 +102,10 @@ def fetch(
         f"Read {result.emails} alert email(s) since {start:%-d %b}: {result.listings} listing(s), "
         f"{result.new} new. {result.suggested} to look at."
     )
+    if result.binned:
+        console.print(f"Moved {result.binned} read alert email(s) to the Gmail bin.")
+    if result.bin_error:
+        err_console.print(f"[yellow]Listings saved, but the emails were not binned: {escape(result.bin_error)}[/]")
     for subject in result.unread:
         err_console.print(
             f"[yellow]No jobs could be read from “{escape(subject)}”. The email layout may have changed.[/]"

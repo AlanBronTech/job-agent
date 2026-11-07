@@ -8,6 +8,12 @@ suggested again. `pending` is what is left to look at; `decide` records what
 Alan made of it; `report` says how good the suggestions were, which is the
 only way the title rules get better.
 
+After a Gmail fetch, each email that gave at least one listing is moved to
+the bin: everything in it is now a row here. An email that gave none is left
+where it is. That covers a changed layout (the email still holds the jobs
+the parser missed) and every other message from the same senders, such as
+LinkedIn messages and SEEK application updates, which are not alerts.
+
 Nothing here opens a job page. Alan opens the link, gives the ad a once-over,
 and prints it to PDF into JD_DIR himself. `match_saved_files` finds that file
 by the job address the saved page records, so he never has to come back and
@@ -77,6 +83,10 @@ class IngestResult:
     # Alert emails that gave no listings at all: a changed email layout shows
     # up here, rather than as a quiet day with nothing suggested.
     unread: list[str] = field(default_factory=list)
+    # Message-IDs of the emails that gave at least one listing: safe to bin.
+    listed: list[str] = field(default_factory=list)
+    binned: int = 0
+    bin_error: str = ""
 
 
 @dataclass
@@ -111,7 +121,11 @@ def default_since(ws: Workspace, today: date) -> date:
 def fetch(
     ws: Workspace, *, address: str | None, app_password: str | None, since: date, now: datetime
 ) -> IngestResult:
-    """Read the alert emails from Gmail and ingest them. Read-only on the mailbox."""
+    """Read the alert emails from Gmail, ingest them, then bin the ones that were read.
+
+    Binning runs only after the listings are saved, and its failure is
+    reported on the result rather than raised: the listings are what matter.
+    """
     if not (address and app_password):
         raise NoMailbox()
     rules = _rules(ws)
@@ -119,7 +133,13 @@ def fetch(
         mails = mailbox.fetch_gmail(address, app_password, since)
     except mailbox.MailboxError as exc:
         raise MailboxFailed(str(exc)) from exc
-    return ingest(ws, mails, now=now, rules=rules)
+    result = ingest(ws, mails, now=now, rules=rules)
+    if result.listed:
+        try:
+            result.binned = mailbox.bin_gmail(address, app_password, result.listed)
+        except mailbox.MailboxError as exc:
+            result.bin_error = str(exc)
+    return result
 
 
 def ingest(ws: Workspace, mails: list, *, now: datetime, rules: AlertRules | None = None) -> IngestResult:
@@ -135,6 +155,8 @@ def ingest(ws: Workspace, mails: list, *, now: datetime, rules: AlertRules | Non
             listings = core.parse_email(mail.sender, mail.text)
             if not listings and core.has_job_links(mail.text):
                 result.unread.append(mail.subject)
+            if listings:
+                result.listed.append(mail.message_id)
             for parsed in listings:
                 result.listings += 1
                 seen = mail.received if mail.received.tzinfo else mail.received.replace(tzinfo=timezone.utc)

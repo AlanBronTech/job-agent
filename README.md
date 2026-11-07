@@ -648,9 +648,12 @@ jobagent alerts fetch --since 2026-10-20 # or --dir FOLDER for saved .eml files
 
 **Setup.** In `.env`: `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD`, an app password
 (Google Account → Security → 2-Step Verification → App passwords), never your
-real password. The mailbox is opened read-only: nothing is marked read, moved
-or deleted. All Mail and the bin are both searched, because alerts get binned
-once read. Each run reads from the day before the last run (a week the first
+real password. Nothing is marked read. Once an email's jobs are saved as
+listings, the email is moved to the Gmail bin (Gmail empties it after 30
+days); an email that gave no listings is left alone, so a changed layout,
+a LinkedIn message or a SEEK application update is never binned. Saved .eml
+files (`--dir`) are never touched. All Mail and the bin are both searched, so
+`--since` still re-reads a binned alert within those 30 days. Each run reads from the day before the last run (a week the first
 time).
 
 **What gets suggested.** Every listing is kept, one row per job however many

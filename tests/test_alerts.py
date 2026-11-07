@@ -323,6 +323,76 @@ def test_gmail_is_read_read_only_from_all_mail_and_the_bin(monkeypatch):
 
 
 
+class BinIMAP:
+    """Gmail as far as binning goes: All Mail holds the messages in `held`."""
+
+    def __init__(self, held, calls, *, move_status="OK"):
+        self.held, self.calls, self.move_status = held, calls, move_status
+
+    def __call__(self, host):
+        return self
+
+    def login(self, user, password):
+        self.calls.append(("login", user))
+
+    def list(self):
+        return "OK", [b'(\\HasNoChildren) "/" "INBOX"',
+                      b'(\\All \\HasNoChildren) "/" "[Gmail]/All Mail"',
+                      b'(\\HasNoChildren \\Trash) "/" "[Gmail]/Bin"']
+
+    def select(self, folder, readonly=False):
+        self.calls.append(("select", folder, readonly))
+        return "OK", [b"1"]
+
+    def uid(self, command, *args):
+        self.calls.append(("uid", command, *args))
+        if command == "SEARCH":
+            mid = args[-1].split('"')[1]
+            return "OK", [self.held.get(mid, b"")]
+        return self.move_status, [b""]
+
+    def logout(self):
+        self.calls.append(("logout",))
+
+
+def test_bin_moves_only_the_given_messages_from_all_mail_to_the_bin(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mailbox.imaplib, "IMAP4_SSL", BinIMAP({"<a@seek>": b"7", "<b@seek>": b"9"}, calls))
+    moved = mailbox.bin_gmail("me@example.com", "pw", ["<a@seek>", "<gone@seek>", "jobmail|2026-10-23"])
+    assert moved == 1  # <gone@seek> is not in All Mail; a made-up id is never searched for
+    assert ("select", '"[Gmail]/All Mail"', False) in calls
+    assert [c for c in calls if c[:2] == ("uid", "MOVE")] == [("uid", "MOVE", "7", '"[Gmail]/Bin"')]
+    assert not any("jobmail|" in str(c) for c in calls)
+    assert calls[-1] == ("logout",)
+
+
+def test_fetch_bins_emails_that_gave_listings_and_leaves_the_rest(ws, monkeypatch):
+    mails = [
+        mail("jobmail@s.seek.com.au", SEEK_TEXT, mid="<alert@seek>"),
+        mail("messages-noreply@linkedin.com", "Sam sent you a message", mid="<msg@linkedin>"),
+        mail("jobmail@s.seek.com.au", "[https://au.seek.com/job/12345678]", subject="New layout",
+             mid="<odd@seek>"),
+    ]
+    binned = []
+    monkeypatch.setattr(alerts.mailbox, "fetch_gmail", lambda *a, **k: mails)
+    monkeypatch.setattr(alerts.mailbox, "bin_gmail", lambda a, p, ids, **k: binned.extend(ids) or len(ids))
+    result = alerts.fetch(ws, address="me@example.com", app_password="pw", since=NOW.date(), now=NOW)
+    assert binned == ["<alert@seek>"]
+    assert result.binned == 1 and result.listings > 0 and result.unread == ["New layout"]
+
+
+def test_a_failed_bin_keeps_the_listings_and_says_so(ws, monkeypatch):
+    def refuse(*a, **k):
+        raise mailbox.MailboxError("Gmail would not move it")
+
+    monkeypatch.setattr(alerts.mailbox, "fetch_gmail",
+                        lambda *a, **k: [mail("jobmail@s.seek.com.au", SEEK_TEXT, mid="<alert@seek>")])
+    monkeypatch.setattr(alerts.mailbox, "bin_gmail", refuse)
+    result = alerts.fetch(ws, address="me@example.com", app_password="pw", since=NOW.date(), now=NOW)
+    assert result.bin_error == "Gmail would not move it" and result.binned == 0
+    assert alerts.listings(ws)
+
+
 def test_a_first_listing_without_a_logo_does_not_take_the_greeting_as_its_title():
     text = (
         "Hi Alex,\nBased on your saved search for software development manager in All Sydney NSW,\n"

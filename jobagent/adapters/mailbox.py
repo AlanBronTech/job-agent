@@ -1,8 +1,11 @@
 """Reading job-alert emails: from Gmail over IMAP, or from saved .eml files.
 
-Read-only by construction. Folders are opened with `readonly=True` and bodies
-fetched with BODY.PEEK, so nothing is marked read, moved or deleted. Standard
-library only (`imaplib`, `email`): a Gmail app password in `.env` is the whole
+Reading is read-only: folders are opened with `readonly=True` and bodies
+fetched with BODY.PEEK, so nothing is marked read. The one write is
+`bin_gmail`, which moves alert emails that have already been read into the
+listings to the bin, where Gmail keeps them 30 days. It is a separate login
+run after the listings are saved, so a failure there never loses a listing,
+and it touches only the Message-IDs it is given. Standard library only (`imaplib`, `email`): a Gmail app password in `.env` is the whole
 setup, with no Google client library or OAuth flow to maintain.
 
 Only the alert emails are read. The search names SEEK's and LinkedIn's
@@ -73,6 +76,53 @@ def fetch_gmail(address: str, app_password: str, since: date, *, host: str = GMA
             pass
 
 
+def bin_gmail(address: str, app_password: str, message_ids: list[str], *, host: str = GMAIL_IMAP) -> int:
+    """Move these messages from All Mail to the bin. Returns how many were moved.
+
+    Messages already in the bin are not in All Mail, so they are left alone.
+    Not a permanent delete: Gmail empties the bin after 30 days, and `fetch_gmail`
+    searches the bin, so a re-read after a parser fix still finds them.
+    """
+    ids = [m for m in message_ids if m.startswith("<") and m.endswith(">") and '"' not in m and "\\" not in m]
+    if not ids:
+        return 0
+    try:
+        conn = imaplib.IMAP4_SSL(host)
+    except OSError as exc:
+        raise MailboxError(f"Could not reach {host}: {exc}") from exc
+    try:
+        try:
+            conn.login(address, app_password)
+        except imaplib.IMAP4.error as exc:
+            raise MailboxError(f"Gmail refused the login. ({exc})") from exc
+        folders = _flagged(conn)
+        all_mail, trash = folders.get(r"\All"), folders.get(r"\Trash")
+        if not (all_mail and trash):
+            raise MailboxError("Could not find Gmail's All Mail and bin folders.")
+        status, _ = conn.select(_quote(all_mail))
+        if status != "OK":
+            raise MailboxError(f"Could not open {all_mail}.")
+        moved = 0
+        for message_id in ids:
+            status, data = conn.uid("SEARCH", None, f'HEADER Message-ID "{message_id}"')
+            uids = data[0].split() if status == "OK" and data and data[0] else []
+            if not uids:
+                continue
+            uid_set = b",".join(uids).decode()
+            status, _ = conn.uid("MOVE", uid_set, _quote(trash))
+            if status != "OK":
+                raise MailboxError(f"Gmail would not move {message_id} to {trash}.")
+            moved += 1
+        return moved
+    except imaplib.IMAP4.error as exc:
+        raise MailboxError(f"Gmail refused a command while binning alerts: {exc}") from exc
+    finally:
+        try:
+            conn.logout()
+        except Exception:  # noqa: BLE001 - closing a connection that already failed
+            pass
+
+
 def read_eml_dir(folder: Path, since: date | None = None) -> list[Mail]:
     """Alert emails saved as .eml files ("Download message" in Gmail)."""
     mails = []
@@ -117,16 +167,25 @@ def text_of(message: EmailMessage) -> str:
 
 
 def _folders(conn: imaplib.IMAP4) -> list[str]:
+    folders = _flagged(conn)
+    return [folders[flag] for flag in _WANTED_FLAGS if flag in folders] or ["INBOX"]
+
+
+def _flagged(conn: imaplib.IMAP4) -> dict[str, str]:
+    """Special-use flag → folder name, for the flags this module cares about."""
     status, rows = conn.list()
     if status != "OK":
         raise MailboxError("Could not list the mailbox folders.")
-    names = []
+    found: dict[str, str] = {}
     for row in rows or []:
         line = row.decode(errors="replace") if isinstance(row, bytes) else str(row)
         match = re.match(r'\((?P<flags>[^)]*)\) "(?P<sep>[^"]*)" (?P<name>.+)$', line)
-        if match and any(flag in match["flags"] for flag in _WANTED_FLAGS):
-            names.append(match["name"].strip().strip('"'))
-    return names or ["INBOX"]
+        if not match:
+            continue
+        for flag in _WANTED_FLAGS:
+            if flag in match["flags"].split():
+                found.setdefault(flag, match["name"].strip().strip('"'))
+    return found
 
 
 def _quote(folder: str) -> str:

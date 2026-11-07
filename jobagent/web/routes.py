@@ -1056,6 +1056,8 @@ async def alerts_fetch(request: Request):
     summary = (
         f"Read {result.emails} email(s): {result.listings} listing(s), {result.new} new, "
         f"{result.suggested} to look at."
+        + (f" Moved {result.binned} read email(s) to the Gmail bin." if result.binned else "")
+        + (f" Listings saved, but the emails were not binned: {result.bin_error}." if result.bin_error else "")
         + (f" Could not read jobs from: {'; '.join(result.unread)}." if result.unread else "")
     )
     return RedirectResponse("/alerts?fetched=" + quote(summary), status_code=303)
