@@ -7,6 +7,7 @@ import pytest
 from jobagent.core.models import ApplicationStatus, Verdict
 from jobagent.services import listing
 from jobagent.services.refusals import NoSuchAd
+from jobagent.services.workspace import Workspace
 from tests.ui_seed import TODAY, seed, workspace
 
 
@@ -73,3 +74,15 @@ def test_unscored_detail_is_not_stale(ws, ids):
 def test_missing_ad(ws, ids):
     with pytest.raises(NoSuchAd):
         listing.ad_detail(ws, 999, today=TODAY)
+
+
+def test_detail_carries_the_master_choice(ws, ids, tmp_path):
+    from tests.ui_seed import masters_profile
+
+    with_masters = Workspace(**{**ws.__dict__, "profile_dir": masters_profile(tmp_path)})
+    detail = listing.ad_detail(with_masters, ids["acme"], today=TODAY)
+    assert detail.master is not None and detail.master.master.id == "manager"
+
+
+def test_detail_without_a_profile_has_no_master(ws, ids):
+    assert listing.ad_detail(ws, ids["acme"], today=TODAY).master is None

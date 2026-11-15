@@ -563,3 +563,15 @@ def test_a_letter_is_addressed_to_a_named_contact_when_there_is_one():
     assert salutation_for([NS(name="Pat Lee", kind="former_colleague")]) == "Dear Hiring Manager,"
     assert salutation_for([NS(name="Sam Roe", kind="agency_recruiter"),
                            NS(name="Pat Lee", kind="hiring_manager")]) == "Dear Pat,"
+
+
+# -- master resumes: the assessment kept with the documents names the master --
+
+
+def test_assessment_md_names_the_master(tmp_path, ids, fake_model, ws):
+    from tests.ui_seed import masters_profile
+
+    with_masters = Workspace(**{**ws.__dict__, "profile_dir": masters_profile(tmp_path)})
+    result = run(with_masters, ids["acme"], resume=False, cover=True)
+    assessment_md = (result.folder / "assessment.md").read_text(encoding="utf-8")
+    assert "**Resume:** Engineering Manager: a manager role." in assessment_md

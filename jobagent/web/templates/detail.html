@@ -82,6 +82,9 @@
     {% if d.role_kind %}<p class="detail"><strong>Role kind:</strong>
       {{ d.role_kind.primary.value.replace("_", " ") }}{% if d.role_kind.secondary %} (secondary: {{ d.role_kind.secondary.value.replace("_", " ") }}){% endif %}
       — {{ d.role_kind.reason }}</p>{% endif %}
+    {% if d.master %}<p class="detail"><strong>Resume:</strong>
+      {{ describe_choice(d.master) }}
+      <span class="muted">A custom one instead: generate a resume below.</span></p>{% endif %}
   </div>
 
   {% if a.constraints %}
