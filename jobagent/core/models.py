@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
@@ -480,6 +481,49 @@ class WorkType(str, Enum):
     contract = "contract"
     fixed_term = "fixed_term"
     unknown = "unknown"
+
+
+# --------------------------------------------------------------------------- #
+# Master resumes: <profile>/resumes/masters.yaml
+# --------------------------------------------------------------------------- #
+
+
+class MasterEntry(_Base):
+    """One hand-written master resume, as written in masters.yaml.
+
+    JobAgent picks a master for an ad and records which one was sent; it never
+    writes or edits the document. `role_kinds` and `work_types` say what the
+    master is for; the master marked `default` covers everything else. File
+    names are relative to the resumes folder.
+    """
+
+    id: str
+    label: str
+    docx: str
+    pdf: str | None = None
+    default: bool = False
+    role_kinds: list[RoleKind] = Field(default_factory=list)
+    work_types: list[WorkType] = Field(default_factory=list)
+    use_for: str
+    not_for: str | None = None
+
+
+class MastersFile(_Base):
+    masters: list[MasterEntry]
+
+
+class MasterResume(_Base):
+    """A master with its files resolved to absolute paths that exist."""
+
+    id: str
+    label: str
+    docx: Path
+    pdf: Path | None = None
+    default: bool = False
+    role_kinds: list[RoleKind] = Field(default_factory=list)
+    work_types: list[WorkType] = Field(default_factory=list)
+    use_for: str
+    not_for: str | None = None
 
 
 class WorkArrangement(str, Enum):

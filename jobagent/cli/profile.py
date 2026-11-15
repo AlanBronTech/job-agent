@@ -10,6 +10,7 @@ from rich.table import Table
 
 from jobagent.cli import paths
 from jobagent.config import get_config
+from jobagent.core.masters import load_masters
 from jobagent.core.profile import ProfileError, load_profile, summarize_profile
 
 app = typer.Typer(help="Inspect and validate the profile.", no_args_is_help=True)
@@ -39,6 +40,7 @@ def validate(
 
     try:
         profile = load_profile(profile_dir)
+        masters = load_masters(profile_dir)
     except ProfileError as exc:
         err_console.print(f"[bold red]Profile invalid[/] ({profile_dir})")
         err_console.print(str(exc))
@@ -53,6 +55,22 @@ def validate(
     _print_table("Sections", summary.section_counts)
     _print_table("Visibility", summary.visibility_breakdown)
     _print_table("Evidence strength", summary.evidence_breakdown)
+    if masters:
+        _print_masters(masters)
+
+
+def _print_masters(masters) -> None:
+    table = Table(title="Master resumes", title_justify="left", box=None)
+    table.add_column("id", style="cyan")
+    table.add_column("label")
+    table.add_column("for")
+    table.add_column("files", style="dim")
+    for m in masters:
+        scope = ["default"] if m.default else []
+        scope += [k.value for k in m.role_kinds] + [w.value for w in m.work_types]
+        files = m.docx.name + (f", {m.pdf.name}" if m.pdf else "")
+        table.add_row(m.id, m.label, ", ".join(scope), files)
+    console.print(table)
 
 
 def _print_table(title: str, counts: dict[str, int]) -> None:
