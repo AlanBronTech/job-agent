@@ -15,6 +15,7 @@ from jobagent.adapters.document_store import OutputFolders
 from jobagent.core import history, store
 from jobagent.core.models import (
     MasterChoice,
+    MasterResume,
     Application,
     ApplicationStatus,
     CompanyHistory,
@@ -60,6 +61,8 @@ class AdDetail:
     revisable: list = field(default_factory=list)
     # The master resume to send (services.masters); None without a registry.
     master: MasterChoice | None = None
+    # Every master, for the pipeline form's "resume sent" choice.
+    masters: list[MasterResume] = field(default_factory=list)
 
 
 def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
@@ -123,4 +126,5 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         context=context,
         revisable=revise.revisable(ws, jd_id, today),
         master=masters.choose(ws, jd, kind),
+        masters=masters.registry(ws),
     )

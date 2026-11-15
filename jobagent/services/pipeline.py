@@ -151,6 +151,8 @@ def update_from_form(
     today: date,
     confirm_blockers: bool = False,
     sent_files: bool = False,
+    resume_master: str | None = None,
+    resume_suggested: str | None = None,
 ) -> tuple[JobDescription, Application | None]:
     """The UI's pipeline form, validated, as one `save`.
 
@@ -210,4 +212,6 @@ def update_from_form(
         worth=Worth(worth) if worth in WORTH_LABELS else None,
         worth_why=why.strip(),
         notes=note.strip(),
+        resume_master=resume_master,
+        resume_suggested=resume_suggested,
     )

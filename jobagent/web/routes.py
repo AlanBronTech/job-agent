@@ -20,6 +20,7 @@ from jobagent.services import (
     costs,
     documents,
     listing,
+    masters,
     outputs,
     pipeline,
     readiness,
@@ -42,6 +43,7 @@ from jobagent.services.refusals import (
     ProfileMissing,
     RunInProgress,
     SentFileUnusable,
+    UnknownMaster,
     UnreadableAd,
 )
 from jobagent.web import work
@@ -93,8 +95,23 @@ async def pipeline_save(request: Request, jd_id: int):
     form = await checked_form(request)
     ws = workspace(request)
     today = request.app.state.today()
+    chosen = str(form.get("master") or "") or None
+    resume = None
     try:
-        prepared = await _sent_files(form, ws, jd_id, today)
+        if chosen:
+            resume = masters.resolve_sent(ws, jd_id, chosen=chosen)
+        prepared = await _sent_files(form, ws, jd_id, today,
+                                     master_file=resume.file if resume else None)
+        if resume is None and prepared is not None:
+            # No master named: a sent resume identical to a master is that
+            # master, any other (or the generated copies) is custom.
+            given = next((g for kind, g, *_ in prepared.plans if kind is DocumentKind.resume), None)
+            if given is not None or form.get("sent_as_generated") == "1":
+                resume = masters.resolve_sent(
+                    ws, jd_id, sent_resume=given,
+                    sent_as_generated=given is None)
+    except UnknownMaster as exc:
+        return _back_to_ad(request, jd_id, f"Not saved: no master resume called '{exc.name}'.")
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
@@ -117,6 +134,8 @@ async def pipeline_save(request: Request, jd_id: int):
             today=today,
             confirm_blockers=form.get("confirm_blockers") == "1",
             sent_files=prepared is not None,
+            resume_master=resume.master if resume else None,
+            resume_suggested=resume.suggested if resume else None,
         )
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
@@ -158,13 +177,19 @@ async def status_save(request: Request, jd_id: int):
                                                  "problem": problem, "problem_link": link})
 
 
-async def _sent_files(form, ws, jd_id: int, today):
-    """The form's sent documents, checked and held, or None if it named none."""
+async def _sent_files(form, ws, jd_id: int, today, master_file=None):
+    """The form's sent documents, checked and held, or None if it named none.
+
+    `master_file` is the chosen master's document, kept as the resume sent
+    when the form names a master and uploads no resume.
+    """
     files = {}
     for key in ("resume", "letter"):
         upload = form.get(f"sent_{key}")
         if upload is not None and getattr(upload, "filename", ""):
             files[key] = (upload.filename, await upload.read(sent.MAX_UPLOAD_BYTES + 1))
+    if master_file is not None and "resume" not in files:
+        files["resume"] = (master_file.name, master_file.read_bytes())
     as_generated = form.get("sent_as_generated") == "1"
     if not files and not as_generated:
         return None

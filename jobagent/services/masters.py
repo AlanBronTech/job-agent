@@ -14,10 +14,25 @@ from pathlib import Path
 
 from jobagent.core import store
 from jobagent.core.masters import load_masters, select_master
-from jobagent.core.models import JobDescription, MasterChoice, RoleClassification
+from jobagent.core.models import (
+    JobDescription,
+    MasterChoice,
+    MasterResume,
+    RoleClassification,
+)
 from jobagent.core.profile import ProfileError
 from jobagent.services.refusals import NoSuchAd, UnknownMaster
 from jobagent.services.workspace import Workspace
+
+
+def registry(ws: Workspace) -> list[MasterResume]:
+    """Every master, or none when there is no profile or the list is invalid."""
+    if ws.profile_dir is None:
+        return []
+    try:
+        return load_masters(ws.profile_dir)
+    except ProfileError:
+        return []
 
 
 def choose(
