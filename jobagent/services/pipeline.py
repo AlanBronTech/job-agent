@@ -26,6 +26,8 @@ def save(
     worth: Worth | None = None,
     worth_why: str = "",
     notes: str = "",
+    resume_master: str | None = None,
+    resume_suggested: str | None = None,
 ) -> tuple[JobDescription, Application]:
     """Create or update the ad's application row. Notes are appended, never replaced.
 
@@ -53,6 +55,10 @@ def save(
             application.worth_derived = False
         if worth_why:
             application.worth_why = worth_why
+        if resume_master is not None:
+            application.resume_master = resume_master
+        if resume_suggested is not None:
+            application.resume_suggested = resume_suggested
         if notes:
             application.notes = (
                 f"{application.notes}\n{notes}".strip() if application.notes else notes

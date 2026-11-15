@@ -69,3 +69,99 @@ def test_describe_falls_back_to_the_docx(tmp_path):
 def test_describe_not_a_target():
     choice = MasterChoice(not_a_target=True, reason="A permanent hands-on engineering role.")
     assert describe_choice(choice) == "Not a target. A permanent hands-on engineering role."
+
+
+# -- which resume went: resolved when an application is recorded --------------
+
+import pytest  # noqa: E402
+
+from jobagent.core import store  # noqa: E402
+from jobagent.services.refusals import UnknownMaster  # noqa: E402
+
+
+def stored_ad(ws, title: str, work_type: WorkType = WorkType.permanent) -> int:
+    with store.open_store(ws.db_path) as conn:
+        return store.add_jd(conn, ad(title, work_type))
+
+
+@pytest.fixture
+def mws(tmp_path):
+    return ws_with(tmp_path, masters_profile(tmp_path))
+
+
+def test_nothing_named_assumes_the_suggested_master_and_its_pdf(mws):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    r = masters.resolve_sent(mws, jd_id)
+    assert (r.master, r.suggested, r.assumed) == ("manager", "manager", True)
+    assert r.file.name == "Sam-Resume-Manager.pdf"
+
+
+def test_a_named_master_is_recorded_as_an_override(mws):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    r = masters.resolve_sent(mws, jd_id, chosen="ai")
+    assert (r.master, r.suggested, r.assumed) == ("ai", "manager", False)
+    assert r.overrode and r.file.name == "Sam-Resume-AI.docx"  # no PDF: the .docx
+
+
+def test_custom_records_custom_and_no_file(mws):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    r = masters.resolve_sent(mws, jd_id, chosen="custom")
+    assert r.master == "custom" and r.file is None
+
+
+def test_a_sent_file_identical_to_a_master_is_that_master(mws, tmp_path):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    copy = tmp_path / "renamed.pdf"
+    copy.write_bytes((mws.profile_dir / "resumes" / "Sam-Resume-Manager.pdf").read_bytes())
+    r = masters.resolve_sent(mws, jd_id, sent_resume=copy)
+    assert r.master == "manager" and r.file is None and not r.assumed
+
+
+def test_any_other_sent_file_is_custom(mws, tmp_path):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    other = tmp_path / "AlanBron_Resume_Acme.docx"
+    other.write_bytes(b"a generated resume")
+    assert masters.resolve_sent(mws, jd_id, sent_resume=other).master == "custom"
+
+
+def test_sent_as_generated_is_custom(mws):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    assert masters.resolve_sent(mws, jd_id, sent_as_generated=True).master == "custom"
+
+
+def test_not_a_target_records_nothing_unless_named(mws):
+    jd_id = stored_ad(mws, "Senior Software Engineer")
+    r = masters.resolve_sent(mws, jd_id)
+    assert r.master is None and r.suggested == "not_a_target" and r.file is None
+    assert masters.resolve_sent(mws, jd_id, chosen="contract").master == "contract"
+
+
+def test_an_unknown_master_is_refused(mws):
+    jd_id = stored_ad(mws, "Engineering Manager")
+    with pytest.raises(UnknownMaster) as refused:
+        masters.resolve_sent(mws, jd_id, chosen="executive")
+    assert refused.value.known == ["manager", "ai", "contract"]
+
+
+def test_without_a_registry_nothing_is_recorded(tmp_path):
+    ws = ws_with(tmp_path, None)
+    jd_id = stored_ad(ws, "Engineering Manager")
+    r = masters.resolve_sent(ws, jd_id)
+    assert r.master is None and r.suggested is None
+    assert masters.resolve_sent(ws, jd_id, chosen="custom").master == "custom"
+    with pytest.raises(UnknownMaster):
+        masters.resolve_sent(ws, jd_id, chosen="manager")
+
+
+def test_nothing_named_again_does_not_record_a_second_copy(mws):
+    from datetime import datetime, timezone
+
+    from jobagent.core.models import Application, ApplicationStatus
+
+    jd_id = stored_ad(mws, "Engineering Manager")
+    with store.open_store(mws.db_path) as conn:
+        store.save_application(conn, Application(
+            jd_id=jd_id, status=ApplicationStatus.applied, resume_master="ai",
+            updated_at=datetime.now(timezone.utc)))
+    r = masters.resolve_sent(mws, jd_id)
+    assert r.master is None and r.file is None  # leaves "ai" as it is

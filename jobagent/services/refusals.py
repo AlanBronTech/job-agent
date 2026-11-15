@@ -196,3 +196,12 @@ class NothingSent(Refusal):
     def __init__(self, jd_id: int) -> None:
         super().__init__(f"nothing recorded as sent for JD {jd_id}")
         self.jd_id = jd_id
+
+
+class UnknownMaster(Refusal):
+    """`--master` named a master the registry does not list."""
+
+    def __init__(self, name: str, known: list[str]) -> None:
+        super().__init__(name)
+        self.name = name
+        self.known = known

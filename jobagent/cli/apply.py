@@ -15,8 +15,9 @@ from jobagent.config import get_config
 from jobagent.core import store
 from jobagent.core.models import ApplicationStatus, Worth
 from jobagent.core.store import StoreError
-from jobagent.services import pipeline
-from jobagent.services.refusals import NoSuchAd
+from jobagent.core.profile import ProfileError
+from jobagent.services import masters, pipeline
+from jobagent.services.refusals import NoSuchAd, UnknownMaster
 from jobagent.services.workspace import Workspace
 
 console = Console()
@@ -64,6 +65,13 @@ def apply(
     sent_as_generated: bool = typer.Option(
         False, "--sent-as-generated", help="You sent the generated documents unedited."
     ),
+    master: str | None = typer.Option(
+        None,
+        "--master",
+        help="The master resume you sent (its id in profile/resumes/masters.yaml), "
+        "or 'custom'. Left out: a file identical to a master is that master, any "
+        "other is custom, and with no file the suggested master is recorded.",
+    ),
 ) -> None:
     """Record that you applied for a job, and what you sent."""
     applied_on = _parse_date(on) if on else date.today()
@@ -75,10 +83,13 @@ def apply(
             "you applied cannot postdate the application."
         )
         raise typer.Exit(code=2)
+    ws = Workspace.from_config(get_config())
+    resume = _which_resume(ws, jd_id, master, sent_resume, sent_as_generated)
+    sent_resume = sent_resume or (resume.file if resume else None)
     if sent_resume or sent_letter or sent_as_generated:
         # First: a refused file stops the run before the status is recorded.
         sent_cli.record_sent(
-            Workspace.from_config(get_config()), jd_id, sent_on=applied_on,
+            ws, jd_id, sent_on=applied_on,
             resume=sent_resume, letter=sent_letter, as_generated=sent_as_generated,
         )
     _save(
@@ -88,7 +99,46 @@ def apply(
         channel=channel,
         reposted_on=reposted,
         notes=note,
+        resume_master=resume.master if resume else None,
+        resume_suggested=resume.suggested if resume else None,
     )
+    if resume is not None:
+        _say_which_resume(resume, jd_id)
+
+
+def _which_resume(ws, jd_id, chosen, sent_resume, sent_as_generated):
+    """Which resume went, resolved before anything is written; None if unknowable."""
+    try:
+        return masters.resolve_sent(ws, jd_id, chosen=chosen, sent_resume=sent_resume,
+                                    sent_as_generated=sent_as_generated)
+    except NoSuchAd:
+        err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
+        raise typer.Exit(code=1)
+    except UnknownMaster as refusal:
+        known = ", ".join(refusal.known) or "none: profile/resumes/masters.yaml lists none"
+        err_console.print(
+            f"[bold red]No master called '{refusal.name}'.[/] Known: {known}; or 'custom'."
+        )
+        raise typer.Exit(code=2)
+    except ProfileError as exc:
+        err_console.print("[bold red]The master list is invalid[/]; nothing recorded.")
+        err_console.print(str(exc))
+        raise typer.Exit(code=1)
+
+
+def _say_which_resume(resume, jd_id: int) -> None:
+    if resume.master is None:
+        if resume.suggested == masters.NOT_A_TARGET:
+            console.print("[dim]Resume: not recorded (JobAgent said not a target). "
+                          f"`jobagent apply {jd_id} --master <id>` records one.[/]")
+        return
+    line = "a custom resume" if resume.master == masters.CUSTOM else f"master '{resume.master}'"
+    if resume.assumed:
+        line += (" (suggested; recorded because no resume was named). If you sent "
+                 f"something else, `jobagent apply {jd_id} --master <id|custom>`")
+    elif resume.overrode:
+        line += f", instead of the suggested '{resume.suggested}'"
+    console.print(f"Resume: {line}.")
 
 
 def outcome(
@@ -162,6 +212,7 @@ def status_command(
     table.add_column("status")
     table.add_column("applied", style="dim")
     table.add_column("channel", style="dim")
+    table.add_column("resume", style="dim")
     table.add_column("worth", style="dim")
 
     for application in shown:
@@ -174,6 +225,7 @@ def status_command(
             f"[{style}]{application.status.value}[/]",
             application.applied_on.isoformat() if application.applied_on else "—",
             application.channel or "—",
+            application.resume_master or "—",
             application.worth_applying.value,
         )
     console.print(table)
@@ -254,6 +306,8 @@ def _save(
     worth: Worth | None = None,
     worth_why: str = "",
     notes: str = "",
+    resume_master: str | None = None,
+    resume_suggested: str | None = None,
 ) -> None:
     config = get_config()
     try:
@@ -267,6 +321,8 @@ def _save(
             worth=worth,
             worth_why=worth_why,
             notes=notes,
+            resume_master=resume_master,
+            resume_suggested=resume_suggested,
         )
     except NoSuchAd:
         err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
