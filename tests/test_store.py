@@ -670,3 +670,41 @@ def test_setting_the_role_kind_of_a_missing_ad_is_an_error(tmp_path):
     with store.open_store(tmp_path / "db") as conn:
         with pytest.raises(store.StoreError):
             store.set_role_kind(conn, 99, _RC(primary=_RK.technical_lead, reason="x"))
+
+
+# -- v19: which resume went with an application ---------------------------------
+
+
+def test_the_resume_sent_round_trips(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+    store.save_application(conn, make_application(
+        jd_id, resume_master="contract", resume_suggested="manager"))
+    loaded = store.get_application(conn, jd_id)
+    assert loaded.resume_master == "contract"
+    assert loaded.resume_suggested == "manager"
+
+
+def test_an_application_without_a_resume_record_reads_none(conn) -> None:
+    jd_id = store.add_jd(conn, make_jd())
+    store.save_application(conn, make_application(jd_id))
+    loaded = store.get_application(conn, jd_id)
+    assert loaded.resume_master is None and loaded.resume_suggested is None
+
+
+def test_v18_database_gains_the_resume_columns(tmp_path):
+    path = tmp_path / "v18.db"
+    with store.open_store(path) as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Fabrikam Medical", 1))
+        store.save_application(conn, make_application(jd_id))
+    raw = _sqlite3.connect(path)
+    raw.execute("ALTER TABLE applications DROP COLUMN resume_master")
+    raw.execute("ALTER TABLE applications DROP COLUMN resume_suggested")
+    raw.execute("UPDATE meta SET value = '18' WHERE key = 'schema_version'")
+    raw.commit()
+    raw.close()
+
+    with store.open_store(path) as conn:
+        loaded = store.get_application(conn, jd_id)
+        assert loaded.resume_master is None
+        version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+        assert version == "19"

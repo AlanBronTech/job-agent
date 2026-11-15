@@ -934,6 +934,14 @@ class Application(_Base):
     # retrospective opinion.
     overrode_scorer: bool = False
 
+    # Which resume went: a master's id from profile/resumes/masters.yaml, or
+    # "custom" for a generated or hand-made one; None when not recorded
+    # (everything before 2026-11-16). `resume_suggested` is what JobAgent
+    # proposed at the time ("not_a_target" when it said not to apply), so an
+    # override can be told from agreement when the masters are read back.
+    resume_master: str | None = None
+    resume_suggested: str | None = None
+
     updated_at: datetime
 
 
