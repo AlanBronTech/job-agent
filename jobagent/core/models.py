@@ -526,6 +526,18 @@ class MasterResume(_Base):
     not_for: str | None = None
 
 
+class MasterChoice(_Base):
+    """Which master to send for an ad, or that the ad is not a target.
+
+    Advice, shown with its reason before anything is sent; Alan can override
+    it or ask for a custom resume instead.
+    """
+
+    master: MasterResume | None = None
+    not_a_target: bool = False
+    reason: str
+
+
 class WorkArrangement(str, Enum):
     """Where the work happens.
 

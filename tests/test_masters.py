@@ -177,3 +177,174 @@ def test_validate_fails_on_a_bad_registry(tmp_path: Path, example_dir: Path) -> 
 
     assert result.exit_code == 1
     assert "Sam-Resume-AI.docx" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# Choosing a master for an ad
+# --------------------------------------------------------------------------- #
+
+from datetime import datetime, timezone  # noqa: E402
+
+from jobagent.core.masters import select_master  # noqa: E402
+from jobagent.core.models import (  # noqa: E402
+    JobDescription,
+    MasterResume,
+    RoleClassification,
+)
+
+MASTERS = [
+    MasterResume(id="em", label="Engineering Manager", docx=Path("/r/em.docx"),
+                 default=True, use_for="Manager roles."),
+    MasterResume(id="ai", label="AI adoption lead", docx=Path("/r/ai.docx"),
+                 role_kinds=[RoleKind.ai_enablement], use_for="AI adoption roles."),
+    MasterResume(id="contract", label="Contract senior engineer",
+                 docx=Path("/r/contract.docx"),
+                 work_types=[WorkType.contract, WorkType.fixed_term],
+                 use_for="Contracts only."),
+]
+
+
+def jd(title: str, work_type: WorkType = WorkType.permanent) -> JobDescription:
+    return JobDescription(title=title, work_type=work_type, raw_text=title,
+                          ingested_at=datetime(2026, 11, 16, tzinfo=timezone.utc))
+
+
+def kind(primary: str, secondary: str | None = None) -> RoleClassification:
+    return RoleClassification(primary=primary, secondary=secondary, reason="test")
+
+
+def pick(title, work_type=WorkType.permanent, classification=None, masters=MASTERS):
+    return select_master(jd(title, work_type), classification, masters)
+
+
+@pytest.mark.parametrize(
+    "title, work_type, classification, expected",
+    [
+        # Contracts take the contract master, whatever else the ad says.
+        ("Senior Software Engineer", WorkType.contract, kind("technical_lead"), "contract"),
+        ("Senior Software Engineering Position", WorkType.fixed_term, kind("technical_lead"), "contract"),
+        ("Senior Software AI Engineer", WorkType.contract, kind("ai_enablement", "technical_lead"), "contract"),
+        # AI adoption leadership.
+        ("AI Enablement Lead - Software Engineering", WorkType.permanent, kind("ai_enablement", "technical_lead"), "ai"),
+        ("AI Product Lead", WorkType.permanent, kind("ai_enablement", "delivery_focused"), "ai"),
+        ("Senior Manager, AI Product Delivery Engineering", WorkType.permanent, kind("ai_enablement"), "ai"),
+        # Manager roles, including AI-flavoured ones that lead with people.
+        ("Engineering Manager", WorkType.permanent, kind("people_focused"), "em"),
+        ("AI Engineering Manager", WorkType.permanent, kind("people_focused", "ai_enablement"), "em"),
+        ("Head of Engineering - AI Platform", WorkType.permanent, kind("technical_lead", "ai_enablement"), "em"),
+        ("Engineering Manager / Squad Tech Lead", WorkType.permanent, kind("technical_lead", "people_focused"), "em"),
+        ("Engineering Manager - Technology", WorkType.permanent, kind("technical_lead", "people_focused"), "em"),
+        ("Software Engineer Manager, Netsoft", WorkType.permanent, None, "em"),
+        # A contract that is a management job is still a management job.
+        ("Engineering Manager", WorkType.contract, kind("people_focused"), "em"),
+        # Permanent Team Lead: the default until Alan decides (TBD).
+        ("Engineering Team Lead", WorkType.permanent, kind("delivery_focused", "people_focused"), "em"),
+        ("Digital Tech Lead", WorkType.permanent, kind("technical_lead"), "em"),
+        # Delivery and project roles have no master of their own.
+        ("Technology Project Manager", WorkType.permanent, kind("delivery_focused"), "em"),
+        # Not classified yet: the title and work type still decide.
+        ("Engineering Manager", WorkType.unknown, None, "em"),
+    ],
+)
+def test_picks_the_master(title, work_type, classification, expected) -> None:
+    choice = pick(title, work_type, classification)
+    assert choice is not None
+    assert choice.not_a_target is False
+    assert choice.master is not None and choice.master.id == expected
+    assert choice.reason
+
+
+@pytest.mark.parametrize(
+    "title, work_type, classification",
+    [
+        ("Senior Software Engineer", WorkType.permanent, kind("technical_lead")),
+        ("Applied AI Engineer", WorkType.permanent, kind("ai_enablement")),
+        ("Senior Full Stack Developer", WorkType.permanent, None),
+        ("Agentic AI Architect", WorkType.permanent, kind("technical_lead")),
+    ],
+)
+def test_permanent_hands_on_roles_are_not_a_target(title, work_type, classification) -> None:
+    choice = pick(title, work_type, classification)
+    assert choice.not_a_target is True
+    assert choice.master is None
+    assert "permanent" in choice.reason
+
+
+def test_hands_on_role_with_unstated_terms_asks_about_them() -> None:
+    choice = pick("AI Engineer", WorkType.unknown, kind("ai_enablement"))
+    assert choice.not_a_target is True
+    assert "contract" in choice.reason
+
+
+def test_the_reason_names_contract_for_a_contract_manager_role() -> None:
+    choice = pick("Engineering Manager", WorkType.contract, kind("people_focused"))
+    assert "contract" in choice.reason.lower()
+
+
+def test_team_lead_reason_says_it_is_undecided() -> None:
+    choice = pick("Engineering Team Lead", WorkType.permanent, kind("people_focused"))
+    assert "Team Lead" in choice.reason
+
+
+def test_no_masters_means_no_choice() -> None:
+    assert pick("Engineering Manager", masters=[]) is None
+
+
+def test_contract_without_a_contract_master_is_not_a_target() -> None:
+    masters = [m for m in MASTERS if m.id != "contract"]
+    choice = pick("Senior Software Engineer", WorkType.contract, None, masters)
+    assert choice.not_a_target is True
+
+
+def test_ai_role_without_an_ai_master_falls_back_to_the_default() -> None:
+    masters = [m for m in MASTERS if m.id != "ai"]
+    choice = pick("AI Enablement Lead", WorkType.permanent, kind("ai_enablement"), masters)
+    assert choice.master.id == "em"
+
+
+def test_ai_adoption_title_finds_the_ai_master_before_classification() -> None:
+    # An ad scored before role kinds existed has no classification.
+    choice = pick("AI & Digital Tools Adoption Lead", WorkType.fixed_term, None)
+    assert choice.master.id == "ai"
+
+
+def test_enablement_without_ai_is_not_the_ai_master() -> None:
+    choice = pick("Engineering Enablement Manager", WorkType.permanent, None)
+    assert choice.master.id == "em"
+
+
+@pytest.mark.parametrize("title", [
+    "Lead AI Engineer, Agentic Systems",
+    "Agentic AI Architect (Lead / Principal)",
+    "Lead Software Engineer",
+])
+def test_lead_engineer_titles_are_hands_on(title) -> None:
+    # "Lead Engineer" is a senior hands-on title, not a team lead.
+    choice = pick(title, WorkType.permanent, kind("technical_lead"))
+    assert choice.not_a_target is True
+
+
+def test_contract_delivery_lead_is_a_delivery_role() -> None:
+    choice = pick("Delivery Lead - Data / Digital Platforms", WorkType.contract, None)
+    assert choice.master.id == "em"
+    assert "delivery" in choice.reason
+
+
+def test_contract_project_manager_reason_is_delivery() -> None:
+    choice = pick("Software Project Manager", WorkType.fixed_term, kind("delivery_focused"))
+    assert "delivery" in choice.reason
+
+
+def test_team_lead_classified_delivery_still_reads_as_team_lead() -> None:
+    choice = pick("Engineering Team Lead", WorkType.permanent,
+                  kind("delivery_focused", "people_focused"))
+    assert "Team Lead" in choice.reason
+
+
+def test_team_lead_pitched_at_manager_level_still_reads_as_team_lead() -> None:
+    from jobagent.core.models import Seniority
+
+    ad = jd("Engineering Team Lead").model_copy(update={"seniority": Seniority.manager})
+    choice = select_master(ad, kind("delivery_focused", "people_focused"), MASTERS)
+    assert choice.master.id == "em"
+    assert "Team Lead" in choice.reason
