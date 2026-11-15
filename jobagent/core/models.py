@@ -128,6 +128,9 @@ class Bullet(_Base):
     note_for_writer: str | None = None
     linked_story: str | None = None
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Never in a resume, cover letter or application answer, whatever the ad
+    # or its role kind. Interview prep still sees it.
+    never_in_documents: bool = False
 
 
 class Education(_Base):
@@ -293,6 +296,11 @@ class Story(_Base):
     # belongs on a resume only when the ad asks about performance management
     # (Alan, 2026-10-23). Bullets linked to the story go with it.
     only_if_ad_mentions: list[str] = Field(default_factory=list)
+    # Never in a written document, whatever the ad says or its role kind: the
+    # phrase gate above can open, this cannot (Alan, 2026-11-14: the Testing
+    # Lead dismissal). Bullets linked to the story go with it; interview prep
+    # still uses it.
+    never_in_documents: bool = False
 
 
 class Explanations(_Base):
