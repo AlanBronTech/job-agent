@@ -234,7 +234,7 @@ def pick(title, work_type=WorkType.permanent, classification=None, masters=MASTE
         ("Head of Engineering - AI Platform", WorkType.permanent, kind("technical_lead", "ai_enablement"), "em"),
         ("Engineering Manager / Squad Tech Lead", WorkType.permanent, kind("technical_lead", "people_focused"), "em"),
         ("Engineering Manager - Technology", WorkType.permanent, kind("technical_lead", "people_focused"), "em"),
-        ("Software Engineer Manager, Netsoft", WorkType.permanent, None, "em"),
+        ("Software Engineer Manager, Payments Platform", WorkType.permanent, None, "em"),
         # A contract that is a management job is still a management job.
         ("Engineering Manager", WorkType.contract, kind("people_focused"), "em"),
         # Permanent Team Lead: the default until Alan decides (TBD).
