@@ -329,3 +329,22 @@ def test_the_jobs_page_status_keeps_the_pipeline_guards(client, ws, ids):
     assert "NOT-READY" in cell.text and f'href="/ads/{ids["contoso"]}#pipeline"' in cell.text
     with store.open_store(ws.db_path) as conn:
         assert store.get_application(conn, ids["contoso"]) is None
+
+
+# -- master resumes: the detail page says which master to send ----------------
+
+
+def test_detail_names_the_master_to_send(tmp_path, ws, ids):
+    from tests.ui_seed import masters_profile
+
+    with_masters = Workspace(**{**ws.__dict__, "profile_dir": masters_profile(tmp_path)})
+    app = create_app(workspace_factory=lambda: with_masters, config=None, port=PORT,
+                     token=TOKEN, today=lambda: TODAY)
+    c = TestClient(app, base_url=f"http://127.0.0.1:{PORT}", follow_redirects=False)
+    c.get(f"/?t={TOKEN}")
+    page = text(c.get(f"/ads/{ids['acme']}"))
+    assert "Resume: Engineering Manager: a manager role. Send Sam-Resume-Manager.pdf." in page
+
+
+def test_detail_without_masters_has_no_resume_line(client, ids):
+    assert "Resume: " not in text(client.get(f"/ads/{ids['acme']}"))

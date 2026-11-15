@@ -42,7 +42,7 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -59,6 +59,9 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("overrode_scorer", "INTEGER NOT NULL DEFAULT 0"),
         # v8
         ("reposted_on", "TEXT"),
+        # v19 — which master resume was sent, and which was suggested.
+        ("resume_master", "TEXT"),
+        ("resume_suggested", "TEXT"),
     ],
     "job_descriptions": [
         ("source_url", "TEXT"),
@@ -289,6 +292,8 @@ CREATE TABLE IF NOT EXISTS applications (
     worth_why      TEXT NOT NULL DEFAULT '',
     worth_derived  INTEGER NOT NULL DEFAULT 0,
     overrode_scorer INTEGER NOT NULL DEFAULT 0,
+    resume_master  TEXT,
+    resume_suggested TEXT,
     updated_at     TEXT NOT NULL
 );
 """
@@ -756,8 +761,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
             INSERT INTO applications (
                 jd_id, status, applied_on, channel, reposted_on, notes,
                 worth_applying, worth_why, worth_derived, overrode_scorer,
-                updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                resume_master, resume_suggested, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(jd_id) DO UPDATE SET
                 status = excluded.status,
                 applied_on = excluded.applied_on,
@@ -768,6 +773,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 worth_why = excluded.worth_why,
                 worth_derived = excluded.worth_derived,
                 overrode_scorer = excluded.overrode_scorer,
+                resume_master = excluded.resume_master,
+                resume_suggested = excluded.resume_suggested,
                 updated_at = excluded.updated_at
             """,
             (
@@ -783,6 +790,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 application.worth_why,
                 int(application.worth_derived),
                 int(application.overrode_scorer),
+                application.resume_master,
+                application.resume_suggested,
                 _to_iso(application.updated_at),
             ),
         )
@@ -837,6 +846,8 @@ def _row_to_application(row: sqlite3.Row) -> Application:
         "worth_why": row["worth_why"],
         "worth_derived": bool(row["worth_derived"]),
         "overrode_scorer": bool(row["overrode_scorer"]),
+        "resume_master": row["resume_master"],
+        "resume_suggested": row["resume_suggested"],
         "updated_at": row["updated_at"],
     }
     try:

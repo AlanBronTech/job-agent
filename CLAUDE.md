@@ -1,4 +1,4 @@
-# CLAUDE.md — job-agent
+  # CLAUDE.md — job-agent
 
 ## What this is
 
@@ -47,6 +47,7 @@ jobagent/
     scoring.py   # fit scoring, gap analysis, go/no-go
     generate.py  # resume + cover letter + application answers
     prep.py      # interview prep from JD + story bank
+    masters.py   # master-resume registry, and which master an ad gets
     alerts.py    # alert emails → listings, and the title/pay filter
     store.py     # SQLite pipeline persistence
     models.py    # pydantic models shared everywhere
@@ -58,6 +59,7 @@ jobagent/
     mailbox.py   # alert emails over IMAP (bins read alerts) or from .eml files
   services/      # workflows shared by cli/ and web/ (added 2026-09-29)
     workspace.py # whose profile, store, run log, saved ads, document store
+    masters.py   # the master chosen for an ad; which resume went on apply
   cli/           # typer commands — parse args, call services, render
   web/           # local UI: routes + templates over services/, no logic
 ```
@@ -90,10 +92,17 @@ readable stdlib beats clever abstractions.
 
 ## Document format (non-negotiable)
 
-Source of truth: `~/Documents/AlanBronMasterResume112026.docx`, revised Nov 2026
-(content only; the format is unchanged from `AlanBronResumeMaster102026.docx`).
-Every value below was measured from the master, not chosen. If a spec and the
-master disagree, the master wins and this section gets corrected (D48).
+Source of truth: the Engineering Manager master,
+`profile/resumes/AlanBron-Resume-EM.docx` (v4, 2026-11-14, built from
+`AlanBronMasterResume112026b.docx`; typography unchanged). Every value below
+was measured from a master, not chosen. If a spec and the master disagree, the
+master wins and this section gets corrected (D48).
+
+Since 2026-11-16 the resume sent is usually a hand-written master, picked per
+ad (see *Master resumes*); this section also governs a generated (custom)
+resume. **Not yet done:** the renderer still writes the earlier layout (em-dash
+highlight labels, a 4×2 Core Skills table); bring `docx_writer.py` in line
+with the two corrections below before relying on a custom resume's format.
 
 ### Typography
 
@@ -114,10 +123,11 @@ Section order, exactly:
 
 1. **Name / tagline / contact** — contact on one line, `·` separated
 2. **PROFILE** — two short paragraphs, no heading bullet
-3. **CAREER HIGHLIGHTS** — 5 bullets, each opening with a bold label then
-   an em dash (`AI in production — ...`)
-4. **CORE SKILLS** — borderless 4×2 table, 8 labelled categories, label in
-   caps above a comma-separated list
+3. **CAREER HIGHLIGHTS** — 5 bullets, each opening with a bold label and a
+   colon (`AI adoption: ...`). No em-dashes anywhere in a resume (Alan,
+   2026-11-14).
+4. **CORE SKILLS** — six lines, each a bold label, a colon, then a list
+   (`Leadership: Teams of up to 15, ...`); the order varies by master
 5. **EXPERIENCE** — reverse chronological; up to 6 bullets for the two most
    recent roles, 1–2 for roles that ended before 2020, 1–4 for the rest
    (`bullet_cap`; Alan, 2026-11-08)
@@ -137,7 +147,9 @@ on a tab stop at **16.93cm**.
   2026-10-16). `earlier_career` entries stay undated.
 - **An ongoing venture is evidence, not record** (D1): DataLlama appears as a
   CAREER HIGHLIGHT and one part-time line under Bron Consulting, never in
-  EARLIER CAREER, never as full-time work or a gap-filler.
+  EARLIER CAREER, never as full-time work or a gap-filler. The hand-written
+  masters give it its own EXPERIENCE entry marked part-time (Alan,
+  2026-11-14); generated resumes keep the rule above.
 
 ### Length
 
@@ -151,6 +163,24 @@ on a tab stop at **16.93cm**.
   2026-11-08; the 1.5-1.75-page contractor CV is retired). Measured by
   rendering through LibreOffice (`adapters/pages.py`); over the limit is a
   blocker after one reselection.
+
+## Master resumes (2026-11-16)
+
+"Pick, don't compose" (D51). Three hand-written masters in
+`profile/resumes/`, listed in `masters.yaml`: `em` (default, the public one),
+`ai` (AI adoption), `contract` (contract and fixed-term only). JobAgent picks
+one per ad in code (`core/masters.select_master`), shows it with the score,
+and records on `apply` which went (`--master <id|custom>`) beside what it
+suggested. It never edits a master. A tailored resume stays available
+(`generate --resume`) and is recorded as `custom`.
+
+- Permanent hands-on engineering roles are not a target; Alan applies for
+  those on contract only. Permanent Team Lead takes `em` until decided.
+- The `contract` master is never sent for a permanent role, nor for a
+  management or delivery role on a contract.
+- Replacing a master: the old files go to `old-resumes/` with the retirement
+  date in the name; the .docx is re-uploaded to his Drive backup.
+- The cover letter is still generated per ad.
 
 ## LLM usage
 
@@ -189,6 +219,11 @@ until enough edited pairs exist to read by hand first), task 8 (needs that
 data), 001's pipeline board and prep in
 the UI, run-log rotation. Task 4 was cut to the write-up only; task 6 waits;
 REVIEW-2026-10-16 D7 is rejected.
+
+Added 2026-11-16 on branch `resume-masters`: master resumes (registry,
+selection, shown with the score, recorded on apply, schema v19) and
+`never_in_documents`. Not done: the renderer's layout for a custom resume
+(see *Document format*).
 
 **Standing decisions not to re-open:** founder years stay on the resume; the
 review is off by default, the claim check on; the UI says "Jobs", not "Ads";
@@ -255,6 +290,10 @@ it protects.
   skipped is the number to keep (D39).
 - A guard that fires when nothing is at risk stops being a guard (D40).
 - A variable informs nothing unless it was observable at decision time (D41).
+- Pick, don't compose: hand-written masters chosen in code, and what went
+  recorded beside what was suggested (D51).
+- `never_in_documents` keeps evidence out of every written document, whatever
+  the ad says; interview prep still sees it (D52).
 - Alerts are filtered by code, not a model: a title alone is too little to
   judge. Suggest, maybe or skip, each with its reason, so `--skipped` can
   audit the filter; Alan's decision is recorded apart from the verdict.

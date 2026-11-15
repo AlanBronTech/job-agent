@@ -256,3 +256,22 @@ def test_the_documents_already_there_are_named(tmp_path) -> None:
     at_risk = existing_documents(folder, [resume, "assessment.md", "job-ad.md"])
 
     assert [path.name for path in at_risk] == [resume, "job-ad.md"]
+
+
+def test_the_assessment_names_the_master_resume() -> None:
+    from pathlib import Path
+
+    from jobagent.core.models import MasterChoice, MasterResume
+
+    master = MasterResume(id="manager", label="Engineering Manager",
+                          docx=Path("/r/Sam-Resume-Manager.docx"),
+                          pdf=Path("/r/Sam-Resume-Manager.pdf"),
+                          default=True, use_for="Manager roles.")
+    choice = MasterChoice(master=master, reason="Engineering Manager: a manager role.")
+    markdown = assessment_markdown(make_assessment(), make_jd(), [], master=choice)
+    assert ("**Resume:** Engineering Manager: a manager role. "
+            "Send Sam-Resume-Manager.pdf.") in markdown
+
+
+def test_no_master_no_resume_line() -> None:
+    assert "**Resume:**" not in assessment_markdown(make_assessment(), make_jd(), [])

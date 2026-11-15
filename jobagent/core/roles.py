@@ -87,16 +87,19 @@ def excluded_ids(
 
     With `jd`, a story gated by `only_if_ad_mentions` is excluded too unless
     the ad's text names one of its phrases. Without one the gate is closed:
-    the default is to leave such a story out.
+    the default is to leave such a story out. A story or bullet marked
+    `never_in_documents` is excluded always, kinds or no kinds.
     """
     kinds = set(kinds)
     text = ad_text(jd)
     out: set[str] = set()
     for story in profile.stories.stories:
-        if kinds & set(story.exclude_for) or not _gate_open(story.only_if_ad_mentions, text):
+        if (
+            story.never_in_documents
+            or kinds & set(story.exclude_for)
+            or not _gate_open(story.only_if_ad_mentions, text)
+        ):
             out.add(story.id)
-    if not kinds and not out:
-        return set()
     roles = profile.roles
     for group in (roles.roles, roles.founder_track_record, roles.ai_capability):
         for entry in group:
@@ -106,6 +109,7 @@ def excluded_ids(
             for index, bullet in enumerate(entry.bullets):
                 if (
                     entry_out
+                    or bullet.never_in_documents
                     or kinds & set(bullet.exclude_for)
                     or (bullet.linked_story and bullet.linked_story in out)
                 ):

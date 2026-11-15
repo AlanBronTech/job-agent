@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
@@ -127,6 +128,9 @@ class Bullet(_Base):
     note_for_writer: str | None = None
     linked_story: str | None = None
     exclude_for: ExcludeFor = Field(default_factory=list)
+    # Never in a resume, cover letter or application answer, whatever the ad
+    # or its role kind. Interview prep still sees it.
+    never_in_documents: bool = False
 
 
 class Education(_Base):
@@ -292,6 +296,11 @@ class Story(_Base):
     # belongs on a resume only when the ad asks about performance management
     # (Alan, 2026-10-23). Bullets linked to the story go with it.
     only_if_ad_mentions: list[str] = Field(default_factory=list)
+    # Never in a written document, whatever the ad says or its role kind: the
+    # phrase gate above can open, this cannot (Alan, 2026-11-14: the Testing
+    # Lead dismissal). Bullets linked to the story go with it; interview prep
+    # still uses it.
+    never_in_documents: bool = False
 
 
 class Explanations(_Base):
@@ -480,6 +489,61 @@ class WorkType(str, Enum):
     contract = "contract"
     fixed_term = "fixed_term"
     unknown = "unknown"
+
+
+# --------------------------------------------------------------------------- #
+# Master resumes: <profile>/resumes/masters.yaml
+# --------------------------------------------------------------------------- #
+
+
+class MasterEntry(_Base):
+    """One hand-written master resume, as written in masters.yaml.
+
+    JobAgent picks a master for an ad and records which one was sent; it never
+    writes or edits the document. `role_kinds` and `work_types` say what the
+    master is for; the master marked `default` covers everything else. File
+    names are relative to the resumes folder.
+    """
+
+    id: str
+    label: str
+    docx: str
+    pdf: str | None = None
+    default: bool = False
+    role_kinds: list[RoleKind] = Field(default_factory=list)
+    work_types: list[WorkType] = Field(default_factory=list)
+    use_for: str
+    not_for: str | None = None
+
+
+class MastersFile(_Base):
+    masters: list[MasterEntry]
+
+
+class MasterResume(_Base):
+    """A master with its files resolved to absolute paths that exist."""
+
+    id: str
+    label: str
+    docx: Path
+    pdf: Path | None = None
+    default: bool = False
+    role_kinds: list[RoleKind] = Field(default_factory=list)
+    work_types: list[WorkType] = Field(default_factory=list)
+    use_for: str
+    not_for: str | None = None
+
+
+class MasterChoice(_Base):
+    """Which master to send for an ad, or that the ad is not a target.
+
+    Advice, shown with its reason before anything is sent; Alan can override
+    it or ask for a custom resume instead.
+    """
+
+    master: MasterResume | None = None
+    not_a_target: bool = False
+    reason: str
 
 
 class WorkArrangement(str, Enum):
@@ -877,6 +941,14 @@ class Application(_Base):
     # what becomes of them, not to tune the prompt on fourteen cases and one
     # retrospective opinion.
     overrode_scorer: bool = False
+
+    # Which resume went: a master's id from profile/resumes/masters.yaml, or
+    # "custom" for a generated or hand-made one; None when not recorded
+    # (everything before 2026-11-16). `resume_suggested` is what JobAgent
+    # proposed at the time ("not_a_target" when it said not to apply), so an
+    # override can be told from agreement when the masters are read back.
+    resume_master: str | None = None
+    resume_suggested: str | None = None
 
     updated_at: datetime
 

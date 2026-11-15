@@ -212,6 +212,7 @@ def assessment_markdown(
     role_kind=None,
     coverage=None,
     by_document: dict[str, list[ValidationIssue]] | None = None,
+    master=None,
 ) -> str:
     """The assessment as a readable record, kept with the documents it shaped.
 
@@ -240,6 +241,11 @@ def assessment_markdown(
         if role_kind.secondary:
             kind += f" (secondary: {role_kind.secondary.value.replace('_', ' ')})"
         lines += [f"**Role kind:** {kind} — {role_kind.reason}", ""]
+
+    if master is not None:
+        from jobagent.core.masters import describe_choice
+
+        lines += [f"**Resume:** {describe_choice(master)}", ""]
 
     if jd.source_url:
         lines += [f"Ad: {jd.source_url}", ""]

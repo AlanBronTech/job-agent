@@ -104,3 +104,39 @@ def test_a_bad_classification_is_an_error():
         roles.classify(northwind(), client=RoutedClient({"classify_role": {"primary": "chef"}}))
     with pytest.raises(roles.ClassifyError):
         roles.classify(northwind(), client=RoutedClient({"classify_role": LLMError("down")}))
+
+
+# -- never_in_documents: out of every written document, whatever the ad --------
+
+
+def test_a_story_never_in_documents_is_out_even_when_the_ad_asks(profile_factory):
+    """Alan, 2026-11-14: the Testing Lead dismissal never goes in a document."""
+    def mutate(path):
+        def change(data):
+            story = next(s for s in data["stories"] if s["id"] == "underperformer")
+            story["exclude_for"] = []
+            story["only_if_ad_mentions"] = ["performance management"]
+            story["never_in_documents"] = True
+        edit_yaml(path / "stories.yaml", change)
+
+    profile = load_profile(profile_factory(mutate))
+    asks = northwind().model_copy(update={"raw_text": "You will own performance management."})
+    for kinds in (set(), {RoleKind.technical_lead}):
+        out = roles.excluded_ids(profile, kinds, asks)
+        assert {"underperformer", "recent_manager.3"} <= out
+
+
+def test_a_bullet_never_in_documents_is_out_with_no_kind(profile_factory):
+    def mutate(path):
+        def change(data):
+            data["roles"][0]["bullets"][0]["never_in_documents"] = True
+        edit_yaml(path / "roles.yaml", change)
+
+    profile = load_profile(profile_factory(mutate))
+    entry = profile.roles.roles[0]
+    out = roles.excluded_ids(profile, set())
+    assert f"{entry.id}.0" in out and f"{entry.id}.1" not in out
+
+
+def test_never_in_documents_defaults_to_false(profile):
+    assert not any(s.never_in_documents for s in profile.stories.stories)

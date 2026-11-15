@@ -156,3 +156,34 @@ def seed(ws: Workspace) -> dict[str, int]:
         amended.raw_text += " The full description arrived later."
         store.update_jd(conn, ids["fabrikam"], amended, amended_at=T0 + timedelta(days=25))
     return ids
+
+
+def masters_profile(tmp_path) -> "Path":
+    """profile.example plus an invented master-resume registry, in tmp_path.
+
+    Three masters for an invented person: a manager default, an AI-adoption
+    one and a contract one, each with placeholder files.
+    """
+    import shutil
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "profile.example"
+    profile = tmp_path / "profile-with-masters"
+    shutil.copytree(example, profile)
+    folder = profile / "resumes"
+    folder.mkdir()
+    (folder / "masters.yaml").write_text(
+        "masters:\n"
+        "  - id: manager\n    label: Engineering Manager\n"
+        "    docx: Sam-Resume-Manager.docx\n    pdf: Sam-Resume-Manager.pdf\n"
+        "    default: true\n    use_for: Manager roles.\n"
+        "  - id: ai\n    label: AI adoption lead\n    docx: Sam-Resume-AI.docx\n"
+        "    role_kinds: [ai_enablement]\n    use_for: AI adoption roles.\n"
+        "  - id: contract\n    label: Contract engineer\n    docx: Sam-Resume-Contract.docx\n"
+        "    work_types: [contract, fixed_term]\n    use_for: Contracts only.\n",
+        encoding="utf-8",
+    )
+    for name in ("Sam-Resume-Manager.docx", "Sam-Resume-Manager.pdf",
+                 "Sam-Resume-AI.docx", "Sam-Resume-Contract.docx"):
+        (folder / name).write_bytes(b"x")
+    return profile

@@ -236,3 +236,78 @@ def test_the_new_terminal_statuses_are_accepted_and_rendered(wired) -> None:
     assert "rejected_after_interview" in runner.invoke(
         app, ["status", "--all", "--json"]
     ).stdout
+
+
+# --------------------------------------------------------------------------- #
+# Master resumes: apply records which resume went
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def with_masters(tmp_path, monkeypatch):
+    from jobagent.cli import sent as sent_cli
+    from tests.ui_seed import masters_profile
+
+    config = Config(_env_file=None, db_path=tmp_path / "jobagent.db",
+                    output_dir=tmp_path / "out", profile_dir=masters_profile(tmp_path))
+    monkeypatch.setattr(apply_cli, "get_config", lambda: config)
+    monkeypatch.setattr(sent_cli, "get_config", lambda: config, raising=False)
+    return config
+
+
+def seed_em(config) -> int:
+    with store.open_store(config.db_path) as conn:
+        return store.add_jd(conn, JobDescription(
+            title="Engineering Manager", company="Acme Logistics",
+            work_type=WorkType.permanent, work_arrangement=WorkArrangement.hybrid,
+            raw_text="We are hiring. " * 60, ingested_at=NOW))
+
+
+def sent_rows(config, jd_id: int):
+    with store.open_store(config.db_path) as conn:
+        return store.list_sent(conn, jd_id)
+
+
+def test_apply_with_nothing_named_records_the_suggested_master(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    result = runner.invoke(app, ["apply", str(jd_id)])
+    assert result.exit_code == 0, result.output
+    application = stored(with_masters, jd_id)
+    assert (application.resume_master, application.resume_suggested) == ("manager", "manager")
+    assert [r.name.split("/")[-1] for r in sent_rows(with_masters, jd_id)] == ["Sam-Resume-Manager.pdf"]
+    out = " ".join(result.output.split())
+    assert "suggested" in out and "--master" in out
+
+
+def test_apply_master_records_the_override(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    result = runner.invoke(app, ["apply", str(jd_id), "--master", "ai"])
+    assert result.exit_code == 0, result.output
+    application = stored(with_masters, jd_id)
+    assert (application.resume_master, application.resume_suggested) == ("ai", "manager")
+    assert "instead of" in " ".join(result.output.split())
+
+
+def test_apply_master_custom_records_custom(with_masters, tmp_path) -> None:
+    jd_id = seed_em(with_masters)
+    tailored = tmp_path / "AlanBron_Resume_Acme.docx"
+    tailored.write_bytes(b"tailored")
+    result = runner.invoke(app, ["apply", str(jd_id), "--sent-resume", str(tailored)])
+    assert result.exit_code == 0, result.output
+    assert stored(with_masters, jd_id).resume_master == "custom"
+
+
+def test_apply_unknown_master_is_refused_before_anything_is_recorded(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    result = runner.invoke(app, ["apply", str(jd_id), "--master", "executive"])
+    assert result.exit_code == 2
+    out = " ".join(result.output.split())
+    assert "executive" in out and "manager, ai, contract" in out
+    assert stored(with_masters, jd_id) is None and sent_rows(with_masters, jd_id) == []
+
+
+def test_status_shows_the_resume_column(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    runner.invoke(app, ["apply", str(jd_id), "--master", "ai"])
+    out = runner.invoke(app, ["status"]).output
+    assert "resume" in out and " ai " in f" {' '.join(out.split())} "

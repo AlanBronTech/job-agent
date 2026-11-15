@@ -443,6 +443,33 @@ side of a prompt change that had nothing to do with it. Grading a boundary
 case once and attributing the result to the last edit is how a prompt gets
 blamed for noise. Repeat the case before believing the delta.
 
+### D51. Pick, don't compose: hand-written masters, chosen in code
+
+Composing a new resume for every ad produced documents that were honest but
+not persuasive, and each one led with something different: a reader who saw
+two would not know what the candidate is. From 2026-11-16 the resume is one
+of a few masters Alan writes and approves by hand, and JobAgent only picks
+one and records which went (`core/masters.py`). A tailored resume stays
+available on request.
+
+The pick is computed in Python from the title, the work type and the stored
+role kind, not asked of a model: the inputs are already known, the rule is
+short enough to read, and a free, repeatable choice can be shown on every
+page without a cost line. The suggestion is stored beside what was sent, so
+an override can be told from agreement when the masters are compared. How
+many masters, and what each leads with, came from reading the application
+record; with so few applications the split is a judgement, and each master
+is to be reviewed after enough sends rather than tuned on a handful.
+
+### D52. Some evidence is never written down
+
+`never_in_documents` keeps a story or bullet out of every resume, letter and
+answer, whatever the ad says. `exclude_for` binds only once an ad has a role
+kind, and `only_if_ad_mentions` opens when the ad uses the right words; for
+an episode the person does not want in writing at all, neither is enough.
+Interview prep still sees it, because a question asked in the room deserves
+a true answer.
+
 ---
 
 ## Testing

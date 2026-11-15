@@ -18,6 +18,7 @@ from jobagent.core.models import (
     FitAssessment,
     InterviewPrep,
     JobDescription,
+    MasterChoice,
     RoleClassification,
     Verdict,
 )
@@ -41,6 +42,8 @@ class ScoreResult:
     history: CompanyHistory | None
     warnings: list[str] = field(default_factory=list)
     role_kind: RoleClassification | None = None
+    # The master resume to send, or not a target; None without a registry.
+    master: MasterChoice | None = None
 
 
 @dataclass

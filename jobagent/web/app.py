@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import FormData
 
+from jobagent.core.masters import describe_choice
 from jobagent.services.workspace import Workspace
 
 HERE = Path(__file__).parent
@@ -50,6 +51,7 @@ def create_app(
     app.state.today = today
     app.state.templates = Jinja2Templates(directory=HERE / "templates")
     app.state.templates.env.globals["csrf_field"] = "csrf"
+    app.state.templates.env.globals["describe_choice"] = describe_choice
     _register_filters(app.state.templates.env)
 
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}

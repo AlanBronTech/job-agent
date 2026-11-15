@@ -172,6 +172,49 @@ jobagent outside link <outside_id> <jd_id>   # once the ad is stored too
 `jobagent jd backfill` (free) fills in requisition numbers and source files for
 ads stored before this existed.
 
+## Master resumes
+
+You keep a small set of hand-written master resumes, and JobAgent picks one
+for each ad instead of writing a new resume every time. It never edits them.
+A tailored resume is still there whenever you want one (`generate --resume`).
+
+They live in `profile/resumes/` (gitignored with the rest of `profile/`), as a
+.docx and a .pdf each, listed in `profile/resumes/masters.yaml`:
+
+| id | For |
+|---|---|
+| `em` | Engineering Manager and similar; the default, and the public one on LinkedIn and Seek |
+| `ai` | AI adoption or enablement roles (`role_kinds: [ai_enablement]`) |
+| `contract` | Contract and fixed-term hands-on roles only (`work_types: [contract, fixed_term]`) |
+
+`jobagent profile validate` lists them, and fails if a file is missing.
+
+**How one is picked.** In code, free, from the title, the work type and the
+role kind the score stores:
+
+1. An AI-adoption role gets `ai`, unless the title is plainly hands-on.
+2. A hands-on engineering title (engineer, developer, architect) gets
+   `contract` on a contract. A permanent one is **not a target**. One whose
+   terms the ad does not state is not a target until you find out.
+3. Delivery and project roles get `em`: they have no master of their own.
+4. Manager roles get `em`, contract or not.
+5. Any other contract gets `contract`.
+6. Everything else gets `em`, including Team Lead roles until that is decided.
+
+`score`, `score --last`, `assessment.md` and the job's page in the UI all show
+the choice and why, for example:
+
+```
+resume   Engineering Manager: a manager role. Send AlanBron-Resume-EM.pdf.
+         A custom one instead: `jobagent generate 125 --resume`.
+```
+
+**Replacing a master.** Move the old .docx and .pdf to
+`profile/resumes/old-resumes/` with the date it was retired in the name
+(`AlanBron-Resume-EM-2026-11-14.docx`), put the new ones in under the same
+names, run `jobagent profile validate`, and upload the new .docx wherever you keep
+the backup copy (Google Drive, for example).
+
 ## The loop
 
 Five commands per application. Two of them are optional. The whole thing takes
@@ -304,8 +347,12 @@ If you disagree, see step 3.
 
 ### 3. Generate the documents
 
+Usually only the cover letter: the score names the master resume to send
+(see *Master resumes*). Generate a resume when you want a tailored one.
+
 ```
-jobagent generate 22 --resume --cover
+jobagent generate 22 --cover              # the usual case: a master goes as the resume
+jobagent generate 22 --resume --cover     # a tailored resume as well
 ```
 
 Costs about 14 cents; the command prints its measured estimate before it
@@ -493,7 +540,23 @@ jobagent apply 22 --channel seek --sent-as-generated     # sent unedited
 ```
 
 Each file is copied into the folder's `sent/<date>/`, read-only, and never
-replaced. Then see how far it moved from what was generated:
+replaced.
+
+Which resume went is recorded too, so the masters can be compared later:
+
+```
+jobagent apply 22 --channel linkedin                  # sent the suggested master
+jobagent apply 22 --channel linkedin --master ai      # sent a different master
+jobagent apply 22 --channel linkedin --master custom --sent-resume ~/Desktop/AlanBron_Resume_Acme_202611.docx
+```
+
+With nothing named, `apply` records the suggested master, keeps its PDF as
+the resume sent, and says so; run it again with `--master` if you sent
+something else. A `--sent-resume` that is an exact copy of a master is
+recorded as that master; any other file, or `--sent-as-generated`, as custom.
+The UI's Pipeline form has the same choice, and there nothing is assumed.
+
+Then see how far a generated document moved from what was generated:
 
 ```
 jobagent diff 22            # kept share per section, every sentence changed
@@ -614,7 +677,11 @@ assessment is what shapes the selection.
 | `jobagent rewrites` | Which checks rejected first drafts. Each rejection means the document was written twice, doubling its time and cost. |
 
 `apply` options: `--on YYYY-MM-DD` (defaults to today), `--channel <text>`,
-`--note <text>`, `--sent-resume F`, `--sent-letter F`, `--sent-as-generated`.
+`--note <text>`, `--sent-resume F`, `--sent-letter F`, `--sent-as-generated`,
+`--master <id|custom>` (which resume went; see *Master resumes*).
+
+`status` shows a `resume` column: the master's id, `custom`, or `—` for
+applications recorded before 2026-11-16.
 
 `sent` options: `--as-generated`, `--on YYYY-MM-DD`, and for a folder from
 before 2026-10-21, when no generated copy was kept,
@@ -832,6 +899,7 @@ tight, not as the default.
 | `~/job-agent-out/` | One folder per application: documents, assessment, ad; `.generated/` and `sent/` inside it. |
 | `~/.job-agent/jobagent.db` | The store — ads, assessments, applications. |
 | `profile/` | You, as data. Everything generated is built from this. |
+| `profile/resumes/` | The master resumes (.docx and .pdf), `masters.yaml`, and `old-resumes/`. |
 | `prompts/` | The prompts, versioned as files so they can be diffed. |
 | `evals/cases.yaml` | An exported snapshot of the eval set. Local only — it is your application history, and this repository is public. |
 | `runs.jsonl` | Every model call: prompt, tokens, cost. |

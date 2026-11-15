@@ -63,7 +63,7 @@ from jobagent.services.refusals import (
     SupersedeFailed,
     VerdictIsSkip,
 )
-from jobagent.services import checks, reapply, role_kind
+from jobagent.services import checks, masters, reapply, role_kind
 from jobagent.services.results import GeneratePlan, GenerateResult
 from jobagent.services.scoring import refuse_if_reapplying
 from jobagent.services.workspace import Workspace
@@ -466,7 +466,7 @@ def generate(
                 "assessment.md",
                 docs.assessment_markdown(
                     assessment, jd, issues, role_kind=kind, coverage=coverage_shown,
-                    by_document=by_document,
+                    by_document=by_document, master=masters.choose(ws, jd, kind),
                 ),
             ),
             written,

@@ -82,6 +82,9 @@
     {% if d.role_kind %}<p class="detail"><strong>Role kind:</strong>
       {{ d.role_kind.primary.value.replace("_", " ") }}{% if d.role_kind.secondary %} (secondary: {{ d.role_kind.secondary.value.replace("_", " ") }}){% endif %}
       — {{ d.role_kind.reason }}</p>{% endif %}
+    {% if d.master %}<p class="detail"><strong>Resume:</strong>
+      {{ describe_choice(d.master) }}
+      <span class="muted">A custom one instead: generate a resume below.</span></p>{% endif %}
   </div>
 
   {% if a.constraints %}
@@ -233,6 +236,8 @@
   {% if d.folders.any %}<span class="pill warn">documents generated, not recorded as applied</span>{% endif %}
 {% endif %}
   {% if pipeline_saved %}<p class="detail"><strong>Saved.</strong></p>{% endif %}
+  {% if d.application and d.application.resume_master %}<p class="detail"><strong>Resume sent:</strong>
+    {% if d.application.resume_master == "custom" %}a custom resume{% else %}{% for m in d.masters if m.id == d.application.resume_master %}{{ m.label }} master{% else %}master '{{ d.application.resume_master }}'{% endfor %}{% endif %}</p>{% endif %}
   {% if pipeline_problem %}<div class="banner bad">{{ pipeline_problem }}</div>{% endif %}
   {% if d.sent %}
   <p><strong>Sent</strong> <span class="muted">against what was generated</span> · <a href="/ads/{{ jd.id }}/diff">every change</a></p>
@@ -275,6 +280,11 @@
     </div>
     <label>Note <input type="text" id="note" name="note" class="wide" placeholder="added to the notes, never replacing them"></label>
     <div class="fields">
+      {% if d.masters %}<label>Master resume sent <select id="master" name="master">
+          <option value="">— none, or work it out from the file —</option>
+          {% for m in d.masters %}<option value="{{ m.id }}">{{ m.label }}{% if d.master and d.master.master and d.master.master.id == m.id %} (suggested){% endif %}</option>{% endfor %}
+          <option value="custom">A custom resume</option>
+        </select></label>{% endif %}
       <label>Resume sent <input type="file" id="sent_resume" name="sent_resume" accept=".docx,.pdf"></label>
       <label>Cover letter sent <input type="file" id="sent_letter" name="sent_letter" accept=".docx,.pdf"></label>
       <label><input type="checkbox" id="sent_as_generated" name="sent_as_generated" value="1">
