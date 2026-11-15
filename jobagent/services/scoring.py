@@ -17,7 +17,7 @@ from jobagent.core import history, store
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.scoring import score_fit
 from jobagent.core.store import StoreError
-from jobagent.services import reapply, role_kind
+from jobagent.services import masters, reapply, role_kind
 from jobagent.services.refusals import (
     NoModel,
     NoSuchAd,
@@ -99,6 +99,7 @@ def score(
         history=seen_before,
         warnings=warnings,
         role_kind=kind,
+        master=masters.choose(ws, jd, kind),
     )
 
 

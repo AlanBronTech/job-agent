@@ -214,3 +214,32 @@ def test_score_last_json_does_not_reach_a_model(wired, monkeypatch) -> None:
     save_assessment(wired, jd_id)
 
     assert runner.invoke(app, ["score", str(jd_id), "--last", "--json"]).exit_code == 0
+
+
+# --------------------------------------------------------------------------- #
+# Master resumes: `score --last` shows which master to send
+# --------------------------------------------------------------------------- #
+
+
+def test_score_last_shows_the_master_to_send(tmp_path, monkeypatch) -> None:
+    from tests.ui_seed import masters_profile
+
+    config = Config(_env_file=None, db_path=tmp_path / "jobagent.db",
+                    profile_dir=masters_profile(tmp_path))
+    monkeypatch.setattr(score_cli, "get_config", lambda: config)
+    jd_id = add(config, WHOLE_AD)  # "Digital Engineering Lead", permanent
+    save_assessment(config, jd_id)
+
+    out = flat(runner.invoke(app, ["score", str(jd_id), "--last"]).output)
+
+    assert "resume" in out
+    assert "Engineering Manager: a Team Lead role" in out
+    assert "Sam-Resume-Manager.pdf" in out
+    assert f"jobagent generate {jd_id} --resume" in out  # a custom one stays available
+
+
+def test_score_last_without_masters_shows_no_resume_line(wired) -> None:
+    jd_id = add(wired, WHOLE_AD)
+    save_assessment(wired, jd_id)
+    out = flat(runner.invoke(app, ["score", str(jd_id), "--last"]).output)
+    assert "Send " not in out

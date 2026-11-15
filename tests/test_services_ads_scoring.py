@@ -260,3 +260,31 @@ def test_an_ad_already_stored_is_refused_before_any_spend(ws, monkeypatch, ad_in
     with pytest.raises(AlreadyAdded) as refused:
         ads.add(ws, CONFIG, RunContext(command="jd add"), ads.AdInput(**ad_input))
     assert (refused.value.jd_id, refused.value.reason, refused.value.spent) == (jd_id, reason, False)
+
+
+# -- master resumes: the choice comes back with the score --------------------
+
+
+def _fake_fit(jd, profile, *, client):
+    return FitAssessment(jd_id=jd.id, overall_score=66, recruiter_screen_score=60,
+                         verdict=Verdict.apply, rationale="Invented.", target_role_match=True,
+                         target_role_note="Invented.", scored_at=datetime.now(timezone.utc))
+
+
+def test_score_returns_the_master_chosen(ws, tmp_path, monkeypatch):
+    from tests.ui_seed import masters_profile
+
+    ids = seed(ws)
+    with_masters = Workspace(**{**ws.__dict__, "profile_dir": masters_profile(tmp_path)})
+    monkeypatch.setattr(scoring, "score_fit", _fake_fit)
+    result = scoring.score(with_masters, CONFIG, RunContext(command="score"), ids["acme"],
+                           client_factory=lambda: object())
+    assert result.master is not None and result.master.master.id == "manager"
+
+
+def test_score_without_masters_has_no_choice(ws, monkeypatch):
+    ids = seed(ws)
+    monkeypatch.setattr(scoring, "score_fit", _fake_fit)
+    result = scoring.score(ws, CONFIG, RunContext(command="score"), ids["acme"],
+                           client_factory=lambda: object())
+    assert result.master is None
