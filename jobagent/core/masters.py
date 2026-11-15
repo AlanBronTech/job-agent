@@ -199,3 +199,13 @@ def select_master(
         return chose(default, "a Team Lead role, not a contract. Which master Team "
                      "Lead roles get is still to be decided; the default meanwhile.")
     return chose(default, "the default.")
+
+
+def describe_choice(choice: MasterChoice) -> str:
+    """One line for a person: the choice, why, and the file to send."""
+    if choice.not_a_target:
+        return f"Not a target. {choice.reason}"
+    if choice.master is None:
+        return choice.reason
+    send = choice.master.pdf or choice.master.docx
+    return f"{choice.reason} Send {send.name}."
