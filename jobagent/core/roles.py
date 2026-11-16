@@ -145,14 +145,22 @@ def is_excluded(ref: str, excluded: set[str]) -> bool:
 SKILL_ORDER: dict[RoleKind, list[str]] = {
     RoleKind.people_focused: ["leadership", "delivery"],
     RoleKind.delivery_focused: ["delivery", "leadership"],
+    # The older eight categories first, then the masters' six (spec 004, T021):
+    # a key a profile does not have is simply never ranked.
     RoleKind.technical_lead: [
         "backend_and_apis",
         "cloud_and_devops",
         "data",
         "frontend",
         "ai_and_automation",
+        "languages",
+        "cloud_and_data",
+        "ai",
     ],
-    RoleKind.ai_enablement: ["ai_and_automation", "backend_and_apis", "cloud_and_devops"],
+    RoleKind.ai_enablement: [
+        "ai_and_automation", "backend_and_apis", "cloud_and_devops",
+        "ai", "languages", "cloud_and_data",
+    ],
 }
 
 # Bullet tags that make a first highlight "on-kind".

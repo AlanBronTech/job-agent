@@ -140,3 +140,12 @@ def test_a_bullet_never_in_documents_is_out_with_no_kind(profile_factory):
 
 def test_never_in_documents_defaults_to_false(profile):
     assert not any(s.never_in_documents for s in profile.stories.stories)
+
+
+def test_the_kind_order_knows_the_masters_categories():
+    """Spec 004 T021: the profile's skills became the masters' six. With no
+    master chosen, the role-kind order still has to rank them."""
+    keys = ["leadership", "delivery", "ai", "languages", "cloud_and_data", "domains"]
+    assert roles.order_skills(keys, RoleKind.technical_lead)[:2] == ["languages", "cloud_and_data"]
+    assert roles.order_skills(keys, RoleKind.ai_enablement)[0] == "ai"
+    assert roles.order_skills(keys, RoleKind.people_focused)[:2] == ["leadership", "delivery"]
