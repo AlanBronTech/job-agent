@@ -132,7 +132,8 @@ Section order, exactly:
 5. **EXPERIENCE** — reverse chronological; up to 6 bullets for the two most
    recent roles, 1–2 for roles that ended before 2020, 1–4 for the rest
    (`bullet_cap`; Alan, 2026-11-08)
-6. **EARLIER CAREER** — one condensed bullet each, undated; the name in
+6. **EARLIER CAREER** — at most five (`EARLIER_CAREER_CAP`), the most
+   relevant to the ad, in catalogue order; one condensed bullet each, undated; the name in
    bold, then a colon (`**EZ-Leads (2015–17)**: Co-founder & CTO; ...`)
 7. **EDUCATION & CERTIFICATIONS** — one line each, certifications first:
    `Name (Issuer)`, then `Qualification, Institution`

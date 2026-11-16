@@ -798,3 +798,54 @@ def test_a_skills_order_lists_every_category_it_names_in_that_order(profile, jd,
     built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 1),
                          skills_order=order)
     assert [s.label for s in built.content.skills] == ["Delivery", "AI and automation", "Leadership"]
+
+
+# -- EARLIER CAREER capped per ad (Alan, 2026-11-16) ------------------------------
+
+
+def _earlier_line(profile, entry_id):
+    from jobagent.core.generate import _founder_line
+
+    for entry in profile.roles.earlier_career:
+        if entry.id == entry_id:
+            return f"{entry.company}: {entry.summary}"
+    founder = next(f for f in profile.roles.founder_track_record if f.id == entry_id)
+    return _founder_line(founder)[0]
+
+
+@pytest.fixture
+def summarised(profile_factory):
+    """profile.example with a summary on every closed founder venture, so each renders."""
+    from tests.conftest import edit_yaml
+
+    def mutate(path):
+        def change(data):
+            for entry in data["founder_track_record"]:
+                entry.setdefault("summary", f"Co-founder; an invented summary for {entry['id']}.")
+        edit_yaml(path / "roles.yaml", change)
+    return load_profile(profile_factory(mutate))
+
+
+def test_earlier_career_keeps_the_five_ranked_first_in_catalogue_order(summarised, jd, assessment) -> None:
+    from jobagent.core.generate import EARLIER_CAREER_CAP
+
+    profile = summarised
+
+    ranked = ["defence_engineering", "super_platform", "marketplace_venture", "gov_systems",
+              "early_saas", "pricing_systems", "industrial_research"]
+    client = FakeClient(selection(profile, earlier_career_ids=ranked))
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 1))
+
+    assert EARLIER_CAREER_CAP == 5
+    kept = ["marketplace_venture", "early_saas", "super_platform", "gov_systems", "defence_engineering"]
+    assert built.content.earlier_career == [_earlier_line(profile, i) for i in kept]
+    assert any(i.rule == "repaired in code" and "EARLIER CAREER" in i.detail for i in built.issues)
+
+
+def test_five_or_fewer_are_kept_in_catalogue_order_without_a_note(summarised, jd, assessment) -> None:
+    profile = summarised
+    client = FakeClient(selection(profile, earlier_career_ids=["gov_systems", "early_saas"]))
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 1))
+    assert built.content.earlier_career == [_earlier_line(profile, "early_saas"),
+                                            _earlier_line(profile, "gov_systems")]
+    assert not any("EARLIER CAREER" in i.detail for i in built.issues if i.rule == "repaired in code")
