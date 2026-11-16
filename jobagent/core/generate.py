@@ -117,6 +117,13 @@ class ResumeLength:
     rule: str
 
 
+# EARLIER CAREER lines on one resume (Alan, 2026-11-16; the v4 master has 5).
+# The model ranks them by relevance to the ad; the first five are kept and
+# rendered in catalogue order. Eleven lines of 1990s work read as an age
+# signal (REVIEW-2026-11-09).
+EARLIER_CAREER_CAP = 5
+
+
 # One length for every resume, permanent or contract (Alan, 2026-11-08): up
 # to three pages, never more. The shorter contractor CV of 2026-10-23 is
 # retired; the recent roles now carry more bullets (`bullet_cap`).
@@ -680,7 +687,30 @@ def _assemble(
     earlier = []
     by_id = {entry.id: entry for entry in profile.roles.earlier_career}
     founders_by_id = {entry.id: entry for entry in profile.roles.founder_track_record}
-    for entry_id in selection.earlier_career_ids:
+    ranked = list(dict.fromkeys(selection.earlier_career_ids))
+    if len(ranked) > EARLIER_CAREER_CAP:
+        issues.append(
+            ValidationIssue(
+                rule="repaired in code",
+                severity=Severity.warning,
+                detail=(
+                    f"EARLIER CAREER had {len(ranked)} entries; kept the "
+                    f"{EARLIER_CAREER_CAP} ranked first: dropped "
+                    f"{', '.join(ranked[EARLIER_CAREER_CAP:])}."
+                ),
+            )
+        )
+        ranked = ranked[:EARLIER_CAREER_CAP]
+    # Rendered in catalogue order: founder ventures, then earlier roles.
+    position = {
+        entry_id: n
+        for n, entry_id in enumerate(
+            [e.id for e in profile.roles.founder_track_record]
+            + [e.id for e in profile.roles.earlier_career]
+        )
+    }
+    ranked.sort(key=lambda entry_id: position.get(entry_id, len(position)))
+    for entry_id in ranked:
         if kinds.is_excluded(entry_id, excluded):
             issues.append(_excluded(entry_id, kind))
             continue

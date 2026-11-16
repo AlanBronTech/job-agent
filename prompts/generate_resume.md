@@ -1,4 +1,4 @@
-# generate_resume — v9
+# generate_resume — v10
 
 Select and order profile content for one specific job advertisement.
 
@@ -130,9 +130,11 @@ full stop. Every em-dash is reported for Alan to fix by hand.
 9. **Never state or compute a career length.** No years-of-experience figures,
    no "since 2006", no decades. Role dates are added by the renderer; you do
    not write them.
-10. **`earlier_career_ids`** — all of them, in catalogue order, unless one is
-    genuinely irrelevant to this ad or rule 1 limits them. **Closed founder ventures go here too**,
-    interleaved in catalogue order; each renders as one dated line. An entry
+10. **`earlier_career_ids`** — **at most 5**, the ones that best support this
+    ad, **most relevant first**. The renderer keeps the first five and puts
+    them in catalogue order. **Closed founder ventures go here too** and count
+    toward the five; each renders as one dated line. Prefer recent work and
+    work the ad's domain or must-haves ask for over old or unrelated work. An entry
     marked `[ongoing]` has no line — it is not employment history. Cite it in
     the highlights instead.
 11. **`roles` accepts ids from the Roles section only.** Founder ventures and

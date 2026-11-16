@@ -67,3 +67,8 @@ degrees "Qualification, Institution".
 - [X] T020 [US6] `skills_order` on a master (`MasterEntry`, `MasterResume`); `profile validate` refuses a key the profile's skills lack; `build_resume(skills_order=…)` uses it over the role-kind order and lists every category it names; `services/documents` passes the chosen master's order. Tests first.
 - [X] T021 Profile (gitignored, diff shown first): `roles.yaml` `skills` become the master's six categories, text verbatim; `masters.yaml` gains each master's `skills_order`; `profile validate` passes.
 - [X] T022 CLAUDE.md Document format: the new layout, the "not yet done" note removed; README if it describes the old layout.
+
+## Phase 8: Earlier Career capped (Alan, 2026-11-16)
+
+- [X] T023 `EARLIER_CAREER_CAP = 5` in `jobagent/core/generate.py` (the v4 master has five): the model returns `earlier_career_ids` most relevant first; the first five are kept, rendered in catalogue order (founder ventures, then earlier roles), with a "repaired in code" warning naming what was dropped. `generate_resume` v10 rule 10 asks for at most five, ranked. Tests in `tests/test_generate.py`.
+
