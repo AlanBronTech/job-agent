@@ -368,7 +368,7 @@ def _check_resume(
         issues += check_third_person(paragraph, "the PROFILE section", name=False, pronouns=True)
     for highlight in selection.highlights:
         issues += validate_prose(
-            f"{highlight.label} — {highlight.text}",
+            f"{highlight.label}: {highlight.text}",
             profile,
             context="a CAREER HIGHLIGHTS bullet",
         )
@@ -426,7 +426,7 @@ def resume_sentences(selection: _ResumeSelection) -> list[Sentence]:
         for n, paragraph in enumerate(selection.profile_paragraphs)
     ]
     out += [
-        Sentence(text=f"{h.label} — {h.text}", cites=[h.source_ref])
+        Sentence(text=f"{h.label}: {h.text}", cites=[h.source_ref])
         for h in selection.highlights
     ]
     return out
@@ -663,7 +663,8 @@ def _assemble(
         if values is None:
             issues.append(_unknown(key, "skill category"))
             continue
-        skills.append(SkillCategory(label=_skill_label(key), skills=", ".join(values)))
+        # "; " between items, as the master writes them: an item may hold commas.
+        skills.append(SkillCategory(label=_skill_label(key), skills="; ".join(values)))
 
     earlier = []
     by_id = {entry.id: entry for entry in profile.roles.earlier_career}
@@ -674,7 +675,7 @@ def _assemble(
             continue
         entry = by_id.get(entry_id)
         if entry is not None:
-            line = f"{entry.company} — {entry.summary}"
+            line = f"{entry.company}: {entry.summary}"
         else:
             founder = founders_by_id.get(entry_id)
             if founder is None:
@@ -1156,11 +1157,11 @@ def apply_resume_repairs(built: GeneratedResume, repairs: dict[str, str], profil
     highlights = []
     on_page = dict(built.on_page)
     for n, (label, text) in enumerate(content.highlights, 1):
-        new = repairs.get(f"{label} — {text}".strip())
+        new = repairs.get(f"{label}: {text}".strip())
         if new:
-            label, _, claim = new.partition(" — ") if " — " in new else (label, "", new)
+            label, _, claim = new.partition(": ") if ": " in new else (label, "", new)
             text = claim.strip()
-            issues += validate_prose(f"{label} — {text}", profile, context="a CAREER HIGHLIGHTS bullet")
+            issues += validate_prose(f"{label}: {text}", profile, context="a CAREER HIGHLIGHTS bullet")
             on_page[f"highlight {n}"] = text
         highlights.append((label.strip(), text))
     sentences = [
@@ -1672,10 +1673,10 @@ def _mechanism_lines(story, indent: str) -> list[str]:
 def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     """One EARLIER CAREER line for a closed venture, in the master's format.
 
-    From `AlanBronMasterResume112026.docx`, which wins over any spec that
-    disagrees with it:
+    From the masters, which win over any spec that disagrees with them (the
+    colon replaced the em-dash in the v4 master, 2026-11-14):
 
-        Australian Home Design Directory (2006–16) — Co-founder & CTO; built
+        Australian Home Design Directory (2006–16): Co-founder & CTO; built
         the initial versions alone as architect; grew to 1M+ annual organic
         visitors; acquired.
 
@@ -1716,7 +1717,7 @@ def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     heading = entry.company
     if dates:
         heading += f" ({dates})"
-    return f"{heading} — {entry.summary}", None
+    return f"{heading}: {entry.summary}", None
 
 
 def _is_ongoing(entry: FounderEntry) -> bool:
@@ -1772,17 +1773,22 @@ def _bare_url(url: str) -> str:
 
 
 def _education_lines(profile: Profile) -> list[str]:
-    """Certifications first, then degrees — the master's order."""
+    """Certifications first, then degrees, as the master writes them:
+    "Name (Issuer)" and "Qualification, Institution"."""
     person = profile.roles.person
-    lines = [f"{cert.name} — {cert.issuer}" for cert in person.certifications]
+    lines = [f"{cert.name} ({cert.issuer})" for cert in person.certifications]
     lines += [
-        f"{entry.qualification} — {entry.institution}" for entry in person.education
+        f"{entry.qualification}, {entry.institution}" for entry in person.education
     ]
     return lines
 
 
 def _skill_label(key: str) -> str:
-    return key.replace("_and_", " & ").replace("_", " ").upper()
+    """`cloud_and_data` -> "Cloud and data", `ai` -> "AI": the master's labels."""
+    words = key.split("_")
+    words = ["AI" if w == "ai" else w for w in words]
+    first = words[0] if words[0].isupper() else words[0].capitalize()
+    return " ".join([first, *words[1:]])
 
 
 def _jd_summary(jd: JobDescription) -> str:
@@ -2000,7 +2006,7 @@ def resume_text(content: ResumeContent) -> str:
     """The resume as plain text, in the rendered order, for the reviewer."""
     lines = [content.name, content.tagline, "", "PROFILE", *content.profile_paragraphs, ""]
     lines.append("CAREER HIGHLIGHTS")
-    lines += [f"- {label} — {text}" for label, text in content.highlights]
+    lines += [f"- {label}: {text}" for label, text in content.highlights]
     lines += ["", "CORE SKILLS"]
     lines += [f"- {category.label}: {category.skills}" for category in content.skills]
     lines += ["", "EXPERIENCE"]

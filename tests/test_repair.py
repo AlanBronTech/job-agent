@@ -79,11 +79,11 @@ def test_resume_repairs_replace_a_highlight_keeping_its_form(profile):
     content = ResumeContent(name="A", tagline="t", contact="c", profile_paragraphs=["I lead teams."],
                             highlights=[("Founder, architect", "Built it alone.")], skills=[], roles=[],
                             earlier_career=[], education=[])
-    built = GeneratedResume(content=content, sentences=[Sentence(text="Founder, architect — Built it alone.", cites=["x"])],
+    built = GeneratedResume(content=content, sentences=[Sentence(text="Founder, architect: Built it alone.", cites=["x"])],
                             on_page={"highlight 1": "Built it alone."})
-    fixed = apply_resume_repairs(built, {"Founder, architect — Built it alone.": "Co-founder & CTO — Built it alone."}, profile)
+    fixed = apply_resume_repairs(built, {"Founder, architect: Built it alone.": "Co-founder & CTO: Built it alone."}, profile)
     assert fixed.content.highlights == [("Co-founder & CTO", "Built it alone.")]
-    assert fixed.sentences[0].text == "Co-founder & CTO — Built it alone."
+    assert fixed.sentences[0].text == "Co-founder & CTO: Built it alone."
     assert built.content.highlights == [("Founder, architect", "Built it alone.")]  # the original is untouched
 
 

@@ -40,8 +40,8 @@ def make_content(**overrides) -> ResumeContent:
             RoleBlock("AI Engineer & Consultant", "Bron Consulting", "2026 – Present",
                       ["Built an agentic system."]),
         ],
-        "earlier_career": ["MLC / NAB — superannuation platform upgrades."],
-        "education": ["PRINCE2 Foundation — APM Group"],
+        "earlier_career": ["MLC / NAB: superannuation platform upgrades."],
+        "education": ["PRINCE2 Foundation (APM Group)"],
     }
     data.update(overrides)
     return ResumeContent(**data)
@@ -123,10 +123,11 @@ def test_bullets_use_the_template_numbering(rendered) -> None:
     assert signature(para)[3:] == (1.5, 3.6, 1.1)
 
 
-def test_a_highlight_bullet_has_a_bold_label_then_an_em_dash(rendered) -> None:
+def test_a_highlight_bullet_has_a_bold_label_then_a_colon(rendered) -> None:
+    """The v4 master (2026-11-14): "**Delivery:** In each new lead role…". No em-dash."""
     para = find(rendered, "AI in production")
 
-    assert para.runs[0].text == "AI in production — "
+    assert para.runs[0].text == "AI in production: "
     assert para.runs[0].font.bold is True
     assert para.runs[1].font.bold is False
 
@@ -161,16 +162,30 @@ def test_sections_appear_in_the_specified_order(rendered) -> None:
     ]
 
 
-def test_skills_render_as_a_borderless_two_column_table(rendered) -> None:
-    table = rendered.tables[0]
+def test_skills_render_as_one_labelled_line_each(rendered) -> None:
+    """Measured from the v4 master: Normal, 10.5pt, 1pt before / 2pt after,
+    a bold "Label: " run, then the list. No table."""
+    assert rendered.tables == []
+    para = find(rendered, "Leadership: ")
+    # The template has no Normal style (see docx_writer); what matters is no bullet.
+    assert para.style is None or para.style.name != "List Paragraph"
+    assert para.runs[0].text == "Leadership: " and para.runs[0].font.bold is True
+    assert para.runs[1].text == "Teams to 15, hiring end-to-end" and not para.runs[1].font.bold
+    assert signature(para)[:5] == (10.5, True, None, 1.0, 2.0)
+    labels = [p.text.split(":")[0] for p in rendered.paragraphs
+              if p.runs and p.runs[0].text.endswith(": ")
+              and (p.style is None or p.style.name != "List Paragraph")]
+    assert labels == ["AI & Automation", "Leadership", "Backend"]
 
-    assert len(table.columns) == 2
-    assert len(table.rows) == 2          # three categories fill two rows
-    assert "AI & AUTOMATION" in table.rows[0].cells[0].text
-    borders = table._tbl.tblPr.findall(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tblBorders"
-    )
-    assert borders, "the table must declare borders explicitly, all set to none"
+
+def test_an_earlier_career_line_bolds_the_name_before_the_colon(rendered) -> None:
+    para = find(rendered, "MLC / NAB")
+    assert para.runs[0].text == "MLC / NAB" and para.runs[0].font.bold is True
+    assert para.runs[1].text == ": superannuation platform upgrades."
+
+
+def test_no_em_dash_is_added_by_the_renderer(rendered) -> None:
+    assert not any("\u2014" in p.text for p in rendered.paragraphs)
 
 
 def test_an_empty_section_is_omitted_entirely(tmp_path: Path) -> None:

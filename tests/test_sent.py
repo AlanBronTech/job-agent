@@ -168,7 +168,7 @@ def test_a_rendered_resume_reads_back_into_its_sections(tmp_path):
     ]
     assert sections["TAGLINE"] == ["Engineering Leader  ·  Delivery"]
     # The table is read, which `doc.paragraphs` alone would skip.
-    assert sections["CORE SKILLS"] == ["LEADERSHIP", "Hiring, coaching", "BACKEND", "Python, Go"]
+    assert sections["CORE SKILLS"] == ["Leadership: Hiring, coaching", "Backend: Python, Go"]
     assert sections["EXPERIENCE: Team Lead · Invented Co"] == ["Led six engineers."]
 
 

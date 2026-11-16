@@ -460,7 +460,7 @@ def test_a_closed_venture_renders_in_the_masters_format() -> None:
 
     assert issue is None
     assert line == (
-        "Australian Home Design Directory (2006–16) — "
+        "Australian Home Design Directory (2006–16): "
         "Co-founder & CTO; grew it to 1M+ annual visitors."
     )
 
@@ -745,7 +745,7 @@ def test_the_resume_hands_its_prose_to_the_claim_check(jd, profile, assessment) 
     chosen = _ResumeSelection.model_validate(selection(profile, profile_refs=[["a"], ["b", "c"]]))
     sentences = resume_sentences(chosen)
     assert [s.cites for s in sentences] == [["a"], ["b", "c"], [chosen.highlights[0].source_ref]]
-    assert sentences[2].text.startswith("AI in production — ")
+    assert sentences[2].text.startswith("AI in production: ")
 
 
 def test_the_catalogue_shows_which_story_a_bullet_tells(profile) -> None:
@@ -763,3 +763,30 @@ def test_the_catalogue_shows_which_story_a_bullet_tells(profile) -> None:
     entry_id, index, story = linked[0]
     line = next(l for l in text.splitlines() if l.strip().startswith(f"{entry_id}.{index} "))
     assert line.endswith(f"(story: {story})")
+
+
+# -- the masters' layout (spec 004, T018) --------------------------------------
+
+
+def test_assembled_lines_use_colons_and_parentheses_not_em_dashes(profile, jd, assessment) -> None:
+    entry = profile.roles.earlier_career[0]
+    client = FakeClient(selection(profile, earlier_career_ids=[entry.id]))
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 1))
+    content = built.content
+    assert f"{entry.company}: {entry.summary}" in content.earlier_career
+    cert = profile.roles.person.certifications[0]
+    assert content.education[0] == f"{cert.name} ({cert.issuer})"
+    if profile.roles.person.education:
+        degree = profile.roles.person.education[0]
+        assert f"{degree.qualification}, {degree.institution}" in content.education
+    assert all(s.label[:1].isupper() and not s.label.isupper() or s.label in {"AI"}
+               for s in content.skills)
+
+
+def test_skill_labels_read_as_the_master_writes_them() -> None:
+    from jobagent.core.generate import _skill_label
+
+    assert _skill_label("leadership") == "Leadership"
+    assert _skill_label("cloud_and_data") == "Cloud and data"
+    assert _skill_label("ai") == "AI"
+    assert _skill_label("ai_and_automation") == "AI and automation"
