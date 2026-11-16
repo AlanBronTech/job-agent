@@ -1,4 +1,4 @@
-# generate_cover_letter — v10
+# generate_cover_letter — v11
 
 Write one cover letter for one job, in Alan Bron's voice.
 
@@ -56,6 +56,9 @@ from what you are shown. Do not refer to it from memory.
 </voice>
 
 ## Rules
+
+**No em-dash (—) anywhere in what you write**: use a colon, a comma or a
+full stop. Every em-dash is reported for Alan to fix by hand.
 
 1. **Under 350 words, one page.** This is checked and a longer letter is
    rejected. Most of Alan's own letters run 180-280 words. Written in the

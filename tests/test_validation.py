@@ -172,8 +172,9 @@ def test_a_cross_reference_in_a_bullet_is_caught() -> None:
         context="Bullet bron_consulting.0",
     )
 
-    assert [issue.rule for issue in issues] == ["internal reference"]
-    assert issues[0].severity is Severity.blocker
+    # The em-dash before "see" is reported too (spec 004, T019).
+    assert [issue.rule for issue in issues] == ["em-dash", "internal reference"]
+    assert issues[1].severity is Severity.blocker
 
 
 def test_an_internal_field_name_in_a_bullet_is_caught() -> None:
@@ -472,3 +473,38 @@ def test_he_is_third_person_only_where_the_text_is_solely_about_him() -> None:
     assert check_third_person(profile_line, "the PROFILE section", name=False, pronouns=True)
     # A letter may say "he" of someone else.
     assert not check_third_person("I coached a junior until he reached mid-level.", "The letter")
+
+
+# -- em-dashes (spec 004, T019): reported, never repaired in a paid call -------
+
+
+def test_an_em_dash_in_prose_is_a_warning_naming_it(profile) -> None:
+    from jobagent.core.validation import Severity, validate_prose
+
+    issues = [i for i in validate_prose("Led the team — and shipped weekly.", profile)
+              if i.rule == "em-dash"]
+    assert len(issues) == 1
+    assert issues[0].severity is Severity.warning
+    assert "—" in issues[0].excerpt
+
+
+def test_each_em_dash_is_reported(profile) -> None:
+    from jobagent.core.validation import validate_prose
+
+    text = "One — two. Three — four."
+    assert len([i for i in validate_prose(text, profile) if i.rule == "em-dash"]) == 2
+
+
+def test_an_em_dash_in_a_copied_bullet_points_at_the_profile() -> None:
+    from jobagent.core.validation import validate_rendered
+
+    issues = [i for i in validate_rendered("Held 1:1s — courses and new work.", context="Bullet x.1")
+              if i.rule == "em-dash"]
+    assert issues and "profile" in issues[0].detail and "Bullet x.1" in issues[0].detail
+
+
+def test_an_en_dash_in_a_date_range_is_fine(profile) -> None:
+    from jobagent.core.validation import validate_prose, validate_rendered
+
+    assert not [i for i in validate_prose("Ran it 2006–16.", profile) if i.rule == "em-dash"]
+    assert not [i for i in validate_rendered("2025 – 2026") if i.rule == "em-dash"]

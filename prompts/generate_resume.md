@@ -1,4 +1,4 @@
-# generate_resume — v8
+# generate_resume — v9
 
 Select and order profile content for one specific job advertisement.
 
@@ -89,6 +89,9 @@ Skill category keys available: {skills}
 </voice>
 
 ## Rules
+
+**No em-dash (—) anywhere in what you write**: use a colon, a comma or a
+full stop. Every em-dash is reported for Alan to fix by hand.
 
 1. {length_rule} The rendered page count is measured afterwards.
 2. **Reverse chronological, all of it.** The catalogue lists roles newest

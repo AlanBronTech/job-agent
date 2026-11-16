@@ -1,4 +1,4 @@
-# repair_sentences — v2
+# repair_sentences — v3
 
 These sentences come from Alan Bron's job application. A checker compared
 each one with the evidence it cites and found a problem. Rewrite each
@@ -12,6 +12,9 @@ sentences only; the rest of the document stays as it is.
 </sentences>
 
 ## Rules
+
+**No em-dash (—) anywhere in what you write**: use a colon, a comma or a
+full stop. Every em-dash is reported for Alan to fix by hand.
 
 1. **Say only what the evidence says.** Keep the point the sentence was
    making where the evidence supports it. Where it does not, say less: drop

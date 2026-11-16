@@ -119,6 +119,8 @@ def validate_prose(
     issues += _check_contrast_phrasing(text, context)
     issues += _check_chronology(text, context)
     issues += check_third_person(text, context)
+    issues += _check_em_dashes(text, f"{context[:1].upper()}{context[1:]}",
+                               "Reword it with a colon, a comma or a full stop.")
     if max_words is not None:
         issues += _check_length(text, max_words, context)
     return issues
@@ -134,6 +136,9 @@ def validate_rendered(text: str, *, context: str = "a bullet") -> list[Validatio
     career length.
     """
     issues = _check_age_signals(text) + check_third_person(text, context)
+    issues += _check_em_dashes(
+        text, context,
+        "It is copied verbatim: reword it in the profile with a colon, a comma or a full stop.")
     for pattern, description in _INTERNAL_REFERENCE_PATTERNS:
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             issues.append(
@@ -522,6 +527,21 @@ _CONTRAST_PATTERNS = (
     r"\brather\s+than\b",
 )
 CONTRAST_LIMIT = 1
+
+
+def _check_em_dashes(text: str, context: str, advice: str) -> list[ValidationIssue]:
+    """Every em-dash, as a warning naming it (Alan, 2026-11-14: none in any
+    document). A warning, not a blocker: a blocker would send the sentence to a
+    paid repair, and rewording is free by hand (spec 004, FR-014)."""
+    return [
+        ValidationIssue(
+            rule="em-dash",
+            severity=Severity.warning,
+            detail=f"{context} contains an em-dash. {advice}",
+            excerpt=_excerpt(text, match.start(), match.end()),
+        )
+        for match in re.finditer("\u2014", text)
+    ]
 
 
 def _check_contrast_phrasing(text: str, context: str) -> list[ValidationIssue]:
