@@ -53,6 +53,17 @@ this feature.
 - [X] T015 Invented team name in a selection test (`22b69ea`).
 - [X] T016 This spec, written as built.
 
-## Phase 7: Open
+## Phase 7: A custom resume in the masters' layout (US6, US7)
 
-- [ ] T017 [US6] Custom resume in the masters' layout: in `jobagent/adapters/docx_writer.py`, highlight labels as bold `Label:` with no em-dash, and CORE SKILLS as six bold-label paragraphs instead of the 4×2 table; tests in `tests/test_docx_writer.py` for both; confirm `adapters/pages.py` page counts and the number check still pass on the new layout. Plan first: decide whether the skills order per master applies to a custom resume.
+Planned 2026-11-16 before any code. Measured from the Engineering Manager
+master: highlight label bold "Label: " then the claim; CORE SKILLS lines in
+Normal style, 10.5pt, 1pt before / 2pt after, bold "Label: " then the list;
+EARLIER CAREER "**Name (years)**: summary"; certifications "Name (Issuer)",
+degrees "Qualification, Institution".
+
+- [X] T017 This plan: clarifications, FR-012-FR-014, US7, tasks T018-T022.
+- [X] T018 [US6] Renderer and assembly in the masters' layout: `_bullet_with_label` and the EARLIER CAREER split use ": "; `_skills_lines` replaces `_skills_table`; `_assemble` builds earlier-career and founder lines with ": ", education as "Name (Issuer)" / "Qualification, Institution", skills joined with "; " and labelled in sentence case ("AI", "Cloud and data"); the highlight repair key and `resume_text` use ": ". Tests first in `tests/test_docx_writer.py` and `tests/test_generate*.py`; `docx_reader` still reads the new layout.
+- [X] T019 [US7] `_check_em_dashes` in `jobagent/core/validation.py`: a warning per em-dash, from `validate_prose` and `validate_rendered`, naming the text. Tests in `tests/test_validation.py`. Also a one-line "no em-dash" rule at the top of the Rules in `generate_resume` (v9), `generate_cover_letter` (v11), `generate_answers` (v4) and `repair_sentences` (v3): prevention as well as detection; a writer-prompt change, so no eval is affected (the eval grades the scorer).
+- [X] T020 [US6] `skills_order` on a master (`MasterEntry`, `MasterResume`); `profile validate` refuses a key the profile's skills lack; `build_resume(skills_order=…)` uses it over the role-kind order and lists every category it names; `services/documents` passes the chosen master's order. Tests first.
+- [X] T021 Profile (gitignored, diff shown first): `roles.yaml` `skills` become the master's six categories, text verbatim; `masters.yaml` gains each master's `skills_order`; `profile validate` passes.
+- [X] T022 CLAUDE.md Document format: the new layout, the "not yet done" note removed; README if it describes the old layout.

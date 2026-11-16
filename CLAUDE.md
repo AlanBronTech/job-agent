@@ -100,9 +100,8 @@ master wins and this section gets corrected (D48).
 
 Since 2026-11-16 the resume sent is usually a hand-written master, picked per
 ad (see *Master resumes*); this section also governs a generated (custom)
-resume. **Not yet done:** the renderer still writes the earlier layout (em-dash
-highlight labels, a 4×2 Core Skills table); bring `docx_writer.py` in line
-with the two corrections below before relying on a custom resume's format.
+resume, which `docx_writer.py` renders in the masters' layout (spec 004,
+T018-T021).
 
 ### Typography
 
@@ -126,13 +125,17 @@ Section order, exactly:
 3. **CAREER HIGHLIGHTS** — 5 bullets, each opening with a bold label and a
    colon (`AI adoption: ...`). No em-dashes anywhere in a resume (Alan,
    2026-11-14).
-4. **CORE SKILLS** — six lines, each a bold label, a colon, then a list
-   (`Leadership: Teams of up to 15, ...`); the order varies by master
+4. **CORE SKILLS** — six lines, each a bold label, a colon, then the list
+   (`Leadership: Teams of up to 15, ...`), 10.5pt, 1pt before / 2pt after.
+   The categories are `profile/roles.yaml` `skills`, which hold the masters'
+   text; the order is the chosen master's `skills_order`
 5. **EXPERIENCE** — reverse chronological; up to 6 bullets for the two most
    recent roles, 1–2 for roles that ended before 2020, 1–4 for the rest
    (`bullet_cap`; Alan, 2026-11-08)
-6. **EARLIER CAREER** — one condensed bullet each, undated
-7. **EDUCATION & CERTIFICATIONS** — one line each, certifications first
+6. **EARLIER CAREER** — one condensed bullet each, undated; the name in
+   bold, then a colon (`**EZ-Leads (2015–17)**: Co-founder & CTO; ...`)
+7. **EDUCATION & CERTIFICATIONS** — one line each, certifications first:
+   `Name (Issuer)`, then `Qualification, Institution`
 
 Role heading format is `Title  ·  Company` with the date range right-aligned
 on a tab stop at **16.93cm**.
@@ -220,10 +223,10 @@ data), 001's pipeline board and prep in
 the UI, run-log rotation. Task 4 was cut to the write-up only; task 6 waits;
 REVIEW-2026-10-16 D7 is rejected.
 
-Added 2026-11-16 on branch `resume-masters`: master resumes (registry,
-selection, shown with the score, recorded on apply, schema v19) and
-`never_in_documents`. Not done: the renderer's layout for a custom resume
-(see *Document format*).
+Added 2026-11-16 (spec 004): master resumes (registry, selection, shown with
+the score, recorded on apply, schema v19), `never_in_documents`, a custom
+resume in the masters' layout with the chosen master's skills order, and an
+em-dash warning on all generated text.
 
 **Standing decisions not to re-open:** founder years stay on the resume; the
 review is off by default, the claim check on; the UI says "Jobs", not "Ads";

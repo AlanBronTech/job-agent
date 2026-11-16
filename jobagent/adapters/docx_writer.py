@@ -1,7 +1,8 @@
 """Rendering documents to Alan's .docx format.
 
-Every measurement here came off `~/Documents/AlanBronMasterResume112026.docx`,
-not from taste. If this file and the master ever disagree, the master wins.
+Every measurement here came off the masters (`AlanBronMasterResume112026.docx`,
+and from 2026-11-16 the v4 Engineering Manager master's highlights, skills
+and earlier-career lines), not from taste. If this file and the master ever disagree, the master wins.
 
 Two decisions worth knowing:
 
@@ -130,7 +131,7 @@ def write_resume(content: ResumeContent, path: Path) -> Path:
 
     if content.skills:
         _section_heading(doc, "CORE SKILLS")
-        _skills_table(doc, content.skills)
+        _skills_lines(doc, content.skills)
 
     _section_heading(doc, "EXPERIENCE")
     for role in content.roles:
@@ -141,14 +142,14 @@ def write_resume(content: ResumeContent, path: Path) -> Path:
     if content.earlier_career:
         _section_heading(doc, "EARLIER CAREER")
         for line in content.earlier_career:
-            # The master bolds the name before the dash: "**EZ-Leads (2015–17)** — …".
-            name, dash, rest = line.partition(" — ")
-            if dash and len(name) <= 60:
+            # The master bolds the name before the colon: "**EZ-Leads (2015–17)**: …".
+            name, colon, rest = line.partition(": ")
+            if colon and len(name) <= 60:
                 para = doc.add_paragraph(style="List Paragraph")
                 _apply_bullet_numbering(para)
                 _format_paragraph(para, space_before=Pt(1.5), space_after=Pt(3.6))
                 _run(para, name, size=10.5, bold=True)
-                _run(para, f" — {rest}", size=10.5)
+                _run(para, f": {rest}", size=10.5)
             else:
                 _bullet(doc, line)
 
@@ -265,38 +266,30 @@ def _bullet(doc: Document, text: str) -> Paragraph:
 
 
 def _bullet_with_label(doc: Document, label: str, rest: str) -> Paragraph:
-    """A CAREER HIGHLIGHTS bullet: bold label, em dash, then the claim."""
+    """A CAREER HIGHLIGHTS bullet: bold label and a colon, then the claim.
+
+    The v4 master (2026-11-14) has no em-dash anywhere; the label ends in a colon.
+    """
     para = doc.add_paragraph(style="List Paragraph")
     _apply_bullet_numbering(para)
     _format_paragraph(para, space_before=Pt(1.5), space_after=Pt(3.6))
-    _run(para, f"{label} — ", size=10.5, bold=True)
+    _run(para, f"{label}: ", size=10.5, bold=True)
     _run(para, rest, size=10.5)
     return para
 
 
-def _skills_table(doc: Document, skills: list[SkillCategory]) -> None:
-    """Borderless two-column table, categories filling left-to-right."""
-    rows = (len(skills) + 1) // 2
-    table = doc.add_table(rows=rows, cols=2)
-    table.autofit = False
-    _remove_table_borders(table)
+def _skills_lines(doc: Document, skills: list[SkillCategory]) -> None:
+    """One line per category: bold "Label: ", then the list.
 
-    usable = doc.sections[0].page_width - doc.sections[0].left_margin - doc.sections[0].right_margin
-    for row in table.rows:
-        for cell in row.cells:
-            cell.width = int(usable / 2)
-
-    for index, category in enumerate(skills):
-        cell = table.rows[index // 2].cells[index % 2]
-        # A new cell arrives with one empty paragraph; use it rather than
-        # leaving a blank line above the label.
-        label = cell.paragraphs[0]
-        _format_paragraph(label, space_before=Pt(2.0), space_after=Pt(1.0))
-        _run(label, category.label.upper(), size=9.5, bold=True)
-
-        body = cell.add_paragraph()
-        _format_paragraph(body, space_after=Pt(4.0))
-        _run(body, category.skills, size=9.5)
+    Measured from the v4 master (2026-11-14): Normal style, 10.5pt, 1pt
+    before and 2pt after, line spacing as everywhere. It replaced the 4×2
+    table the earlier master used.
+    """
+    for category in skills:
+        para = doc.add_paragraph()
+        _format_paragraph(para, space_before=Pt(1.0), space_after=Pt(2.0))
+        _run(para, f"{category.label}: ", size=10.5, bold=True)
+        _run(para, category.skills, size=10.5)
 
 
 def _spacer(doc: Document) -> None:
@@ -357,12 +350,3 @@ def _apply_bullet_numbering(para: Paragraph) -> None:
     numbering.append(level)
     numbering.append(num_id)
     para._p.get_or_add_pPr().append(numbering)
-
-
-def _remove_table_borders(table) -> None:
-    properties = table._tbl.tblPr
-    borders = properties.makeelement(qn("w:tblBorders"), {})
-    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        element = borders.makeelement(qn(f"w:{edge}"), {qn("w:val"): "none"})
-        borders.append(element)
-    properties.append(borders)

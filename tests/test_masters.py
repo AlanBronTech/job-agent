@@ -348,3 +348,35 @@ def test_team_lead_pitched_at_manager_level_still_reads_as_team_lead() -> None:
     choice = select_master(ad, kind("delivery_focused", "people_focused"), MASTERS)
     assert choice.master.id == "em"
     assert "Team Lead" in choice.reason
+
+
+# -- skills_order (spec 004, T020) ----------------------------------------------
+
+
+def test_a_master_carries_its_skills_order(tmp_path: Path) -> None:
+    text = VALID.replace("    default: true\n",
+                         "    default: true\n    skills_order: [leadership, delivery]\n", 1)
+    manager = load_masters(_registry(tmp_path, text))[0]
+    assert manager.skills_order == ["leadership", "delivery"]
+
+
+def test_a_skills_order_naming_a_category_the_profile_lacks_is_refused(tmp_path: Path) -> None:
+    text = VALID.replace("    default: true\n",
+                         "    default: true\n    skills_order: [leadership, juggling]\n", 1)
+    folder = _registry(tmp_path, text)
+    with pytest.raises(ProfileError, match="juggling"):
+        load_masters(folder, skill_keys={"leadership", "delivery"})
+    # Without the profile's keys the order is not checked.
+    assert load_masters(folder)[0].skills_order == ["leadership", "juggling"]
+
+
+def test_validate_checks_skills_order_against_the_profile(tmp_path: Path, example_dir: Path) -> None:
+    from typer.testing import CliRunner
+
+    from jobagent.cli.main import app
+
+    text = VALID.replace("    default: true\n",
+                         "    default: true\n    skills_order: [leadership, juggling]\n", 1)
+    profile = _profile_with_masters(tmp_path, example_dir, text)
+    result = CliRunner().invoke(app, ["profile", "validate", "--dir", str(profile)])
+    assert result.exit_code == 1 and "juggling" in result.output

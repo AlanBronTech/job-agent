@@ -304,6 +304,7 @@ def build_resume(
     instructions: str | None = None,
     feedback: str | None = None,
     length: ResumeLength = FULL_TIME_LENGTH,
+    skills_order: list[str] | None = None,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
@@ -312,6 +313,9 @@ def build_resume(
     `instructions` is Alan's context and revision note (`instructions_block`),
     sent with every attempt; a rejected draft's failures follow it.
     `feedback` is the claim check's verdict on an earlier draft, sent the same way.
+    `skills_order` is the chosen master's CORE SKILLS order (spec 004): every
+    category it names, in that order, over the model's choice and the role
+    kind's order.
     """
     instructions = "\n\n".join(part for part in (instructions, feedback) if part) or None
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
@@ -332,7 +336,7 @@ def build_resume(
         )
         built = _check_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
-            today=today or date.today(),
+            today=today or date.today(), skills_order=skills_order,
         )
         # Repetition is repaired in code where it can be: dropping a duplicate
         # bullet costs nothing, and a rewrite for it cost $0.19-0.28.
@@ -341,7 +345,7 @@ def build_resume(
             if notes:
                 again = _check_resume(
                     repaired, jd, profile, assessment, catalogue, citable, excluded, kind,
-                    today=today or date.today(),
+                    today=today or date.today(), skills_order=skills_order,
                 )
                 if _blockers(again) < _blockers(built):
                     again.issues += [
@@ -359,7 +363,8 @@ def build_resume(
 
 
 def _check_resume(
-    selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today
+    selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today,
+    skills_order: list[str] | None = None,
 ) -> GeneratedResume:
     issues: list[ValidationIssue] = _uncited_paragraphs(selection)
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
@@ -368,7 +373,7 @@ def _check_resume(
         issues += check_third_person(paragraph, "the PROFILE section", name=False, pronouns=True)
     for highlight in selection.highlights:
         issues += validate_prose(
-            f"{highlight.label} — {highlight.text}",
+            f"{highlight.label}: {highlight.text}",
             profile,
             context="a CAREER HIGHLIGHTS bullet",
         )
@@ -387,6 +392,7 @@ def _check_resume(
         today=today,
         kind=kind,
         excluded=excluded,
+        skills_order=skills_order,
     )
     cited = [h.source_ref for h in selection.highlights] + [
         ref for role in selection.roles for ref in role.bullet_refs
@@ -426,7 +432,7 @@ def resume_sentences(selection: _ResumeSelection) -> list[Sentence]:
         for n, paragraph in enumerate(selection.profile_paragraphs)
     ]
     out += [
-        Sentence(text=f"{h.label} — {h.text}", cites=[h.source_ref])
+        Sentence(text=f"{h.label}: {h.text}", cites=[h.source_ref])
         for h in selection.highlights
     ]
     return out
@@ -595,6 +601,7 @@ def _assemble(
     today: date,
     kind: RoleClassification | None = None,
     excluded: set[str] = frozenset(),
+    skills_order: list[str] | None = None,
 ) -> tuple[ResumeContent, list[ValidationIssue]]:
     """Turn the selection into rendered content, resolving every reference.
 
@@ -657,13 +664,18 @@ def _assemble(
         highlights.append((highlight.label, highlight.text))
 
     skills = []
-    chosen_keys = selection.skill_categories or list(profile.roles.skills)
-    for key in kinds.order_skills(chosen_keys, kind.primary if kind else None):
+    if skills_order:
+        ordered = list(skills_order)
+    else:
+        chosen_keys = selection.skill_categories or list(profile.roles.skills)
+        ordered = kinds.order_skills(chosen_keys, kind.primary if kind else None)
+    for key in ordered:
         values = profile.roles.skills.get(key)
         if values is None:
             issues.append(_unknown(key, "skill category"))
             continue
-        skills.append(SkillCategory(label=_skill_label(key), skills=", ".join(values)))
+        # "; " between items, as the master writes them: an item may hold commas.
+        skills.append(SkillCategory(label=_skill_label(key), skills="; ".join(values)))
 
     earlier = []
     by_id = {entry.id: entry for entry in profile.roles.earlier_career}
@@ -674,7 +686,7 @@ def _assemble(
             continue
         entry = by_id.get(entry_id)
         if entry is not None:
-            line = f"{entry.company} — {entry.summary}"
+            line = f"{entry.company}: {entry.summary}"
         else:
             founder = founders_by_id.get(entry_id)
             if founder is None:
@@ -1156,11 +1168,11 @@ def apply_resume_repairs(built: GeneratedResume, repairs: dict[str, str], profil
     highlights = []
     on_page = dict(built.on_page)
     for n, (label, text) in enumerate(content.highlights, 1):
-        new = repairs.get(f"{label} — {text}".strip())
+        new = repairs.get(f"{label}: {text}".strip())
         if new:
-            label, _, claim = new.partition(" — ") if " — " in new else (label, "", new)
+            label, _, claim = new.partition(": ") if ": " in new else (label, "", new)
             text = claim.strip()
-            issues += validate_prose(f"{label} — {text}", profile, context="a CAREER HIGHLIGHTS bullet")
+            issues += validate_prose(f"{label}: {text}", profile, context="a CAREER HIGHLIGHTS bullet")
             on_page[f"highlight {n}"] = text
         highlights.append((label.strip(), text))
     sentences = [
@@ -1672,10 +1684,10 @@ def _mechanism_lines(story, indent: str) -> list[str]:
 def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     """One EARLIER CAREER line for a closed venture, in the master's format.
 
-    From `AlanBronMasterResume112026.docx`, which wins over any spec that
-    disagrees with it:
+    From the masters, which win over any spec that disagrees with them (the
+    colon replaced the em-dash in the v4 master, 2026-11-14):
 
-        Australian Home Design Directory (2006–16) — Co-founder & CTO; built
+        Australian Home Design Directory (2006–16): Co-founder & CTO; built
         the initial versions alone as architect; grew to 1M+ annual organic
         visitors; acquired.
 
@@ -1716,7 +1728,7 @@ def _founder_line(entry: FounderEntry) -> tuple[str, ValidationIssue | None]:
     heading = entry.company
     if dates:
         heading += f" ({dates})"
-    return f"{heading} — {entry.summary}", None
+    return f"{heading}: {entry.summary}", None
 
 
 def _is_ongoing(entry: FounderEntry) -> bool:
@@ -1772,17 +1784,22 @@ def _bare_url(url: str) -> str:
 
 
 def _education_lines(profile: Profile) -> list[str]:
-    """Certifications first, then degrees — the master's order."""
+    """Certifications first, then degrees, as the master writes them:
+    "Name (Issuer)" and "Qualification, Institution"."""
     person = profile.roles.person
-    lines = [f"{cert.name} — {cert.issuer}" for cert in person.certifications]
+    lines = [f"{cert.name} ({cert.issuer})" for cert in person.certifications]
     lines += [
-        f"{entry.qualification} — {entry.institution}" for entry in person.education
+        f"{entry.qualification}, {entry.institution}" for entry in person.education
     ]
     return lines
 
 
 def _skill_label(key: str) -> str:
-    return key.replace("_and_", " & ").replace("_", " ").upper()
+    """`cloud_and_data` -> "Cloud and data", `ai` -> "AI": the master's labels."""
+    words = key.split("_")
+    words = ["AI" if w == "ai" else w for w in words]
+    first = words[0] if words[0].isupper() else words[0].capitalize()
+    return " ".join([first, *words[1:]])
 
 
 def _jd_summary(jd: JobDescription) -> str:
@@ -2000,7 +2017,7 @@ def resume_text(content: ResumeContent) -> str:
     """The resume as plain text, in the rendered order, for the reviewer."""
     lines = [content.name, content.tagline, "", "PROFILE", *content.profile_paragraphs, ""]
     lines.append("CAREER HIGHLIGHTS")
-    lines += [f"- {label} — {text}" for label, text in content.highlights]
+    lines += [f"- {label}: {text}" for label, text in content.highlights]
     lines += ["", "CORE SKILLS"]
     lines += [f"- {category.label}: {category.skills}" for category in content.skills]
     lines += ["", "EXPERIENCE"]

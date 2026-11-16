@@ -575,3 +575,22 @@ def test_assessment_md_names_the_master(tmp_path, ids, fake_model, ws):
     result = run(with_masters, ids["acme"], resume=False, cover=True)
     assessment_md = (result.folder / "assessment.md").read_text(encoding="utf-8")
     assert "**Resume:** Engineering Manager: a manager role." in assessment_md
+
+
+def test_a_custom_resume_takes_the_chosen_masters_skills_order(tmp_path, ids, fake_model, ws, monkeypatch):
+    from tests.ui_seed import masters_profile
+
+    profile = masters_profile(tmp_path)
+    registry = profile / "resumes" / "masters.yaml"
+    registry.write_text(registry.read_text().replace(
+        "    default: true\n", "    default: true\n    skills_order: [delivery, leadership]\n", 1))
+    seen = {}
+    real = documents.build_resume
+
+    def build_resume(*a, skills_order=None, **k):
+        seen["order"] = skills_order
+        return real(*a, **k)
+    monkeypatch.setattr(documents, "build_resume", build_resume)
+    with_masters = Workspace(**{**ws.__dict__, "profile_dir": profile})
+    run(with_masters, ids["acme"])
+    assert seen["order"] == ["delivery", "leadership"]

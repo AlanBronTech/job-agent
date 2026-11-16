@@ -85,7 +85,7 @@ def test_citing_excluded_evidence_blocks_and_keeps_it_off_the_page(profile):
 def test_skills_are_ordered_by_kind(profile):
     built, _ = resume(profile, selection())
     labels = [s.label for s in built.content.skills]
-    assert labels[:2] == ["LEADERSHIP", "DELIVERY"]
+    assert labels[:2] == ["Leadership", "Delivery"]
 
 
 def test_an_ai_highlight_first_is_flagged_for_a_people_focused_ad(profile):

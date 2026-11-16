@@ -1,4 +1,4 @@
-# generate_answers — v3
+# generate_answers — v4
 
 Answer the free-text application questions for one job, in Alan Bron's voice.
 
@@ -67,6 +67,9 @@ this ad. Do not contradict it. Cite it by its type (`why_leaving`).
 Character limit per answer: {limit}
 
 ## Rules
+
+**No em-dash (—) anywhere in what you write**: use a colon, a comma or a
+full stop. Every em-dash is reported for Alan to fix by hand.
 
 1. **One answer per question**, in order. Classify each question as one of
    `summary`, `why_company`, `why_role`, `why_you`, `what_made_you_apply`,

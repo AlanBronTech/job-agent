@@ -217,7 +217,7 @@ def test_an_entry_whose_wording_is_on_the_page_is_not_reported_unused(profile_fa
     profile = load_profile(profile_factory(mutate))
     from jobagent.core.generate import _ResumeSelection
     selection = _ResumeSelection(tagline="t", profile_paragraphs=[], highlights=[], roles=[])
-    on_page = ["Example AI Practitioner Certificate — Example Training Provider"]
+    on_page = ["Example AI Practitioner Certificate (Example Training Provider)"]
     by_id = {u.id for u in unused_entries(selection, profile)}
     by_content = {u.id for u in unused_entries(selection, profile, on_page=on_page)}
     assert "ai_credentials" in by_id and "ai_credentials" not in by_content

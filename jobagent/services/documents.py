@@ -266,13 +266,17 @@ def generate(
     if resume:
         # A contract matched to an offer gets the shorter contractor CV.
         length = resume_length(contract_block(profile, assessment.contract_offer, letter=False) is not None)
+        # The chosen master's CORE SKILLS order, so a custom resume reads like
+        # the master it stands in for (spec 004, T020).
+        chosen = masters.choose(ws, jd, kind)
+        skills_order = (chosen.master.skills_order or None) if chosen and chosen.master else None
 
         def select(feedback: str | None = None):
             try:
                 return build_resume(
                     jd, profile, assessment, client=client, today=today, kind=kind,
                     instructions=instructions("resume", "resume"), feedback=feedback,
-                    length=length,
+                    length=length, skills_order=skills_order,
                 )
             except GenerateError as exc:
                 raise GenerationFailed("resume", exc, written) from exc
