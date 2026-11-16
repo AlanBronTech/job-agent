@@ -7,7 +7,7 @@
 Development Workflow); this spec records what was asked, decided and built,
 and carries the one task still open.
 
-**Status**: Implemented, one task open (T017)
+**Status**: Implemented except T017-T022 (custom resume layout, em-dash check)
 
 **Input**: User description: "Stop composing a new resume for every job.
 Keep a small set of hand-approved master resumes, have JobAgent pick the best
@@ -55,6 +55,19 @@ Contoso Health and Fabrikam Energy.
   `custom`.
 - Q: The story the person never wants written down? → A: A
   `never_in_documents` flag that no ad wording or role kind can open.
+
+### Session 2026-11-16 (T017, before the code)
+
+- Q: Which Core Skills order does a custom resume use? → A: The order of the
+  master that would be chosen for the ad. Without masters, the role-kind
+  order as before.
+- Q: The profile's skill categories differ from the masters'. → A: Replace
+  the profile's skills with the masters' categories, text copied from the
+  approved master; the category that is in neither (embedded and hardware)
+  goes. One source of truth.
+- Q: Em-dashes inside profile text? → A: A free check flags any em-dash in a
+  generated resume or letter, as a warning (no paid repair); the profile text
+  is reworded by hand.
 
 ## Why
 
@@ -173,6 +186,11 @@ A generated resume uses the masters' layout: highlight labels followed by a
 colon, no em-dash anywhere, and CORE SKILLS as six "Label: list" lines. Today
 the renderer still writes em-dash labels and a 4×2 skills table (T017).
 
+### User Story 7 - No em-dash reaches a document unseen (Priority: P2)
+
+Any em-dash in a generated resume, letter or answer is reported, naming the
+text, so it can be reworded. Free; a warning, not a blocker.
+
 ### Edge Cases
 
 - The registry exists but lists no masters: an error, not "no masters".
@@ -204,7 +222,14 @@ the renderer still writes em-dash labels and a 4×2 skills table (T017).
 - **FR-010**: JobAgent never writes or edits a master.
 - **FR-011**: `never_in_documents` on stories and bullets excludes them from
   all written documents; interview prep is unaffected.
-- **FR-012**: A custom resume renders in the masters' layout (open, T017).
+- **FR-012**: A custom resume renders in the masters' layout: highlight and
+  earlier-career labels end in a colon, CORE SKILLS is one bold-label line
+  per category, education reads "Name (Issuer)" and "Qualification,
+  Institution".
+- **FR-013**: A custom resume lists the skill categories in the chosen
+  master's `skills_order`; each master's order names only categories the
+  profile has.
+- **FR-014**: Every em-dash in generated text is reported as a warning.
 
 ### Key Entities
 
