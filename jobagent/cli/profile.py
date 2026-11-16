@@ -40,7 +40,7 @@ def validate(
 
     try:
         profile = load_profile(profile_dir)
-        masters = load_masters(profile_dir)
+        masters = load_masters(profile_dir, skill_keys=set(profile.roles.skills))
     except ProfileError as exc:
         err_console.print(f"[bold red]Profile invalid[/] ({profile_dir})")
         err_console.print(str(exc))

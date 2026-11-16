@@ -514,6 +514,10 @@ class MasterEntry(_Base):
     work_types: list[WorkType] = Field(default_factory=list)
     use_for: str
     not_for: str | None = None
+    # The master's CORE SKILLS order, as profile skill keys. A custom resume
+    # generated when this master is chosen lists the same categories in the
+    # same order (spec 004, T020).
+    skills_order: list[str] = Field(default_factory=list)
 
 
 class MastersFile(_Base):
@@ -532,6 +536,10 @@ class MasterResume(_Base):
     work_types: list[WorkType] = Field(default_factory=list)
     use_for: str
     not_for: str | None = None
+    # The master's CORE SKILLS order, as profile skill keys. A custom resume
+    # generated when this master is chosen lists the same categories in the
+    # same order (spec 004, T020).
+    skills_order: list[str] = Field(default_factory=list)
 
 
 class MasterChoice(_Base):

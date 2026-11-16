@@ -304,6 +304,7 @@ def build_resume(
     instructions: str | None = None,
     feedback: str | None = None,
     length: ResumeLength = FULL_TIME_LENGTH,
+    skills_order: list[str] | None = None,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
@@ -312,6 +313,9 @@ def build_resume(
     `instructions` is Alan's context and revision note (`instructions_block`),
     sent with every attempt; a rejected draft's failures follow it.
     `feedback` is the claim check's verdict on an earlier draft, sent the same way.
+    `skills_order` is the chosen master's CORE SKILLS order (spec 004): every
+    category it names, in that order, over the model's choice and the role
+    kind's order.
     """
     instructions = "\n\n".join(part for part in (instructions, feedback) if part) or None
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
@@ -332,7 +336,7 @@ def build_resume(
         )
         built = _check_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
-            today=today or date.today(),
+            today=today or date.today(), skills_order=skills_order,
         )
         # Repetition is repaired in code where it can be: dropping a duplicate
         # bullet costs nothing, and a rewrite for it cost $0.19-0.28.
@@ -341,7 +345,7 @@ def build_resume(
             if notes:
                 again = _check_resume(
                     repaired, jd, profile, assessment, catalogue, citable, excluded, kind,
-                    today=today or date.today(),
+                    today=today or date.today(), skills_order=skills_order,
                 )
                 if _blockers(again) < _blockers(built):
                     again.issues += [
@@ -359,7 +363,8 @@ def build_resume(
 
 
 def _check_resume(
-    selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today
+    selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today,
+    skills_order: list[str] | None = None,
 ) -> GeneratedResume:
     issues: list[ValidationIssue] = _uncited_paragraphs(selection)
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
@@ -387,6 +392,7 @@ def _check_resume(
         today=today,
         kind=kind,
         excluded=excluded,
+        skills_order=skills_order,
     )
     cited = [h.source_ref for h in selection.highlights] + [
         ref for role in selection.roles for ref in role.bullet_refs
@@ -595,6 +601,7 @@ def _assemble(
     today: date,
     kind: RoleClassification | None = None,
     excluded: set[str] = frozenset(),
+    skills_order: list[str] | None = None,
 ) -> tuple[ResumeContent, list[ValidationIssue]]:
     """Turn the selection into rendered content, resolving every reference.
 
@@ -657,8 +664,12 @@ def _assemble(
         highlights.append((highlight.label, highlight.text))
 
     skills = []
-    chosen_keys = selection.skill_categories or list(profile.roles.skills)
-    for key in kinds.order_skills(chosen_keys, kind.primary if kind else None):
+    if skills_order:
+        ordered = list(skills_order)
+    else:
+        chosen_keys = selection.skill_categories or list(profile.roles.skills)
+        ordered = kinds.order_skills(chosen_keys, kind.primary if kind else None)
+    for key in ordered:
         values = profile.roles.skills.get(key)
         if values is None:
             issues.append(_unknown(key, "skill category"))

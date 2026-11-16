@@ -790,3 +790,11 @@ def test_skill_labels_read_as_the_master_writes_them() -> None:
     assert _skill_label("cloud_and_data") == "Cloud and data"
     assert _skill_label("ai") == "AI"
     assert _skill_label("ai_and_automation") == "AI and automation"
+
+
+def test_a_skills_order_lists_every_category_it_names_in_that_order(profile, jd, assessment) -> None:
+    order = ["delivery", "ai_and_automation", "leadership"]
+    client = FakeClient(selection(profile, skill_categories=["leadership"]))
+    built = build_resume(jd, profile, assessment, client=client, today=date(2026, 9, 1),
+                         skills_order=order)
+    assert [s.label for s in built.content.skills] == ["Delivery", "AI and automation", "Leadership"]

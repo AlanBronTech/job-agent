@@ -34,12 +34,16 @@ RESUMES_DIR = "resumes"
 MASTERS_FILE = "masters.yaml"
 
 
-def load_masters(profile_dir: str | Path) -> list[MasterResume]:
+def load_masters(
+    profile_dir: str | Path, *, skill_keys: set[str] | None = None
+) -> list[MasterResume]:
     """The masters listed in `<profile_dir>/resumes/masters.yaml`, in file order.
 
     Returns an empty list when there is no registry. Raises `ProfileError`
     when there is one and it is wrong: bad YAML, an unknown key or value, a
     duplicate id, not exactly one default, or a document that is not there.
+    With `skill_keys` (the profile's skill categories), a `skills_order` naming
+    one the profile lacks is refused too.
     """
     folder = Path(profile_dir) / RESUMES_DIR
     path = folder / MASTERS_FILE
@@ -64,6 +68,13 @@ def load_masters(profile_dir: str | Path) -> list[MasterResume]:
         for name in (entry.docx, entry.pdf):
             if name is not None and not (folder / name).is_file():
                 errors.append(f"{entry.id}: {name} is not in {folder}")
+        if skill_keys is not None:
+            unknown = [k for k in entry.skills_order if k not in skill_keys]
+            if unknown:
+                errors.append(
+                    f"{entry.id}: skills_order names {', '.join(unknown)}, which the "
+                    f"profile's skills do not have ({', '.join(sorted(skill_keys))})"
+                )
 
     defaults = [e.id for e in entries if e.default]
     if len(defaults) != 1:
