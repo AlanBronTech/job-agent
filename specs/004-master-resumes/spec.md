@@ -7,7 +7,7 @@
 Development Workflow); this spec records what was asked, decided and built,
 and carries the one task still open.
 
-**Status**: Implemented except T017-T022 (custom resume layout, em-dash check)
+**Status**: Implemented (T001-T022)
 
 **Input**: User description: "Stop composing a new resume for every job.
 Keep a small set of hand-approved master resumes, have JobAgent pick the best

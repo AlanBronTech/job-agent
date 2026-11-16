@@ -432,13 +432,18 @@ is the second attempt, so fix it by hand or regenerate.
 **Fit, coverage and checks (spec 003).** Before writing, each ad is
 classified once by the kind of role it is — people-focused, delivery-focused,
 technical lead or AI enablement — and `score` shows it with the assessment.
-The kind decides what leads the resume and the order of the skills table, and
+The kind decides what leads the resume and the order of the skills (the chosen
+master's order when there is one), and
 anything you mark `exclude_for: [people_focused]` (on a story, an entry or a
 bullet in `profile/`) is never shown to the writer for that kind of ad; citing
 it anyway is a blocker. Interview prep still uses it. A story can instead
 carry `only_if_ad_mentions: [performance management, underperform, …]`: it is
 then left out of every resume, letter and answer unless the ad's text contains
 one of those phrases (bullets linked to it go with it).
+`never_in_documents: true` on a story or bullet keeps it out of every resume,
+letter and answer whatever the ad says; interview prep still uses it. Any
+em-dash in generated text is listed as a warning, so you can reword it (a
+bullet copied from the profile is reworded in the profile).
 
 After the folder list you get:
 
