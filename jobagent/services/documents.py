@@ -100,13 +100,15 @@ def planned_names(
     cover: bool,
     answers: bool,
     review: bool = False,
+    master_file: str | None = None,
 ) -> list[str]:
     """Exactly the file names a run would write, in the order it writes them.
 
     `assessment.md` and `job-ad.md` are unconditional: every run rewrites the
-    record of why the documents were cut the way they were.
+    record of why the documents were cut the way they were. `master_file` is a
+    master resume copied in unchanged, so it is there to send.
     """
-    names: list[str] = []
+    names: list[str] = [master_file] if master_file else []
     if resume:
         names.append(docs.document_name("Resume", jd, when=when))
     if cover:
@@ -115,17 +117,22 @@ def planned_names(
         names.append("answers.md")
     if review:
         names.append("review.md")
+    if not (resume or cover or answers or review):
+        return names  # a master copied alone: no model ran, nothing to record
     return names + ["assessment.md", "job-ad.md"]
 
 
 def plan(
-    ws: Workspace, jd_id: int, *, resume: bool, cover: bool, answers: bool, when: date
+    ws: Workspace, jd_id: int, *, resume: bool, cover: bool, answers: bool, when: date,
+    master: str | None = None,
 ) -> GeneratePlan:
     """What a run would do. Spends nothing; the UI shows it before asking to confirm."""
-    if not (resume or cover or answers):
+    if not (resume or cover or answers or master):
         raise NothingSelected()
+    master_file = masters.file_to_send(masters.find(ws, master)).name if master else None
     loaded = _load(ws, jd_id)
-    names = planned_names(loaded.jd, when, resume=resume, cover=cover, answers=answers)
+    names = planned_names(loaded.jd, when, resume=resume, cover=cover, answers=answers,
+                          master_file=master_file)
     return GeneratePlan(
         jd=loaded.jd,
         verdict=loaded.assessment.verdict,
@@ -133,7 +140,7 @@ def plan(
         needs_overrule=loaded.assessment.verdict is Verdict.skip,
         folder=Path(ws.documents.folder_name(loaded.jd, when)),
         names=names,
-        clashes=_clashes(ws, loaded.jd, when, names),
+        clashes=_clashes(ws, loaded.jd, when, [n for n in names if n != master_file]),
         history=loaded.history,
         reapply=reapply.check(ws, jd_id, when),
         role_kind=role_kind.stored(ws, jd_id),
@@ -160,20 +167,25 @@ def generate(
     review: bool | None = None,
     limit: int | None = None,
     revisions: dict[str, tuple[str, str]] | None = None,
+    master: str | None = None,
 ) -> GenerateResult:
     """Run generate. `before_spend` is called once every refusal has passed and
     immediately before the first model call: the CLI prints its cost line there.
 
     The ad's stored context goes to every writer. `revisions` maps "resume" or
     "cover_letter" to (previous draft text, Alan's note): `services.revise`.
+    `master` is a master resume's id: its file is copied into the folder
+    unchanged, free, and a custom resume takes its skills order.
     """
     if supersede and overwrite:
         raise ValueError("supersede and overwrite are mutually exclusive")
     # None means "as configured"; both checks are on unless switched off.
     check_claims = config.check_claims if check_claims is None else check_claims
     review = config.review if review is None else review
-    if not (resume or cover or questions):
+    if not (resume or cover or questions or master):
         raise NothingSelected()
+    chosen_master = masters.find(ws, master) if master else None
+    needs_model = bool(resume or cover or questions)
 
     loaded = _load(ws, jd_id)
     jd, assessment = loaded.jd, loaded.assessment
@@ -200,9 +212,15 @@ def generate(
         if warning:
             warnings.append(warning)
 
+    review = review and needs_model
+    check_claims = check_claims and needs_model
+    master_file = masters.file_to_send(chosen_master).name if chosen_master else None
     names = planned_names(
-        jd, today, resume=resume, cover=cover, answers=bool(questions), review=review
+        jd, today, resume=resume, cover=cover, answers=bool(questions), review=review,
+        master_file=master_file,
     )
+    # The master copy is never "at risk": it is the same file every time.
+    names = [n for n in names if n != master_file]
     # With supersede the clash is expected: the folder is moved aside below.
     if not overwrite and not supersede:
         clashes = _clashes(ws, jd, today, names)
@@ -216,10 +234,12 @@ def generate(
     except ProfileError as exc:
         raise ProfileInvalid(str(exc)) from exc
 
+    kind = role_kind.stored(ws, jd_id)
     try:
-        client = get_client(CallType.generate, config, ctx)
-        kind = role_kind.stored(ws, jd_id)
-        classify_client = None if kind else get_client(CallType.classify, config, ctx)
+        client = get_client(CallType.generate, config, ctx) if needs_model else None
+        classify_client = (
+            None if kind or not needs_model else get_client(CallType.classify, config, ctx)
+        )
         review_client = (
             get_client(CallType.review, config, ctx) if (check_claims or review) else None
         )
@@ -241,10 +261,16 @@ def generate(
             with store.open_store(ws.db_path) as conn:
                 store.move_sent_folder(conn, ws.documents.folder_name(jd, today), moved)
 
-    # -- spending starts here ------------------------------------------------
-    if before_spend is not None:
-        before_spend()
     written: list[Path] = []
+    if chosen_master is not None:
+        # Free, so before any spend: the master to send, beside the letter.
+        source = masters.file_to_send(chosen_master)
+        target = ws.documents.path_for_write(jd, today, source.name)
+        written.append(_write(lambda: _copy(source, target), written))
+
+    # -- spending starts here ------------------------------------------------
+    if needs_model and before_spend is not None:
+        before_spend()
     issues = []
     per_document: dict[str, list] = {}  # what this run found, by document
     rewrites: dict[str, list] = {}  # each rejected draft's blockers, by document
@@ -255,7 +281,7 @@ def generate(
     on_resume: dict[str, str] = {}  # what the letter must not repeat
     rendered: dict[str, str] = {}  # what the reviewer reads
 
-    if kind is None:
+    if kind is None and needs_model:
         try:
             kind = role_kind.ensure(
                 ws, config, ctx, jd_id, client_factory=lambda: classify_client
@@ -268,8 +294,9 @@ def generate(
         length = resume_length(contract_block(profile, assessment.contract_offer, letter=False) is not None)
         # The chosen master's CORE SKILLS order, so a custom resume reads like
         # the master it stands in for (spec 004, T020).
-        chosen = masters.choose(ws, jd, kind)
-        skills_order = (chosen.master.skills_order or None) if chosen and chosen.master else None
+        # The master Alan picked, else the one suggested.
+        picked = chosen_master or getattr(masters.choose(ws, jd, kind), "master", None)
+        skills_order = (picked.skills_order or None) if picked else None
 
         def select(feedback: str | None = None):
             try:
@@ -459,6 +486,15 @@ def generate(
             )
         )
 
+    if not needs_model:
+        # A master copied alone: nothing was written by a model, so nothing to
+        # record, and the folder's assessment.md stays as the last run left it.
+        return GenerateResult(
+            folder=written[0].parent, written=written, issues=[], unused=[],
+            superseded=superseded, warnings=warnings, role_kind=kind, coverage=[],
+            claims=None, review=None, ready=False, resume_pages=None, copied_only=True,
+        )
+
     by_document, coverage_shown = _records(
         ws, jd, today, now, per_document, coverage, warnings, rewrites
     )
@@ -529,6 +565,16 @@ def _repair(config, ctx, profile, found, sentences, *, apply, sentences_of, chec
         for old, new in fixes.items()
     ]
     return candidate
+
+
+def _copy(source: Path, target: Path) -> Path:
+    import shutil
+
+    try:
+        shutil.copyfile(source, target)
+    except OSError as exc:
+        raise docs.DocsError(f"Could not copy {source.name} into {target.parent}: {exc}") from exc
+    return target
 
 
 def is_ready(issues, claims, reviewed) -> bool:

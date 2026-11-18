@@ -400,9 +400,12 @@ def _generate_choice(form, config) -> dict:
     # the only form that carries them; arriving from the ad page they take the
     # configured default.
     from_confirm = form.get("checks_shown") == "1"
+    master = str(form.get("master") or "").strip() or None
     return {
         "resume": form.get("resume") == "1",
         "cover": form.get("cover") == "1",
+        # A master resume copied into the folder: free, never generated.
+        "master": master if form.get("use_master") == "1" else None,
         "questions": questions,
         "overrule": form.get("overrule") == "1",
         "supersede": form.get("supersede") == "1",
@@ -429,20 +432,24 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     try:
         plan = documents.plan(
             ws, jd_id, resume=choice["resume"], cover=choice["cover"],
-            answers=bool(choice["questions"]), when=today,
+            answers=bool(choice["questions"]), when=today, master=choice["master"],
         )
     except NothingSelected:
         return _back_to_ad(request, jd_id, "Choose at least one document to generate.")
+    except UnknownMaster as exc:
+        return _back_to_ad(request, jd_id, f"No master resume called '{exc.name}'.")
     except NotScored:
         return _back_to_ad(request, jd_id, "Score this ad first: generation is shaped by the assessment.")
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    # Copying a master alone calls no model: no checks, no classifier.
+    model = bool(choice["resume"] or choice["cover"] or choice["questions"])
     estimate = costs.estimate(
         ws, config, "generate",
         resume=choice["resume"], cover=choice["cover"], answers=bool(choice["questions"]),
-        check_claims=choice["check_claims"], review=choice["review"],
-        jd_id=jd_id,
+        check_claims=choice["check_claims"] and model, review=choice["review"] and model,
+        jd_id=jd_id if model else None,
     )
     checks_cost = costs.estimate(
         ws, config, "generate", cover=True, check_claims=True, review=True
@@ -454,14 +461,22 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
             "nav": "ads",
             "plan": plan,
             "choice": choice,
-            "estimate": costs.describe(estimate),
+            "estimate": costs.describe(estimate) if model
+                        else "Free: copies the master resume, no model call.",
             "check_cost": costs.label_cost(checks_cost, "check_claims"),
             "review_cost": costs.label_cost(checks_cost, "review_documents"),
-            "missing": readiness.missing(ws, config, "generate"),
+            "missing": _missing_for(ws, config, choice),
             "problem": problem,
         },
         status_code=409 if problem else 200,
     )
+
+
+def _missing_for(ws, config, choice: dict) -> list[str]:
+    """What generate needs that is not set up. Copying a master alone needs no model."""
+    if not (choice["resume"] or choice["cover"] or choice["questions"]):
+        return []
+    return readiness.missing(ws, config, "generate")
 
 
 def _back_to_ad(request: Request, jd_id: int, problem: str, extra: dict | None = None):
@@ -493,9 +508,9 @@ async def generate_start(request: Request, jd_id: int):
     try:
         plan = documents.plan(
             ws, jd_id, resume=choice["resume"], cover=choice["cover"],
-            answers=bool(choice["questions"]), when=today,
+            answers=bool(choice["questions"]), when=today, master=choice["master"],
         )
-    except (NothingSelected, NotScored, NoSuchAd):
+    except (NothingSelected, NotScored, NoSuchAd, UnknownMaster):
         return _generate_confirm(request, jd_id, choice)
     # The same refusals the service would raise, checked here only so the page
     # can say so before a run exists. The service checks them again.
@@ -508,7 +523,7 @@ async def generate_start(request: Request, jd_id: int):
     if plan.clashes and not choice["supersede"]:
         return _generate_confirm(request, jd_id, choice,
                                  "Documents already exist. Tick the box to keep them under a dated name.")
-    missing = readiness.missing(ws, config, "generate")
+    missing = _missing_for(ws, config, choice)
     if missing:
         return _generate_confirm(request, jd_id, choice, "Nothing was started: " + " ".join(missing))
 
@@ -523,6 +538,7 @@ async def generate_start(request: Request, jd_id: int):
                 "title": plan.jd.title,
                 "resume": choice["resume"],
                 "cover": choice["cover"],
+                "master": choice["master"],
                 "answers": len(choice["questions"]),
                 "overrule": choice["overrule"],
                 "supersede": choice["supersede"],
@@ -534,7 +550,7 @@ async def generate_start(request: Request, jd_id: int):
                 resume=choice["resume"], cover=choice["cover"], questions=choice["questions"],
                 overrule=choice["overrule"], supersede=choice["supersede"], today=today,
                 check_claims=choice["check_claims"], review=choice["review"],
-                limit=choice["limit"],
+                limit=choice["limit"], master=choice["master"],
             ),
         )
     except RunInProgress:

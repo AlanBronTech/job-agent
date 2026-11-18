@@ -380,3 +380,79 @@ def test_validate_checks_skills_order_against_the_profile(tmp_path: Path, exampl
     profile = _profile_with_masters(tmp_path, example_dir, text)
     result = CliRunner().invoke(app, ["profile", "validate", "--dir", str(profile)])
     assert result.exit_code == 1 and "juggling" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# custom_advice: is a custom resume worth generating? (invented profile)
+# --------------------------------------------------------------------------- #
+
+from jobagent.core.masters import custom_advice  # noqa: E402
+from jobagent.core.models import FitAssessment, MasterChoice, MatchStatus, RequirementMatch, Verdict  # noqa: E402
+from jobagent.core.profile import load_profile  # noqa: E402
+
+
+def _assessment(*reqs: tuple[str, MatchStatus, str | None]) -> FitAssessment:
+    return FitAssessment(
+        jd_id=1, overall_score=70, recruiter_screen_score=60, verdict=Verdict.apply,
+        rationale="Invented.", target_role_match=True, target_role_note="Invented.",
+        requirements=[RequirementMatch(requirement=r, status=s, evidence_ref=e, note="n")
+                      for r, s, e in reqs],
+        scored_at=datetime(2026, 11, 19, tzinfo=timezone.utc),
+    )
+
+
+EM_CHOICE = MasterChoice(master=MASTERS[0], reason="Engineering Manager: a manager role.")
+
+
+def test_custom_not_recommended_when_the_master_names_every_cited_employer(example_dir) -> None:
+    profile = load_profile(example_dir)
+    advice = custom_advice(
+        EM_CHOICE,
+        _assessment(("Led teams", MatchStatus.met, "recent_manager.0"),
+                    ("Kubernetes", MatchStatus.gap, None)),  # a gap is never a reason
+        profile,
+        "Engineering Manager · Example Manufacturing Co 2024 – Present",
+    )
+    assert advice.recommended is False and advice.missing == []
+
+
+def test_custom_recommended_when_the_master_omits_a_cited_employer(example_dir) -> None:
+    profile = load_profile(example_dir)
+    advice = custom_advice(
+        EM_CHOICE,
+        _assessment(("Led teams", MatchStatus.met, "recent_manager"),
+                    ("Transport systems", MatchStatus.met, "gov_systems")),
+        profile,
+        "Example Manufacturing Co",
+    )
+    assert advice.recommended is True
+    assert advice.missing == [("Transport systems", "Example State Transport Authority")]
+    assert "Example State Transport Authority" in advice.reason
+
+
+def test_any_part_of_a_compound_employer_name_counts(example_dir) -> None:
+    profile = load_profile(example_dir)
+    advice = custom_advice(
+        EM_CHOICE, _assessment(("Payments", MatchStatus.met, "payments_lead.2")),
+        profile, "Team Lead · Example Payments",  # "Example EdTech / Example Payments"
+    )
+    assert advice.recommended is False
+
+
+def test_stories_and_unreadable_masters_give_no_false_advice(example_dir) -> None:
+    profile = load_profile(example_dir)
+    story_only = _assessment(("AI adoption", MatchStatus.met, "agentic_coding_adoption"))
+    assert custom_advice(EM_CHOICE, story_only, profile, "nothing").recommended is False
+    assert custom_advice(EM_CHOICE, story_only, profile, None).recommended is None
+    not_target = MasterChoice(not_a_target=True, reason="Not a target.")
+    assert custom_advice(not_target, story_only, profile, "x").recommended is False
+    assert custom_advice(None, story_only, profile, "x").recommended is None
+
+
+def test_a_years_requirement_never_asks_for_a_custom_resume(example_dir) -> None:
+    profile = load_profile(example_dir)
+    advice = custom_advice(
+        EM_CHOICE, _assessment(("10+ years in software delivery", MatchStatus.met, "gov_systems")),
+        profile, "Example Manufacturing Co",
+    )
+    assert advice.recommended is False

@@ -88,6 +88,8 @@ class GenerateResult:
     ready: bool = False
     # The resume's rendered length; None without a resume or LibreOffice.
     resume_pages: float | None = None
+    # Only a master resume was copied in: no model ran, so nothing to review.
+    copied_only: bool = False
 
 
 @dataclass

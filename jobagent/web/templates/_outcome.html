@@ -3,7 +3,8 @@
 {% set r = run.result %}
 <div class="outcome">
   {% if r.revision_note %}<p class="detail">Revised: “{{ r.revision_note }}”</p>{% endif %}
-  {% if r.blocked %}<p><span class="pill verdict-skip">not ready: blocker</span>
+  {% if r.copied_only %}<p class="detail">Master resume copied into the job folder unchanged; nothing was generated.</p>
+  {% elif r.blocked %}<p><span class="pill verdict-skip">not ready: blocker</span>
     Do not send these without fixing the blockers. An unsupported number means the claim is either invented or missing from the profile — check which before editing.</p>
   {% elif r.ready %}<p><span class="pill verdict-apply">ready</span> No blockers, and the review found nothing blocking.</p>
   {% elif r.review and r.review.state != "reviewed" %}<p><span class="pill warn">not reviewed</span>

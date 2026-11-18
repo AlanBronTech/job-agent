@@ -84,7 +84,7 @@
       — {{ d.role_kind.reason }}</p>{% endif %}
     {% if d.master %}<p class="detail"><strong>Resume:</strong>
       {{ describe_choice(d.master) }}
-      <span class="muted">A custom one instead: generate a resume below.</span></p>{% endif %}
+      <span class="muted">Copied into the job folder when you generate below.</span></p>{% endif %}
   </div>
 
   {% if a.constraints %}
@@ -151,8 +151,20 @@
 <h2>Generate</h2>
 <form class="panel" method="post" action="/ads/{{ jd.id }}/generate/confirm">
   <input type="hidden" name="csrf" value="{{ token }}">
-  <label><input type="checkbox" name="resume" value="1" checked> Resume</label>
-  <label><input type="checkbox" name="cover" value="1"> Cover letter</label>
+  {% set suggested = d.master.master.id if d.master and d.master.master else none %}
+  {% if d.masters %}
+  <label><input type="checkbox" name="use_master" value="1" {% if suggested %}checked{% endif %}>
+    Master resume <select name="master">
+    {% for m in d.masters %}<option value="{{ m.id }}" {% if m.id == suggested %}selected{% endif %}>{{ m.label }}{% if m.id == suggested %} (recommended){% endif %}</option>{% endfor %}
+    </select></label>
+  <p class="detail">Copied unchanged into the job folder, free, so it is there to send.</p>
+  {% endif %}
+  <label><input type="checkbox" name="resume" value="1" {% if not d.masters %}checked{% endif %}> Custom resume <span class="muted">(generated, paid)</span></label>
+  {% if d.custom and d.custom.recommended is not none %}
+  <p class="detail"><strong>{{ "Recommended" if d.custom.recommended else "Not recommended" }}:</strong>
+    {{ d.custom.reason.split(": ", 1)[-1] if d.custom.reason.startswith("Custom resume") else d.custom.reason }}</p>
+  {% elif d.custom %}<p class="detail">{{ d.custom.reason }}</p>{% endif %}
+  <label><input type="checkbox" name="cover" value="1" checked> Cover letter</label>
   <details>
     <summary>Application questions (optional)</summary>
     <p class="detail">One per line, pasted from the application form. Answers are written to <code>answers.md</code> to paste back.</p>

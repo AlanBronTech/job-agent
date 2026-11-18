@@ -13,14 +13,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jobagent.core import store
-from jobagent.core.masters import load_masters, select_master
+from jobagent.adapters.docx_writer import docx_text
+from jobagent.core.masters import CustomAdvice, custom_advice, load_masters, select_master
 from jobagent.core.models import (
+    FitAssessment,
     JobDescription,
     MasterChoice,
     MasterResume,
     RoleClassification,
 )
-from jobagent.core.profile import ProfileError
+from jobagent.core.profile import ProfileError, load_profile
 from jobagent.services.refusals import NoSuchAd, UnknownMaster
 from jobagent.services.workspace import Workspace
 
@@ -48,6 +50,51 @@ def choose(
             reason=f"No master chosen: the master list is invalid. {exc}"
         )
     return select_master(jd, kind, registry)
+
+
+def advise_custom(
+    ws: Workspace, choice: MasterChoice | None, assessment: FitAssessment | None
+) -> CustomAdvice:
+    """Whether a custom resume is worth generating beside the chosen master. Free."""
+    profile = None
+    if ws.profile_dir is not None:
+        try:
+            profile = load_profile(ws.profile_dir)
+        except ProfileError:
+            profile = None
+    master = choice.master if choice is not None else None
+    text = docx_text(master.docx) if master is not None else None
+    return custom_advice(choice, assessment, profile, text)
+
+
+def suggest(ws: Workspace, jd_id: int) -> tuple[MasterChoice | None, CustomAdvice | None]:
+    """The master suggested for a stored ad, and whether a custom resume is worth it.
+
+    Free. (None, None) for an ad that does not exist; the caller's own lookup
+    reports that.
+    """
+    with store.open_store(ws.db_path) as conn:
+        jd = store.get_jd(conn, jd_id)
+        if jd is None:
+            return None, None
+        kind = store.get_role_kind(conn, jd_id)
+        assessment = store.latest_assessment(conn, jd_id)
+    choice = choose(ws, jd, kind)
+    return choice, advise_custom(ws, choice, assessment) if assessment else None
+
+
+def file_to_send(master: MasterResume) -> Path:
+    """The master's file to send: the PDF when there is one."""
+    return master.pdf or master.docx
+
+
+def find(ws: Workspace, master_id: str) -> MasterResume:
+    """The registry's master with this id; UnknownMaster otherwise."""
+    listed = registry(ws)
+    found = next((m for m in listed if m.id == master_id), None)
+    if found is None:
+        raise UnknownMaster(master_id, [m.id for m in listed])
+    return found
 
 
 # --------------------------------------------------------------------------- #

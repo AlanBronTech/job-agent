@@ -28,6 +28,7 @@ from jobagent.services.refusals import (
     ProfileMissing,
     SupersedeFailed,
     PossiblySameJob,
+    UnknownMaster,
     SameJobRecently,
     VerdictIsSkip,
 )
@@ -40,7 +41,23 @@ err_console = Console(stderr=True)
 
 def generate(
     jd_id: int = typer.Argument(..., help="The JD id, from `jobagent jd list`."),
-    resume: bool = typer.Option(False, "--resume", help="Write a tailored resume."),
+    resume: bool = typer.Option(
+        False, "--resume",
+        help="A resume: a copy of the suggested master when there is one, else a "
+        "generated one. Free with a master.",
+    ),
+    custom: bool = typer.Option(
+        False, "--custom",
+        help="Generate a tailored resume (paid), whether or not a master is suggested.",
+    ),
+    master: str | None = typer.Option(
+        None, "--master",
+        help="Copy this master (its id in masters.yaml) instead of the suggested one.",
+    ),
+    no_master: bool = typer.Option(
+        False, "--no-master",
+        help="Do not copy a master into the job folder.",
+    ),
     cover: bool = typer.Option(False, "--cover", help="Write a cover letter."),
     answers: Path | None = typer.Option(
         None,
@@ -92,16 +109,24 @@ def generate(
         "Kept with the ad and given to every writer; see `jobagent context`.",
     ),
 ) -> None:
-    """Generate application documents for one job description."""
+    """Generate application documents for one job description.
+
+    The suggested master resume is copied into the job folder on every run
+    unless --no-master: free, and the file to send sits beside the letter.
+    """
     if supersede and overwrite:
         err_console.print(
             "[bold red]--supersede and --overwrite contradict each other.[/] "
             "One keeps the earlier documents, the other replaces them."
         )
         raise typer.Exit(code=2)
-    if not (resume or cover or answers):
+    if master and no_master:
+        err_console.print("[bold red]--master and --no-master contradict each other.[/]")
+        raise typer.Exit(code=2)
+    if not (resume or custom or master or cover or answers):
         err_console.print(
-            "[bold red]Nothing to generate.[/] Pass --resume, --cover, or --answers."
+            "[bold red]Nothing to generate.[/] Pass --resume, --custom, --master, "
+            "--cover, or --answers."
         )
         raise typer.Exit(code=2)
 
@@ -113,9 +138,13 @@ def generate(
     ws = Workspace.from_config(config)
     today = date.today()
 
+    master_id, custom = _which_resume(ws, jd_id, resume=resume, custom=custom,
+                                      master=master, no_master=no_master)
+
     try:
         planned = documents.plan(
-            ws, jd_id, resume=resume, cover=cover, answers=answers is not None, when=today
+            ws, jd_id, resume=custom, cover=cover, answers=answers is not None, when=today,
+            master=master_id,
         )
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
@@ -149,9 +178,10 @@ def generate(
             config,
             RunContext(command="generate", jd_id=jd_id),
             jd_id,
-            resume=resume,
+            resume=custom,
             cover=cover,
             questions=questions,
+            master=master_id,
             overrule=force,
             supersede=supersede,
             overwrite=overwrite,
@@ -160,7 +190,7 @@ def generate(
             before_spend=lambda: print_estimate(
                 config,
                 "generate",
-                resume=resume,
+                resume=custom,
                 cover=cover,
                 answers=bool(questions),
                 check_claims=check_claims,
@@ -213,10 +243,59 @@ def generate(
     if result.superseded is not None:
         console.print(f"[dim]Earlier documents kept in {config.output_dir / result.superseded}[/]")
     _report_coverage(result.coverage)
+    if result.copied_only:
+        console.print(f"\n[bold]{result.folder}[/]")
+        for path in result.written:
+            console.print(f"  [green]·[/] {path.name}")
+        console.print("\n[dim]Master copied unchanged; nothing was generated, so nothing to review.[/]")
+        return
     _report(result.folder, result.written, result.issues, result.unused)
     if result.resume_pages is not None:
         console.print(f"Resume: {result.resume_pages:.2f} pages, measured.")
+    if result.copied_only:
+        console.print("\n[dim]Master copied unchanged; nothing was generated, so nothing to review.[/]")
+        return
     _report_readiness(result)
+
+
+def _which_resume(ws, jd_id: int, *, resume: bool, custom: bool, master: str | None,
+                  no_master: bool) -> tuple[str | None, bool]:
+    """(master to copy, generate a custom resume?), and say which, before anything.
+
+    Pick, don't compose (D51): a master is copied whenever one is suggested or
+    named. `--resume` is generated only when there is no master list at all.
+    """
+    from jobagent.core.masters import describe_choice
+    from jobagent.services import masters
+
+    registry = masters.registry(ws)
+    if master is not None:
+        try:
+            chosen = masters.find(ws, master)
+        except UnknownMaster as exc:
+            known = ", ".join(exc.known) or "none"
+            err_console.print(f"[bold red]No master called {master!r}.[/] Listed: {known}.")
+            raise typer.Exit(code=2)
+        console.print(f"[bold]Resume:[/] {chosen.label} master, as asked: "
+                      f"{masters.file_to_send(chosen).name}.")
+        return chosen.id, custom
+    if not registry:
+        return None, custom or resume  # no masters: a resume is a generated one
+    choice, advice = masters.suggest(ws, jd_id)
+    if choice is not None:
+        console.print(f"[bold]Resume:[/] {describe_choice(choice)}")
+    if advice is not None and advice.recommended is not None:
+        console.print(f"  [dim]{advice.reason}[/]")
+    suggested = choice.master.id if choice is not None and choice.master is not None else None
+    if no_master:
+        return None, custom or resume  # a resume without a master is generated
+    if resume and suggested is None and not custom:
+        err_console.print(
+            "[bold red]No master to copy for this job.[/] Pass --master <id> to send one "
+            "anyway, or --custom to generate a tailored resume."
+        )
+        raise typer.Exit(code=2)
+    return suggested, custom
 
 
 _FAILED = {

@@ -16,13 +16,17 @@ and the web UI report a bad registry the same way they report a bad profile.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from jobagent.core.models import (
+    FitAssessment,
     JobDescription,
     MasterChoice,
     MasterResume,
     MastersFile,
+    MatchStatus,
+    Profile,
     RoleClassification,
     RoleKind,
     Seniority,
@@ -220,3 +224,97 @@ def describe_choice(choice: MasterChoice) -> str:
         return choice.reason
     send = choice.master.pdf or choice.master.docx
     return f"{choice.reason} Send {send.name}."
+
+
+# --------------------------------------------------------------------------- #
+# Whether a custom resume would add anything
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class CustomAdvice:
+    """Whether to generate a custom resume as well as, or instead of, the master.
+
+    `recommended` is None when nothing can be said (no master, or its text
+    could not be read). `missing` is (requirement, company) for each met
+    requirement whose cited employer the master never mentions.
+    """
+
+    recommended: bool | None
+    reason: str
+    missing: list[tuple[str, str]] = field(default_factory=list)
+
+
+_YEARS = re.compile(r"\b\d+\s*\+?\s*(?:years|yrs)\b", re.IGNORECASE)
+
+
+def _company_parts(company: str) -> list[str]:
+    """The names a master might use for an employer: "Sentral (Global
+    Payments)" is "Sentral" or "Global Payments"; "MLC / NAB" is either."""
+    parts = re.split(r"\s*(?:/|&|\(|\))\s*", company)
+    return [p.strip().casefold() for p in parts if len(p.strip()) >= 3]
+
+
+def _employer_of(ref: str, profile: Profile) -> str | None:
+    """The employer behind a cited id: a role, a founder entry or an earlier-career
+    line. None for a story, a differentiator or an AI-capability entry, which a
+    master cannot be checked against by name."""
+    entry_id = ref.partition(".")[0]
+    r = profile.roles
+    for entry in [*r.roles, *r.founder_track_record, *r.earlier_career]:
+        if entry.id == entry_id:
+            return entry.company
+    return None
+
+
+def custom_advice(
+    choice: MasterChoice | None,
+    assessment: FitAssessment | None,
+    profile: Profile | None,
+    master_text: str | None,
+) -> CustomAdvice:
+    """Free, in code: is a custom resume worth its cost for this ad?
+
+    A custom resume can only select and reorder what the profile holds, so it
+    beats the master only where the master leaves out evidence the scorer
+    relied on. The test: every met requirement's cited employer (role,
+    founder entry or earlier-career line) must be named in the master's text.
+    One that is not means the master omits evidence for something the ad asks
+    for, and a custom resume can include it. Gaps do not count: no resume
+    fixes a gap. Stories and differentiators are not checked by name, nor is a
+    years-of-experience requirement: the whole career answers it, whichever
+    old employer the scorer happened to cite.
+    """
+    if choice is None or choice.master is None:
+        if choice is not None and choice.not_a_target:
+            return CustomAdvice(False, "Not a target, so no resume is recommended.")
+        return CustomAdvice(None, "No master to compare with.")
+    label = choice.master.label
+    if master_text is None:
+        return CustomAdvice(None, f"The {label} master could not be read, so it was not compared.")
+    if assessment is None or profile is None:
+        return CustomAdvice(None, "Score the job first.")
+    text = master_text.casefold()
+    missing: list[tuple[str, str]] = []
+    for req in assessment.requirements:
+        if req.status is not MatchStatus.met or not req.evidence_ref:
+            continue
+        if _YEARS.search(req.requirement):
+            continue
+        company = _employer_of(req.evidence_ref, profile)
+        if company is None:
+            continue
+        if not any(part in text for part in _company_parts(company)):
+            missing.append((req.requirement, company))
+    if missing:
+        named = "; ".join(f"{company} (for “{req}”)" for req, company in missing)
+        return CustomAdvice(
+            True,
+            f"Custom resume recommended: the {label} master does not mention {named}.",
+            missing,
+        )
+    return CustomAdvice(
+        False,
+        f"Custom resume not recommended: the {label} master names every employer "
+        "the score cites for a met requirement.",
+    )

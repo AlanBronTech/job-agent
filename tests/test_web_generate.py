@@ -273,10 +273,12 @@ def test_ui_runs_are_logged_as_source_ui(client, ids, model, monkeypatch):
 # -- spec 003: the checks, readiness, the letter opt-in --------------------------
 
 
-def test_the_letter_starts_unticked_on_the_ad_page(client, ids):
-    page = client.get(f"/ads/{ids['acme']}").text
-    assert '<input type="checkbox" name="resume" value="1" checked>' in page
-    assert '<input type="checkbox" name="cover" value="1">' in page
+def test_without_masters_the_letter_and_a_custom_resume_start_ticked(client, ids):
+    # No master registry: a generated resume is the only resume there is.
+    page = " ".join(client.get(f"/ads/{ids['acme']}").text.split())
+    assert '<input type="checkbox" name="resume" value="1" checked> Custom resume' in page
+    assert '<input type="checkbox" name="cover" value="1" checked>' in page
+    assert 'name="use_master"' not in page
 
 
 def test_confirm_offers_both_checks_with_their_costs_review_unticked(client, ids, model):

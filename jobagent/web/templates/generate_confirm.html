@@ -13,6 +13,7 @@
   <input type="hidden" name="confirmed" value="1">
   {% if choice.resume %}<input type="hidden" name="resume" value="1">{% endif %}
   {% if choice.cover %}<input type="hidden" name="cover" value="1">{% endif %}
+  {% if choice.master %}<input type="hidden" name="use_master" value="1"><input type="hidden" name="master" value="{{ choice.master }}">{% endif %}
   <textarea name="questions" hidden>{{ choice.questions | join('\n') }}</textarea>
   {% if choice.limit %}<input type="hidden" name="limit" value="{{ choice.limit }}">{% endif %}
 

@@ -44,6 +44,7 @@ def generate(
     check_claims: bool = True,
     review: bool = True,
     limit: int | None = None,
+    master: str | None = None,
 ):
     def work() -> dict:
         try:
@@ -52,7 +53,7 @@ def generate(
                 resume=resume, cover=cover, questions=questions,
                 overrule=overrule, supersede=supersede,
                 today=today, now=datetime.now(),
-                check_claims=check_claims, review=review, limit=limit,
+                check_claims=check_claims, review=review, limit=limit, master=master,
             )
         except GenerationFailed as failure:
             message = f"{_STAGE[failure.stage]}: {failure.cause}"
@@ -110,6 +111,7 @@ def _generated(jd_id: int, result) -> dict:
         "claims_not_checked": getattr(result.claims, "reason", None),
         "superseded": result.superseded.name if result.superseded else None,
         "warnings": result.warnings,
+        "copied_only": getattr(result, "copied_only", False),
     }
 
 

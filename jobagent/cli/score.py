@@ -289,7 +289,7 @@ def _render(
         header.add_row(
             "resume",
             f"{line}  [dim]A custom one instead: "
-            f"`jobagent generate {fit.jd_id} --resume`.[/]",
+            f"`jobagent generate {fit.jd_id} --custom`.[/]",
         )
 
     console.print(
