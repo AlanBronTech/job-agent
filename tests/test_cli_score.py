@@ -235,7 +235,7 @@ def test_score_last_shows_the_master_to_send(tmp_path, monkeypatch) -> None:
     assert "resume" in out
     assert "Engineering Manager: a Team Lead role" in out
     assert "Sam-Resume-Manager.pdf" in out
-    assert f"jobagent generate {jd_id} --resume" in out  # a custom one stays available
+    assert f"jobagent generate {jd_id} --custom" in out  # a custom one stays available
 
 
 def test_score_last_without_masters_shows_no_resume_line(wired) -> None:

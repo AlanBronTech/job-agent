@@ -350,3 +350,19 @@ def _apply_bullet_numbering(para: Paragraph) -> None:
     numbering.append(level)
     numbering.append(num_id)
     para._p.get_or_add_pPr().append(numbering)
+
+
+def docx_text(path: Path) -> str | None:
+    """Every paragraph and table cell of a .docx as plain text; None if it cannot be read.
+
+    For comparing a hand-written master with the profile, never for writing.
+    """
+    try:
+        document = Document(str(path))
+    except Exception:  # noqa: BLE001 - a missing or corrupt file is "unreadable"
+        return None
+    lines = [p.text for p in document.paragraphs]
+    for table in document.tables:
+        for row in table.rows:
+            lines += [cell.text for cell in row.cells]
+    return "\n".join(lines)

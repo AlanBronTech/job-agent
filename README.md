@@ -39,8 +39,14 @@ including the `?t=…` part, or the buttons will be refused.
   capture cut off at "…more" is refused, and a thin one is flagged.
 - **Score.** A button on every ad, and *Re-score* on a scored or stale one. A
   stub needs a box ticked before it will score, as `--force` does.
-- **Generate.** Tick resume and letter, paste application questions if there
-  are any, and you get a confirmation page first: the files it will write, the
+- **Generate.** With master resumes, the form starts with the recommended
+  master ticked (a drop-down to pick another), the cover letter ticked, and
+  *Custom resume* unticked, with a line saying whether a custom one is
+  recommended (see *Master resumes*). The ticked master is copied, unchanged
+  and free, into the job's folder in `OUTPUT_DIR`, so the file to send sits
+  beside the letter; on its own it calls no model and moves nothing aside.
+  Paste application questions if there are any, and you get a confirmation
+  page first: the files it will write, the
   measured cost, the scorer's reasons if it said skip (with a box to overrule
   it, recorded as `--force` records it), and any documents already there.
   Nothing is spent until you confirm. The result shows every validation issue
@@ -176,7 +182,7 @@ ads stored before this existed.
 
 You keep a small set of hand-written master resumes, and JobAgent picks one
 for each ad instead of writing a new resume every time. It never edits them.
-A tailored resume is still there whenever you want one (`generate --resume`).
+A tailored resume is still there whenever you want one (`generate --custom`).
 
 They live in `profile/resumes/` (gitignored with the rest of `profile/`), as a
 .docx and a .pdf each, listed in `profile/resumes/masters.yaml`:
@@ -206,8 +212,18 @@ the choice and why, for example:
 
 ```
 resume   Engineering Manager: a manager role. Send AlanBron-Resume-EM.pdf.
-         A custom one instead: `jobagent generate 125 --resume`.
+         A custom one instead: `jobagent generate 125 --custom`.
 ```
+
+**Is a custom resume worth it?** The job's page says, free and in code. For
+each requirement the score marks met, it takes the employer the scorer cited
+(a role, founder entry or earlier-career line) and looks for that name in the
+master's text. If the master never mentions one, a custom resume is
+recommended, because it can include that evidence; otherwise not. Gaps never
+count (no resume fixes a gap), nor do years-of-experience requirements (the
+whole career answers those), nor stories and differentiators, which cannot be
+looked up by name. On 2026-11-19 it said "not recommended" for all 113 scored
+jobs: the masters name every employer the scorer leans on.
 
 **Replacing a master.** Move the old .docx and .pdf to
 `profile/resumes/old-resumes/` with the date it was retired in the name
@@ -347,13 +363,23 @@ If you disagree, see step 3.
 
 ### 3. Generate the documents
 
-Usually only the cover letter: the score names the master resume to send
-(see *Master resumes*). Generate a resume when you want a tailored one.
+Usually only the cover letter. Every run copies the suggested master resume
+(see *Master resumes*) unchanged into the job folder, free, and prints which
+master and whether a custom resume is recommended. Generate a custom one only
+when you want it.
 
 ```
-jobagent generate 22 --cover              # the usual case: a master goes as the resume
-jobagent generate 22 --resume --cover     # a tailored resume as well
+jobagent generate 22 --cover              # the usual case: the letter, plus the master copied in
+jobagent generate 22 --resume             # just the master copied in; no model, no cost
+jobagent generate 22 --cover --master ai  # copy a different master
+jobagent generate 22 --custom --cover     # a tailored resume as well (paid)
+jobagent generate 22 --cover --no-master  # no master copied
 ```
+
+`--resume` means "a resume": the suggested master when there is one. It is
+generated only when there is no `masters.yaml` at all, or with `--no-master`.
+For a job with no master to send (not a target), `--resume` stops and asks for
+`--master <id>` or `--custom`.
 
 Costs about 14 cents; the command prints its measured estimate before it
 spends. If the verdict was `skip`, it refuses:
@@ -495,7 +521,7 @@ yourself. Ten minutes, not two hours.
 ```
 jobagent revise 22 --cover --note "lead with the payments work; drop the second paragraph"
 jobagent context 22 "Recruiter said they care most about payments"   # before generating
-jobagent generate 22 --resume --cover --context "Hiring manager is ex-Atlassian"
+jobagent generate 22 --cover --context "Hiring manager is ex-Atlassian"
 jobagent notes                                                        # what you keep asking for
 ```
 
@@ -641,7 +667,12 @@ whole ad. Expand the description, save the page again, re-add it.
 
 `jobagent generate <jd_id>` with at least one of:
 
-- `--resume` — a tailored resume.
+- `--resume` — a resume: the suggested master copied in (free), or a
+  generated one when there is no master list.
+- `--custom` — a tailored, generated resume (paid).
+- `--master <id>` — copy this master instead of the suggested one.
+  `--no-master` copies none. Without either, every run copies the suggested
+  master.
 - `--cover` — a cover letter.
 - `--answers <path>` — a text file of application questions, one per line;
   writes `answers.md` with a short and a long answer to each, starting from

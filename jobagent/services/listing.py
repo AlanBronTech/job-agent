@@ -24,6 +24,7 @@ from jobagent.core.models import (
     RoleClassification,
     Verdict,
 )
+from jobagent.core.masters import CustomAdvice
 from jobagent.services import masters, outputs, revise, sent
 from jobagent.services.refusals import NoSuchAd
 from jobagent.services.workspace import Workspace
@@ -63,6 +64,8 @@ class AdDetail:
     master: MasterChoice | None = None
     # Every master, for the pipeline form's "resume sent" choice.
     masters: list[MasterResume] = field(default_factory=list)
+    # Whether a custom resume is worth generating beside the master (free).
+    custom: CustomAdvice | None = None
 
 
 def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
@@ -114,6 +117,7 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         application = store.get_application(conn, jd_id)
         kind = store.get_role_kind(conn, jd_id)
         context = store.get_context(conn, jd_id)
+    choice = masters.choose(ws, jd, kind)
     return AdDetail(
         jd=jd,
         assessment=assessment,
@@ -125,6 +129,7 @@ def ad_detail(ws: Workspace, jd_id: int, *, today: date) -> AdDetail:
         sent=sent.summary(ws, jd_id, today),
         context=context,
         revisable=revise.revisable(ws, jd_id, today),
-        master=masters.choose(ws, jd, kind),
+        master=choice,
         masters=masters.registry(ws),
+        custom=masters.advise_custom(ws, choice, assessment) if assessment else None,
     )

@@ -341,3 +341,81 @@ def test_the_switches_reach_the_service(wired, monkeypatch) -> None:
     monkeypatch.setattr(documents, "generate", stop)
     runner.invoke(app, ["generate", str(jd_id), "--resume", "--force", "--no-review"])
     assert seen == {"check_claims": True, "review": False}
+
+
+# --------------------------------------------------------------------------- #
+# Master resumes: copy the suggested master, generate only when asked
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def with_masters(tmp_path, monkeypatch):
+    from tests.ui_seed import masters_profile
+
+    config = Config(
+        _env_file=None,
+        db_path=tmp_path / "jobagent.db",
+        output_dir=tmp_path / "out",
+        profile_dir=masters_profile(tmp_path),
+    )
+    monkeypatch.setattr(generate_cli, "get_config", lambda: config)
+
+    def no_model(*a, **k):
+        raise AssertionError("a model client was built")
+
+    monkeypatch.setattr(generate_cli.documents, "get_client", no_model)
+    return config
+
+
+def out_files(config) -> list[str]:
+    return sorted(p.name for p in config.output_dir.glob("*/*") if p.is_file())
+
+
+def seed_manager_role(config) -> int:
+    with store.open_store(config.db_path) as conn:
+        jd_id = store.add_jd(conn, make_jd("Engineering Manager"))
+        store.add_assessment(conn, FitAssessment(
+            jd_id=jd_id, overall_score=70, recruiter_screen_score=60, verdict=Verdict.apply,
+            rationale="Invented.", target_role_match=True, target_role_note="Invented.",
+            scored_at=NOW,
+        ))
+        return jd_id
+
+
+def test_resume_copies_the_suggested_master_and_spends_nothing(with_masters) -> None:
+    jd_id = seed_manager_role(with_masters)
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+    assert result.exit_code == 0, result.output
+    assert out_files(with_masters) == ["Sam-Resume-Manager.pdf"]
+    assert "Engineering Manager: a manager role." in result.output
+    assert "nothing was generated" in result.output
+
+
+def test_master_picks_another_and_an_unknown_one_is_refused(with_masters) -> None:
+    jd_id = seed_manager_role(with_masters)
+    assert runner.invoke(app, ["generate", str(jd_id), "--master", "ai"]).exit_code == 0
+    assert out_files(with_masters) == ["Sam-Resume-AI.docx"]
+    refused = runner.invoke(app, ["generate", str(jd_id), "--master", "executive"])
+    assert refused.exit_code == 2 and "executive" in refused.output
+
+
+def test_a_not_a_target_job_has_no_master_to_copy(with_masters) -> None:
+    with store.open_store(with_masters.db_path) as conn:
+        jd_id = store.add_jd(conn, make_jd("Senior Software Engineer"))  # permanent, hands-on
+        store.add_assessment(conn, FitAssessment(
+            jd_id=jd_id, overall_score=70, recruiter_screen_score=60, verdict=Verdict.apply,
+            rationale="Invented.", target_role_match=True, target_role_note="Invented.",
+            scored_at=NOW,
+        ))
+    result = runner.invoke(app, ["generate", str(jd_id), "--resume"])
+    assert result.exit_code == 2 and "--custom" in result.output
+    assert out_files(with_masters) == []
+
+
+def test_custom_and_no_master_reach_the_model(with_masters) -> None:
+    # The model is refused by the fixture, so reaching it is the proof.
+    jd_id = seed_manager_role(with_masters)
+    for args in (["--custom", "--no-master"], ["--resume", "--no-master"]):
+        result = runner.invoke(app, ["generate", str(jd_id), *args])
+        assert isinstance(result.exception, AssertionError), args
+    assert out_files(with_masters) == []
