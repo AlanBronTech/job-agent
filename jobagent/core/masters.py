@@ -249,8 +249,8 @@ _YEARS = re.compile(r"\b\d+\s*\+?\s*(?:years|yrs)\b", re.IGNORECASE)
 
 
 def _company_parts(company: str) -> list[str]:
-    """The names a master might use for an employer: "Sentral (Global
-    Payments)" is "Sentral" or "Global Payments"; "MLC / NAB" is either."""
+    """The names a master might use for an employer: "Example EdTech (Example
+    Payments)" is either name; so is "Example Bank / Example Wealth"."""
     parts = re.split(r"\s*(?:/|&|\(|\))\s*", company)
     return [p.strip().casefold() for p in parts if len(p.strip()) >= 3]
 
