@@ -11,7 +11,7 @@ Score several with `jobagent score 63 64 65`; generate stays per ad.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import typer
 from rich.console import Console
@@ -21,7 +21,8 @@ from jobagent.adapters.llm import CallType, get_client
 from jobagent.config import get_config
 from jobagent.core.models import ApplicationStatus
 from jobagent.core.store import StoreError
-from jobagent.services import batches, costs, pipeline
+from jobagent.cli.binned import print_sweep
+from jobagent.services import batches, costs, pipeline, retention
 from jobagent.services.refusals import NoSuchAd
 from jobagent.services.workspace import Workspace
 
@@ -39,6 +40,7 @@ def show(ctx: typer.Context) -> None:
         return
     config = get_config()
     ws = Workspace.from_config(config)
+    print_sweep(console, retention.sweep(ws, datetime.now(timezone.utc)))
     new = batches.new_files(ws)
     if new:
         console.print(f"[bold]{len(new)} new saved ad(s)[/] in {ws.jd_dir}:")
@@ -117,6 +119,7 @@ def skip(ids: list[int] = typer.Argument(..., help="JD ids to record as not appl
             err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
             continue
         console.print(f"JD {jd_id} [dim]not_applied  {jd.title}" + (f" · {jd.company}" if jd.company else "") + "[/]")
+        print_sweep(console, retention.bin_closed(ws, jd_id))
 
 
 # --------------------------------------------------------------------------- #

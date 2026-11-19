@@ -23,6 +23,9 @@ class Workspace:
     runs_log_path: Path
     jd_dir: Path
     documents: DocumentStore
+    # The bin saved ads are moved to. None moves nothing: a workspace built by
+    # hand (tests, the demo) never touches the real bin.
+    trash_dir: Path | None = None
 
     @classmethod
     def from_config(cls, config) -> Workspace:
@@ -34,4 +37,5 @@ class Workspace:
             runs_log_path=config.runs_log_path,
             jd_dir=config.jd_dir,
             documents=LocalFolderStore(config.output_dir),
+            trash_dir=config.trash_dir,
         )

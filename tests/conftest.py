@@ -88,3 +88,8 @@ def edit_yaml(path: Path, change: Callable[[dict], None]) -> None:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     change(data)
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+@pytest.fixture(autouse=True)
+def no_real_bin(monkeypatch, tmp_path_factory):
+    """No test moves a file into the real macOS bin."""
+    monkeypatch.setenv("TRASH_DIR", str(tmp_path_factory.mktemp("trash")))

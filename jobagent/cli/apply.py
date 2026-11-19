@@ -16,7 +16,8 @@ from jobagent.core import store
 from jobagent.core.models import ApplicationStatus, Worth
 from jobagent.core.store import StoreError
 from jobagent.core.profile import ProfileError
-from jobagent.services import masters, pipeline
+from jobagent.cli.binned import print_sweep
+from jobagent.services import masters, pipeline, retention
 from jobagent.services.refusals import NoSuchAd, UnknownMaster
 from jobagent.services.workspace import Workspace
 
@@ -310,9 +311,10 @@ def _save(
     resume_suggested: str | None = None,
 ) -> None:
     config = get_config()
+    ws = Workspace.from_config(config)
     try:
         jd, _ = pipeline.save(
-            Workspace.from_config(config),
+            ws,
             jd_id,
             status=status,
             applied_on=applied_on,
@@ -334,6 +336,7 @@ def _save(
     label = f"{jd.title}" + (f" · {jd.company}" if jd.company else "")
     style = _STATUS_STYLE[status]
     console.print(f"JD {jd_id} [{style}]{status.value}[/]  [dim]{label}[/]")
+    print_sweep(console, retention.bin_closed(ws, jd_id))
 
     if worth is None and status not in {
         ApplicationStatus.identified,

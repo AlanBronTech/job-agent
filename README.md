@@ -632,6 +632,7 @@ a case is recorded but cannot be marked.
 | `jobagent jd show <jd_id>` | One ad in full, as parsed. |
 | `jobagent jd same <jd_id> yes\|no` | Answer "possibly the same job as an earlier application?" Free. |
 | `jobagent jd backfill` | Fill in requisition numbers and source files for older ads. Free. |
+| `jobagent jd prune [--dry-run]` | Move saved ads JobAgent no longer needs to the bin. Free. |
 | `jobagent batch [parse\|skip IDS]` | Several ads at once; see *Several ads at once*. |
 
 `jd add` options:
@@ -931,7 +932,7 @@ tight, not as the default.
 
 | Path | What it holds |
 |---|---|
-| `~/job-agent-jds/` | Saved job ads. Print pages to PDF into here. |
+| `~/job-agent-jds/` | Saved job ads. Print pages to PDF into here. A file moves to the macOS bin when its job closes unsuccessfully (rejected, no reply, went quiet, chose not to apply) or 30 days after it was added; the ad's text stays in the database. Files never added are listed by `jd prune`, never moved. `batch`, the Add page and recording an outcome do this for you. |
 | `~/job-agent-out/` | One folder per application: documents, assessment, ad; `.generated/` and `sent/` inside it. |
 | `~/.job-agent/jobagent.db` | The store — ads, assessments, applications. |
 | `profile/` | You, as data. Everything generated is built from this. |
