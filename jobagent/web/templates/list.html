@@ -4,7 +4,8 @@
 {% block main %}
 <script src="/static/filters.js" defer></script>
 <div class="heading-row">
-  <h1>Jobs <span class="muted count">{{ rows | length }}{% if rows | length != total %} of {{ total }}{% endif %}</span></h1>
+  <h1>Jobs</h1>
+  <a class="button primary" href="/ads/new"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add a job</a>
 </div>
 {% if alerts_pending %}
   <div class="banner warn"><a href="/alerts/review">{{ alerts_pending }} job{{ "s" if alerts_pending != 1 }} from your alert emails to look at →</a></div>
@@ -12,75 +13,106 @@
 {% if alerts_waiting %}
   <div class="banner warn"><a href="/alerts">{{ alerts_waiting }} job{{ "s" if alerts_waiting != 1 }} you're interested in still need{{ "" if alerts_waiting != 1 else "s" }} the ad saved as PDF →</a></div>
 {% endif %}
-{% if total %}
-{# A plain GET form: every view is a URL, so it can be bookmarked and Back works.
-   filters.js submits it on change; the button is there without JavaScript. #}
-<form class="filters" method="get" action="/" data-autosubmit>
-  <label>Stage
-    <select name="stage">
-      {% for key, (label, _) in stages.items() %}
-      <option value="{{ key }}" {% if key == view.stage %}selected{% endif %}>{{ label }} ({{ counts[key] }})</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Added
-    <select name="days">
-      <option value="">any time</option>
-      {% for d in day_choices %}<option value="{{ d }}" {% if view.days == d %}selected{% endif %}>last {{ d }} days</option>{% endfor %}
-    </select>
-  </label>
-  <label>Verdict
-    <select name="verdict">
-      <option value="">any</option>
-      {% for key, label in verdicts.items() %}<option value="{{ key }}" {% if view.verdict == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Type
-    <select name="work">
-      <option value="">any</option>
-      {% for key, label in work_types.items() %}<option value="{{ key }}" {% if view.work == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Sort
-    <select name="sort">
-      {% for key, label in sorts.items() %}<option value="{{ key }}" {% if view.sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-  </label>
-  <label class="search">Search
-    <input type="search" name="q" value="{{ view.q }}" placeholder="company, title, requisition">
-  </label>
-  <button type="submit">Show</button>
-  {% if view.narrowed or view.stage != "open" or view.sort != "date" %}<a href="/" class="muted">reset</a>{% endif %}
-</form>
-{% endif %}
 {% if not total %}
   <p class="empty">No jobs yet. Add one with <code>jobagent jd add --latest</code>.</p>
-{% elif not rows %}
+{% else %}
+
+<nav class="tabs" aria-label="Stage">
+  {% for key in tab_stages %}
+  <a href="{{ view.url(stage=key) }}" {% if view.stage == key %}aria-current="page"{% endif %}>{{ stages[key][0] | replace("↳ ", "") }} <span class="tab-count">{{ counts[key] }}</span></a>
+  {% endfor %}
+  {% set in_more = view.stage not in tab_stages %}
+  <details class="menu">
+    <summary {% if in_more %}aria-current="page"{% endif %}>{% if in_more %}{{ view.stage_label }} <span class="tab-count">{{ counts[view.stage] }}</span>{% else %}More{% endif %}
+      <svg class="icon small" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div class="menu-list">
+      {% for key, (label, _) in stages.items() if key not in tab_stages %}
+      <a href="{{ view.url(stage=key) }}" {% if view.stage == key %}aria-current="page"{% endif %}>{{ label | replace("↳ ", "") }} <span class="muted">{{ counts[key] }}</span></a>
+      {% endfor %}
+    </div>
+  </details>
+</nav>
+
+{# A plain GET form: every view is a URL, so it can be bookmarked and Back works.
+   filters.js applies a choice at once and searches as you type; without it,
+   Enter or the Show button does the same. #}
+<form class="toolbar" method="get" action="/" data-autosubmit>
+  {% if view.stage != "open" %}<input type="hidden" name="stage" value="{{ view.stage }}">{% endif %}
+  <label class="search">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input type="search" name="q" value="{{ view.q }}" placeholder="Search company, title or requisition" aria-label="Search jobs">
+  </label>
+  <label class="select {% if view.days %}on{% endif %}"><span>Added</span>
+    <select name="days">
+      <option value="">Any time</option>
+      {% for d in day_choices %}<option value="{{ d }}" {% if view.days == d %}selected{% endif %}>Last {{ d }} days</option>{% endfor %}
+    </select>
+  </label>
+  <label class="select {% if view.verdict %}on{% endif %}"><span>Verdict</span>
+    <select name="verdict">
+      <option value="">Any</option>
+      {% for key, label in verdicts.items() %}<option value="{{ key }}" {% if view.verdict == key %}selected{% endif %}>{{ label | capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="select {% if view.work %}on{% endif %}"><span>Type</span>
+    <select name="work">
+      <option value="">Any</option>
+      {% for key, label in work_types.items() %}<option value="{{ key }}" {% if view.work == key %}selected{% endif %}>{{ label | capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <span class="toolbar-gap"></span>
+  <label class="select"><span>Sort</span>
+    <select name="sort">
+      {% for key, label in sorts.items() %}<option value="{{ key }}" {% if view.sort == key %}selected{% endif %}>{{ label | capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="js-hide">Show</button>
+</form>
+
+<div class="showing">
+  <span class="muted">Showing {{ rows | length }} of {{ counts[view.stage] }} {{ view.stage_label | lower if view.stage != "all" else "" }} job{{ "s" if counts[view.stage] != 1 }}{% if view.stage != "all" %} · {{ total }} in all{% endif %}</span>
+  {% for label, without in view.chips() %}
+  <span class="chip">{{ label }}<a href="{{ without }}" aria-label="Remove filter: {{ label }}"><svg class="icon small" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a></span>
+  {% endfor %}
+  {% if view.narrowed %}<a href="{{ view.url(days='', verdict='', work='', q='') }}">Clear all</a>{% endif %}
+</div>
+
+{% if not rows %}
   <p class="empty">No jobs match. <a href="/?stage=all">Show all {{ total }}</a></p>
 {% else %}
 <div class="table-wrap">
 <table class="ads">
   <thead>
     <tr>
-      <th class="num">id</th><th>Role</th><th>{% if view.sort == "activity" %}Last activity{% else %}Captured{% endif %}</th><th>Verdict</th>
-      <th class="num" title="Hiring manager / recruiter screen">Score</th><th>Status</th><th>Docs</th>
+      <th>Role</th>
+      <th>{% if view.sort == "activity" %}Last activity{% else %}Added{% endif %}</th>
+      <th>Verdict</th>
+      <th title="Hiring-manager fit · recruiter screen, out of 100">Fit · Screen</th>
+      <th>Status</th>
+      <th class="num">Docs</th>
     </tr>
   </thead>
   <tbody>
   {% for r in rows %}
+    {% set when = r.last_activity if view.sort == "activity" else r.captured %}
     <tr>
-      <td class="num muted">{{ r.jd_id }}</td>
-      <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
-        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div></td>
-      <td class="muted nowrap">{{ (r.last_activity if view.sort == "activity" else r.captured) | local("%-d %b %Y") }}</td>
-      <td>{{ verdict(r.verdict) }}{% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
-      <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td><a class="role" href="/ads/{{ r.jd_id }}">{{ r.title }}</a>
+        <div class="muted small">{{ r.company or "Unknown company" }} <span class="faint">· #{{ r.jd_id }}</span>{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div></td>
+      <td class="muted nowrap" title="{{ when | local('%-d %b %Y') }}">{{ when | ago(today) }}</td>
+      <td>{% if r.verdict %}{{ verdict(r.verdict) }}{% else %}
+        <form class="inline" method="post" action="/ads/{{ r.jd_id }}/score/confirm">
+          <input type="hidden" name="csrf" value="{{ token }}">
+          <button type="submit" class="link-button" title="Shows the cost before anything is spent"><svg class="icon small" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Score</button>
+        </form>{% endif %}
+        {% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
+      <td class="nowrap tabular">{% if r.overall_score is not none %}<span class="fit fit-{{ 'high' if r.overall_score >= 70 else ('mid' if r.overall_score >= 50 else 'low') }}">{{ r.overall_score }}</span> <span class="muted small">· {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td>{% include "_status_cell.html" %}</td>
-      <td>{% if r.has_documents %}<span title="Documents on disk">●</span>{% endif %}</td>
+      <td class="num">{% if r.has_documents %}<a class="docs" href="/ads/{{ r.jd_id }}#documents" title="Documents" aria-label="Documents for JD {{ r.jd_id }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>{% if r.doc_count %}{{ r.doc_count }}{% endif %}</a>{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

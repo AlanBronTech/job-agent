@@ -4,7 +4,7 @@
 <form class="status-cell" hx-post="/ads/{{ r.jd_id }}/status" hx-trigger="change" hx-swap="outerHTML">
   <input type="hidden" name="csrf" value="{{ token }}">
   <select name="status" aria-label="Status of JD {{ r.jd_id }}" class="status-{{ current or 'none' }}">
-    {% if not current %}<option value="" selected>—</option>{% endif %}
+    {% if not current %}<option value="" selected>To decide</option>{% endif %}
     {% for value, label in pipeline.statuses.items() %}
     <option value="{{ value }}" {% if value == current %}selected{% endif %}>{{ label }}</option>
     {% endfor %}

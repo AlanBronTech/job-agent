@@ -90,9 +90,10 @@ def test_list_shows_every_ad_newest_first(client, ids):
     order = [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)]
     assert order == [ids["contoso"], ids["fabrikam"], ids["acme"], ids["northwind"], ids["northwind_old"]]
     body = text(page)
-    assert "78 / 70" in body and "41 / 35" in body
+    assert "78 · 70" in body and "41 · 35" in body
     assert 'value="rejected_screen" selected' in page.text
-    assert "not scored" in body and "stale" in body
+    assert "Score" in body and "stale" in body
+    assert f'action="/ads/{ids["contoso"]}/score/confirm"' in page.text  # unscored: a Score button
 
 
 def test_list_by_score(client, ids):
@@ -104,15 +105,15 @@ def test_list_opens_on_open_jobs_and_says_how_many_are_hidden(client, ids):
     page = client.get("/")
     order = [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)]
     assert ids["northwind_old"] not in order  # rejected at screening: closed
-    assert "4 of 5" in text(page)
-    assert '<option value="open" selected>Open (4)</option>' in page.text
+    assert "Showing 4 of 4 open jobs · 5 in all" in text(page)
+    assert '<a href="/" aria-current="page">Open <span class="tab-count">4</span>' in page.text
 
 
 def test_list_filters_are_a_url(client, ids):
     page = client.get("/?stage=rejected_screen&sort=oldest")
     assert [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)] == [ids["northwind_old"]]
     assert '<option value="oldest" selected>' in page.text
-    assert "reset" in page.text
+    assert 'aria-current="page">Rejected at screening' in page.text  # under More
 
 
 def test_list_search_and_nothing_matching(client, ids):
