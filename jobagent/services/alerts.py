@@ -189,6 +189,12 @@ def _judge(row, parsed, rules, filters, conn, ads, applications, outside) -> Non
     verdict = core.judge(parsed, rules, min_salary=filters[0], min_day_rate=filters[1])
     row.verdict, row.reason = verdict.verdict, verdict.reason
     if row.verdict is AlertVerdict.skip:
+        # Skipped on its title, but the job may already be in JobAgent (added
+        # from a saved page before the email came): link it all the same, or
+        # the Alerts page offers to add a job already applied for (JD 132,
+        # 2026-11-19). The title reason stays, for `--skipped` to audit.
+        row.jd_id = next((ad.id for ad in ads if core.job_key(ad.source_url) == (row.source, row.job_id)),
+                         row.jd_id)
         return
     known = _already_known(row, conn, ads, applications, outside)
     if known:
@@ -423,7 +429,29 @@ def match_saved_files(ws: Workspace, now: datetime) -> list[AlertListing]:
                 row.decision, row.decided_at = AlertDecision.interested, now
             store.save_alert(conn, row)
             linked.append(row)
+        _link_stored_ads(conn, now)
     return linked
+
+
+def _link_stored_ads(conn, now: datetime) -> None:
+    """Point every unlinked listing at the stored ad for the same job.
+
+    Same job link, or the saved file an ad was added from. Catches a listing
+    that arrived after its ad was added, which `link_ad` cannot see.
+    """
+    ads = store.list_jds(conn)
+    by_key = {core.job_key(ad.source_url): ad.id for ad in ads if core.job_key(ad.source_url)}
+    by_file = {ad.source_file: ad.id for ad in ads if ad.source_file}
+    for row in store.list_alerts(conn):
+        if row.jd_id is not None:
+            continue
+        jd_id = by_key.get((row.source, row.job_id)) or (by_file.get(row.saved_file) if row.saved_file else None)
+        if jd_id is None:
+            continue
+        row.jd_id = jd_id
+        if row.decision in (None, AlertDecision.later):
+            row.decision, row.decided_at = AlertDecision.interested, now
+        store.save_alert(conn, row)
 
 
 def waiting_for_file(ws: Workspace) -> list[AlertListing]:
