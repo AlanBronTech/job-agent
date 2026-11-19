@@ -85,7 +85,7 @@ def text(response) -> str:
 
 
 def test_list_shows_every_ad_newest_first(client, ids):
-    page = client.get("/")
+    page = client.get("/?stage=all")
     assert page.status_code == 200
     order = [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)]
     assert order == [ids["contoso"], ids["fabrikam"], ids["acme"], ids["northwind"], ids["northwind_old"]]
@@ -98,6 +98,31 @@ def test_list_shows_every_ad_newest_first(client, ids):
 def test_list_by_score(client, ids):
     order = [int(m) for m in re.findall(r'href="/ads/(\d+)"', client.get("/?sort=score").text)]
     assert order[:3] == [ids["acme"], ids["fabrikam"], ids["northwind"]]
+
+
+def test_list_opens_on_open_jobs_and_says_how_many_are_hidden(client, ids):
+    page = client.get("/")
+    order = [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)]
+    assert ids["northwind_old"] not in order  # rejected at screening: closed
+    assert "4 of 5" in text(page)
+    assert '<option value="open" selected>Open (4)</option>' in page.text
+
+
+def test_list_filters_are_a_url(client, ids):
+    page = client.get("/?stage=rejected_screen&sort=oldest")
+    assert [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)] == [ids["northwind_old"]]
+    assert '<option value="oldest" selected>' in page.text
+    assert "reset" in page.text
+
+
+def test_list_search_and_nothing_matching(client, ids):
+    page = client.get("/?stage=all&q=acme")
+    assert [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)] == [ids["acme"]]
+    assert "No jobs match" in client.get("/?q=nothing-like-this").text
+
+
+def test_list_ignores_unknown_values(client, ids):
+    assert client.get("/?stage=bogus&sort=bogus&days=12&verdict=x&work=y").status_code == 200
 
 
 def test_empty_store(client):

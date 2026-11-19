@@ -479,3 +479,35 @@ def test_deciding_against_a_saved_ad_takes_it_off_the_add_list(ws):
     [row] = alerts.match_saved_files(ws, NOW)
     alerts.decide(ws, [row.id], AlertDecision.expired, now=NOW)
     assert alerts.ready_to_add(ws) == []
+
+
+# -- an ad added before its alert email arrived (JD 132, 2026-11-19) ------------
+
+
+def _stored(ws, url, source_file=None):
+    ad = jd("Network Engineering Manager", "Contoso", 0)
+    ad.source_url, ad.source_file = url, source_file
+    with store.open_store(ws.db_path) as conn:
+        return store.add_jd(conn, ad)
+
+
+def test_a_title_skipped_listing_is_still_linked_to_the_ad_already_added(ws):
+    jd_id = _stored(ws, "https://au.seek.com/job/90000003")
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    row = next(r for r in alerts.listings(ws) if r.job_id == "90000003")
+    assert row.verdict is AlertVerdict.skip and row.reason.startswith("title")
+    assert row.jd_id == jd_id
+
+
+def test_a_saved_ad_already_added_is_not_offered_again(ws):
+    alerts.ingest(ws, [mail("jobmail@s.seek.com.au", SEEK_TEXT)], now=NOW)
+    row = next(r for r in alerts.listings(ws) if r.job_id == "90000002")
+    # As the old code left it: linked to the saved file, not to the ad added from it.
+    with store.open_store(ws.db_path) as conn:
+        row.saved_file, row.decision = "Delivery Manager.pdf", AlertDecision.interested
+        store.save_alert(conn, row)
+    jd_id = _stored(ws, None, source_file="Delivery Manager.pdf")
+    assert [r.id for r in alerts.ready_to_add(ws)] == [row.id]
+    alerts.match_saved_files(ws, NOW)
+    assert alerts.ready_to_add(ws) == []
+    assert next(r for r in alerts.listings(ws) if r.id == row.id).jd_id == jd_id

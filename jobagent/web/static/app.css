@@ -76,6 +76,11 @@ h2 { font-size: 16px; margin: 28px 0 10px; text-transform: uppercase; letter-spa
 .heading-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
 .sort a { margin-left: 8px; color: var(--muted); }
 .sort a[aria-current] { color: var(--ink); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; margin-bottom: 14px; }
+.filters label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.filters select, .filters input { font: inherit; font-size: 14px; color: var(--ink); }
+.filters .search input { width: 14em; }
+.filters a { font-size: 13px; padding-bottom: 4px; }
 
 .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 table.ads { width: 100%; border-collapse: collapse; }
