@@ -63,3 +63,18 @@ def test_a_post_without_the_token_is_refused(tmp_path):
     client.get("/?t=t")
     assert client.post("/settings", data={"csrf": "wrong"}).status_code in (400, 403)
     assert settings.load(cfg) == {}
+
+
+def test_the_theme_is_saved_and_set_on_every_page(tmp_path):
+    cfg = config(tmp_path)
+    app = create_app(workspace_factory=lambda: workspace(tmp_path), config=cfg, port=8765,
+                     token="t", runner=SyncRunner())
+    client = TestClient(app, base_url="http://127.0.0.1:8765", follow_redirects=False)
+    client.get("/?t=t")
+    assert 'data-theme="auto"' in client.get("/").text
+    assert 'name="theme" value="auto" checked' in client.get("/settings").text
+    client.post("/settings", data={"csrf": "t", "theme": "light"})
+    assert settings.load(cfg)["theme"] == "light"
+    assert 'data-theme="light"' in client.get("/").text
+    client.post("/settings", data={"csrf": "t", "theme": "purple"})
+    assert settings.theme(cfg) == "auto"

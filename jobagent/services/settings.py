@@ -29,6 +29,17 @@ from jobagent.adapters.llm import (
 from jobagent.adapters.prices import PriceError, load_prices
 
 FILE_NAME = "settings.json"
+# The UI's colours: follow the OS, or always light or dark (Alan, 2026-11-19:
+# his Mac is dark, JobAgent he wants light).
+THEMES = {"auto": "Match the system", "light": "Light", "dark": "Dark"}
+
+
+def theme(config) -> str:
+    """The saved theme, "auto" when none or an unknown one is saved."""
+    if config is None:
+        return "auto"
+    value = load(config).get("theme")
+    return value if value in THEMES else "auto"
 
 
 @dataclass(frozen=True)
@@ -174,6 +185,8 @@ def view(config) -> dict:
         "check_claims": effective.check_claims,
         "review": effective.review,
         "efforts": EFFORT_LEVELS,
+        "theme": theme(config),
+        "themes": THEMES,
         "path": path_for(config),
     }
 
@@ -194,6 +207,7 @@ def from_form(form) -> dict:
         "efforts": efforts,
         "check_claims": form.get("check_claims") == "1",
         "review": form.get("review") == "1",
+        "theme": str(form.get("theme")) if form.get("theme") in THEMES else "auto",
     }
 
 
