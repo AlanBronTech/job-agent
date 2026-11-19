@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from urllib.parse import urlencode
 
 from jobagent.adapters.document_store import OutputFolders
 from jobagent.core import history, store
@@ -44,6 +45,8 @@ class AdRow:
     has_documents: bool
     stale: bool
     requisition_id: str | None = None
+    # .docx files in the live (not superseded) folders: the docs icon's count.
+    doc_count: int = 0
     work_type: WorkType | None = None
     applied_on: date | None = None
     # When the application was last changed; None with no application.
@@ -104,6 +107,7 @@ def ad_rows(ws: Workspace, *, today: date, sort: str = "date") -> list[AdRow]:
                 recruiter_score=assessment.recruiter_screen_score if assessment else None,
                 status=application.status if application else None,
                 has_documents=on_disk[jd.id].any,
+                doc_count=_doc_count(on_disk[jd.id]),
                 stale=bool(assessment) and stale,
                 requisition_id=jd.requisition_id,
                 work_type=jd.work_type,
@@ -144,6 +148,8 @@ STAGES: dict[str, tuple[str, object]] = {
     "all": ("All", lambda r, today: True),
 }
 DEFAULT_STAGE = "open"
+# The tabs; every other stage sits under "More".
+TAB_STAGES = ("open", "decide", "applied", "progress", "closed", "all")
 
 SORTS: dict[str, str] = {
     "date": "newest",
@@ -184,6 +190,31 @@ class JobsView:
             work=_one_of(params.get("work"), WORK_TYPES, ""),
             q=(params.get("q") or "").strip()[:100],
         )
+
+    def url(self, **changes) -> str:
+        """This view's address with `changes` applied; defaults are left out."""
+        values = {"stage": self.stage, "days": self.days or "", "verdict": self.verdict,
+                  "work": self.work, "sort": self.sort, "q": self.q, **changes}
+        defaults = {"stage": DEFAULT_STAGE, "sort": "date"}
+        query = [(k, str(v)) for k, v in values.items() if v not in ("", None) and v != defaults.get(k)]
+        return "/" + ("?" + urlencode(query) if query else "")
+
+    def chips(self) -> list[tuple[str, str]]:
+        """Each filter beyond the stage, as (label, the address without it)."""
+        out = []
+        if self.days:
+            out.append((f"Added: last {self.days} days", self.url(days="")))
+        if self.verdict:
+            out.append((f"Verdict: {VERDICTS[self.verdict]}", self.url(verdict="")))
+        if self.work:
+            out.append((f"Type: {WORK_TYPES[self.work]}", self.url(work="")))
+        if self.q:
+            out.append((f"Search: {self.q}", self.url(q="")))
+        return out
+
+    @property
+    def stage_label(self) -> str:
+        return STAGES[self.stage][0].removeprefix("↳ ")
 
     @property
     def narrowed(self) -> bool:
@@ -246,6 +277,11 @@ def _work_matches(r: AdRow, wanted: str) -> bool:
     if wanted == "contract":
         return r.work_type in (WorkType.contract, WorkType.fixed_term)
     return r.work_type is WorkType.permanent
+
+
+def _doc_count(folders: OutputFolders) -> int:
+    live = ([folders.current] if folders.current else []) + folders.earlier
+    return sum(1 for folder in live for f in folder.files if f.name.endswith(".docx"))
 
 
 def _one_of(value, allowed, default: str) -> str:

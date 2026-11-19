@@ -54,7 +54,7 @@ def test_a_decision_takes_it_off_the_list(ws, client):
     response = client.post(f"/alerts/{first.id}/decide",
                            data={"csrf": TOKEN, "decision": "not_qualified", "note": "needs Go"})
     assert response.status_code == 303
-    assert first.title not in client.get("/alerts").text.split("Show:")[1]
+    assert first.title not in client.get("/alerts").text.split('aria-label="Show"')[1]
     decided = client.get("/alerts?show=decided").text
     assert "not qualified" in decided and "needs Go" in decided
     assert "<th>Decided</th>" in decided

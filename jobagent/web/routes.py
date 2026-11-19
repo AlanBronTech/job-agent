@@ -63,8 +63,9 @@ def ad_list(request: Request):
         "nav": "ads", "view": view, "total": len(every),
         "rows": listing.view_rows(every, view, today),
         "counts": listing.stage_counts(every, today),
-        "stages": listing.STAGES, "sorts": listing.SORTS, "day_choices": listing.DAYS,
-        "verdicts": listing.VERDICTS, "work_types": listing.WORK_TYPES,
+        "stages": listing.STAGES, "tab_stages": listing.TAB_STAGES,
+        "sorts": listing.SORTS, "day_choices": listing.DAYS,
+        "verdicts": listing.VERDICTS, "work_types": listing.WORK_TYPES, "today": today,
     })
 
 

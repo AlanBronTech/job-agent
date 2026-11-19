@@ -164,3 +164,21 @@ def _register_filters(env) -> None:
     env.filters["local"] = lambda moment, fmt="%-d %b %Y %H:%M": (
         local(moment).strftime(fmt) if moment else ""
     )
+    env.filters["ago"] = _ago
+
+
+def _ago(moment, today) -> str:
+    """`{{ t | ago(today) }}`: "Today", "Yesterday", "3 days ago", then the date."""
+    from jobagent.timefmt import local
+
+    if not moment:
+        return ""
+    when = local(moment)
+    days = (today - when.date()).days
+    if days <= 0:
+        return "Today"
+    if days == 1:
+        return "Yesterday"
+    if days < 7:
+        return f"{days} days ago"
+    return when.strftime("%-d %b" if when.year == today.year else "%-d %b %Y")

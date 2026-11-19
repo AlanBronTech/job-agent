@@ -16,12 +16,11 @@
   open each link yourself, give the ad a once-over, and record what you made of it. An ad you print to PDF into
   the saved-ads folder is matched to its job by itself. Free.</p>
 <p class="muted">{% if last_fetch %}Last checked {{ last_fetch | local("%-d %b %Y, %H:%M") }}.{% else %}Not checked yet.{% endif %}</p>
-<div class="sort">
-  Show:
-  <a href="/alerts" {% if show == "pending" %}aria-current="true"{% endif %}>to look at</a>
-  <a href="/alerts?show=decided" {% if show == "decided" %}aria-current="true"{% endif %}>decided</a>
-  <a href="/alerts?show=skipped" {% if show == "skipped" %}aria-current="true"{% endif %}>left out by the filter</a>
-</div>
+<nav class="tabs" aria-label="Show">
+  <a href="/alerts" {% if show == "pending" %}aria-current="page"{% endif %}>To look at</a>
+  <a href="/alerts?show=decided" {% if show == "decided" %}aria-current="page"{% endif %}>Decided</a>
+  <a href="/alerts?show=skipped" {% if show == "skipped" %}aria-current="page"{% endif %}>Left out by the filter</a>
+</nav>
 {% if fetched %}<div class="banner done">{{ fetched }}</div>{% endif %}
 {% include "_alert_followups.html" %}
 {% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
