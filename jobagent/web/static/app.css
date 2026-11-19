@@ -379,3 +379,19 @@ form.pipeline input.wide { width: 100%; }
   main { padding: 20px 16px 40px; }
   .toolbar-gap { display: none; }
 }
+
+/* Batch page */
+.batch-actions { padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table.batch td { vertical-align: top; }
+table.batch td.pick, table.batch th.pick { width: 1%; padding-right: 0; }
+table.batch tr.group th {
+  text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); font-weight: 600;
+  background: var(--chip); padding-top: 10px; padding-bottom: 10px; white-space: normal;
+}
+table.batch tr.group:hover { background: var(--chip); }
+table.batch .flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+table.batch .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 22em; margin-top: 4px; }
+table.batch a.docs { margin-top: 6px; }
+.filter-ok { color: var(--ok); font-weight: 600; white-space: nowrap; }
+.filter-bad { color: var(--bad); font-weight: 600; white-space: nowrap; }
+.filter-unknown { color: var(--warn); white-space: nowrap; }

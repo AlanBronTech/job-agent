@@ -174,6 +174,13 @@ def start(ws: Workspace, now: datetime | None = None) -> int | None:
     return batch_id
 
 
+def started_at(ws: Workspace, batch_id: int) -> datetime | None:
+    """When the batch began: the table's heading, and where "added since" starts."""
+    with _open(ws) as conn:
+        row = conn.execute("SELECT started_at FROM batches WHERE id = ?", (batch_id,)).fetchone()
+    return datetime.fromisoformat(row[0]) if row else None
+
+
 def latest(ws: Workspace) -> int | None:
     with _open(ws) as conn:
         row = conn.execute(
@@ -298,7 +305,7 @@ def rows(ws: Workspace, batch_id: int, today: date) -> list[BatchRow]:
 
 def _fill(conn, ws, row: BatchRow, jd, profile, today: date) -> None:
     row.state = "parsed"
-    row.company, row.title, row.requisition_id = jd.company, jd.title, jd.requisition_id
+    row.company, row.title, row.requisition_id = jd.company or jd.posted_by, jd.title, jd.requisition_id
     row.arrangement = f"{jd.work_arrangement.value} · {jd.work_type.value}"
     row.salary = jd.salary_range.raw if jd.salary_range and jd.salary_range.raw else None
     row.posting = jd.source_metadata
