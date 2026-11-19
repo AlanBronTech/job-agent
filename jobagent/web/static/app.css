@@ -1,4 +1,4 @@
-/* job-agent local UI. Plain CSS, no build step. Light and dark follow the OS. */
+/* job-agent local UI. Plain CSS, no build step. Light or dark: the OS, unless Settings says otherwise. */
 
 :root {
   --bg: #fafaf8;
@@ -18,8 +18,9 @@
   color-scheme: light;
 }
 
+/* Dark follows the OS unless Settings forces light; Settings can also force dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14161b;
     --panel: #1b1e25;
     --ink: #e6e8ee;
@@ -36,6 +37,24 @@
     --caveat-bg: #33250f;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14161b;
+  --panel: #1b1e25;
+  --ink: #e6e8ee;
+  --muted: #9aa1ad;
+  --line: #2c313b;
+  --accent: #8fb4ff;
+  --ok: #6fd08f;
+  --ok-bg: #16301f;
+  --warn: #f0c35a;
+  --warn-bg: #33290f;
+  --bad: #ff8a80;
+  --bad-bg: #3a1714;
+  --caveat: #f0b35a;
+  --caveat-bg: #33250f;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }

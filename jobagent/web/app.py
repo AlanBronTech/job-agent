@@ -131,8 +131,16 @@ def render(request: Request, name: str, context: dict, status_code: int = 200):
     except Exception:  # nor must the alerts count
         alerts_pending = alerts_waiting = 0
 
+    from jobagent.services import settings
+
+    try:
+        theme = settings.theme(request.app.state.config)
+    except Exception:  # nor the colour scheme
+        theme = "auto"
+
     context = {
         "token": request.app.state.token,
+        "theme": theme,
         "unseen": unseen,
         "alerts_pending": alerts_pending,
         "alerts_waiting": alerts_waiting,

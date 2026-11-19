@@ -39,6 +39,14 @@
   </div>
 
   <div class="panel">
+    <strong>Appearance</strong>
+    {% for value, label in s.themes.items() %}
+    <label><input type="radio" name="theme" value="{{ value }}" {% if s.theme == value %}checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+    <p class="detail">"Match the system" follows your Mac's light or dark setting.</p>
+  </div>
+
+  <div class="panel">
     <strong>Checks after writing</strong>
     <label><input type="checkbox" id="check_claims" name="check_claims" value="1" {% if s.check_claims %}checked{% endif %}>
       Claim check: each letter or answer sentence against its evidence, about $0.01</label>
