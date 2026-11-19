@@ -26,7 +26,15 @@ including the `?t=…` part, or the buttons will be refused.
 
 - **Jobs.** The main page: every job description — from an ad, a recruiter's
   email or a message — with its verdict, both scores, where it is in the
-  pipeline and whether documents exist. Sort by date or score.
+  pipeline and whether documents exist. Opens on **Open** jobs (not decided,
+  applied, in progress); the heading says "12 of 118" so nothing is hidden
+  silently. Filter by stage (each with its count: to decide, applied,
+  follow-up due — applied over 30 days ago with no reply recorded — in
+  progress, closed, rejected, at screening, after interview, no reply, chose
+  not to apply, withdrew, all), added in the last 7/30/90 days, verdict,
+  contract or permanent, and a search over company, title and requisition.
+  Sort newest, oldest, score high–low or low–high, or last activity. Every
+  view is a URL, so a bookmark keeps it; *reset* goes back to Open.
 - **The assessment.** Click a job for everything `score` would print — hard
   filters (a breach says so; an unstated one says "not stated", never met),
   requirements, what they will push on, questions to ask — plus any history

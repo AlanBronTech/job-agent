@@ -54,10 +54,18 @@ router = APIRouter()
 
 
 @router.get("/")
-def ad_list(request: Request, sort: str = "date"):
-    sort = sort if sort in {"date", "score"} else "date"
-    rows = listing.ad_rows(workspace(request), today=request.app.state.today(), sort=sort)
-    return render(request, "list.html", {"nav": "ads", "rows": rows, "sort": sort})
+def ad_list(request: Request):
+    """The Jobs page: open jobs, newest first, unless the query asks otherwise. Free."""
+    today = request.app.state.today()
+    view = listing.JobsView.from_params(request.query_params)
+    every = listing.ad_rows(workspace(request), today=today)
+    return render(request, "list.html", {
+        "nav": "ads", "view": view, "total": len(every),
+        "rows": listing.view_rows(every, view, today),
+        "counts": listing.stage_counts(every, today),
+        "stages": listing.STAGES, "sorts": listing.SORTS, "day_choices": listing.DAYS,
+        "verdicts": listing.VERDICTS, "work_types": listing.WORK_TYPES,
+    })
 
 
 @router.get("/ads/{jd_id:int}")

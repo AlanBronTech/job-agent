@@ -2,13 +2,9 @@
 {% from "_macros.html" import verdict %}
 {% block title %}Jobs · job-agent{% endblock %}
 {% block main %}
+<script src="/static/filters.js" defer></script>
 <div class="heading-row">
-  <h1>Jobs <span class="muted count">{{ rows | length }}</span></h1>
-  <div class="sort">
-    Sort:
-    <a href="/?sort=date" {% if sort == "date" %}aria-current="true"{% endif %}>newest</a>
-    <a href="/?sort=score" {% if sort == "score" %}aria-current="true"{% endif %}>score</a>
-  </div>
+  <h1>Jobs <span class="muted count">{{ rows | length }}{% if rows | length != total %} of {{ total }}{% endif %}</span></h1>
 </div>
 {% if alerts_pending %}
   <div class="banner warn"><a href="/alerts/review">{{ alerts_pending }} job{{ "s" if alerts_pending != 1 }} from your alert emails to look at →</a></div>
@@ -16,14 +12,57 @@
 {% if alerts_waiting %}
   <div class="banner warn"><a href="/alerts">{{ alerts_waiting }} job{{ "s" if alerts_waiting != 1 }} you're interested in still need{{ "" if alerts_waiting != 1 else "s" }} the ad saved as PDF →</a></div>
 {% endif %}
-{% if not rows %}
+{% if total %}
+{# A plain GET form: every view is a URL, so it can be bookmarked and Back works.
+   filters.js submits it on change; the button is there without JavaScript. #}
+<form class="filters" method="get" action="/" data-autosubmit>
+  <label>Stage
+    <select name="stage">
+      {% for key, (label, _) in stages.items() %}
+      <option value="{{ key }}" {% if key == view.stage %}selected{% endif %}>{{ label }} ({{ counts[key] }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Added
+    <select name="days">
+      <option value="">any time</option>
+      {% for d in day_choices %}<option value="{{ d }}" {% if view.days == d %}selected{% endif %}>last {{ d }} days</option>{% endfor %}
+    </select>
+  </label>
+  <label>Verdict
+    <select name="verdict">
+      <option value="">any</option>
+      {% for key, label in verdicts.items() %}<option value="{{ key }}" {% if view.verdict == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Type
+    <select name="work">
+      <option value="">any</option>
+      {% for key, label in work_types.items() %}<option value="{{ key }}" {% if view.work == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Sort
+    <select name="sort">
+      {% for key, label in sorts.items() %}<option value="{{ key }}" {% if view.sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="search">Search
+    <input type="search" name="q" value="{{ view.q }}" placeholder="company, title, requisition">
+  </label>
+  <button type="submit">Show</button>
+  {% if view.narrowed or view.stage != "open" or view.sort != "date" %}<a href="/" class="muted">reset</a>{% endif %}
+</form>
+{% endif %}
+{% if not total %}
   <p class="empty">No jobs yet. Add one with <code>jobagent jd add --latest</code>.</p>
+{% elif not rows %}
+  <p class="empty">No jobs match. <a href="/?stage=all">Show all {{ total }}</a></p>
 {% else %}
 <div class="table-wrap">
 <table class="ads">
   <thead>
     <tr>
-      <th class="num">id</th><th>Role</th><th>Captured</th><th>Verdict</th>
+      <th class="num">id</th><th>Role</th><th>{% if view.sort == "activity" %}Last activity{% else %}Captured{% endif %}</th><th>Verdict</th>
       <th class="num" title="Hiring manager / recruiter screen">Score</th><th>Status</th><th>Docs</th>
     </tr>
   </thead>
@@ -33,7 +72,7 @@
       <td class="num muted">{{ r.jd_id }}</td>
       <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
         <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div></td>
-      <td class="muted nowrap">{{ r.captured | local("%-d %b %Y") }}</td>
+      <td class="muted nowrap">{{ (r.last_activity if view.sort == "activity" else r.captured) | local("%-d %b %Y") }}</td>
       <td>{{ verdict(r.verdict) }}{% if r.stale %} <span class="pill warn" title="Scored before the ad was amended">stale</span>{% endif %}</td>
       <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td>{% include "_status_cell.html" %}</td>
