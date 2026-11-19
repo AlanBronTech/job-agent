@@ -826,6 +826,8 @@ def _batch_page(
             "parse_cost": _times(estimate, len(new)) if new else None,
             "waiting": batches.waiting(ws, batch_id) if batch_id else [],
             "batch_id": batch_id,
+            "batch_started": batches.started_at(ws, batch_id) if batch_id else None,
+            "today": today,
             "rows": batches.rows(ws, batch_id, today) if batch_id else [],
             "describe": batches.describe,
             "run": parse_run,

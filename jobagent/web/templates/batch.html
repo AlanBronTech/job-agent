@@ -73,55 +73,94 @@
 {% endif %}
 
 {% if rows %}
-<h2>Batch {{ batch_id }}</h2>
-<form method="post">
-<input type="hidden" name="csrf" value="{{ token }}">
+{# Batch rows first, then jobs added one at a time since the batch began: they
+   are shown here so they can be screened and scored with the rest. #}
+{% set in_batch = rows | rejectattr("added_singly") | list %}
+{% set since = rows | selectattr("added_singly") | list %}
+{% set jd_of = {} %}{% for r in rows %}{% set _ = jd_of.update({r.number: r.jd_id}) %}{% endfor %}
+{% set FILTER_NAMES = {"hiring status": "Hiring status", "work type": "Work type", "location": "Location", "salary": "Salary"} %}
+
+{% macro job_row(r) %}
+  {% if r.refusal %}
+  <tr>
+    <td></td>
+    <td colspan="5"><code>{{ r.file_name }}</code><div class="detail">{{ describe(r.refusal, r.refusal_detail) }}</div></td>
+    <td><span class="pill verdict-skip">Refused</span></td>
+  </tr>
+  {% elif r.jd_id is none %}
+  <tr><td></td><td colspan="5"><code>{{ r.file_name }}</code></td><td><span class="pill muted">Not parsed yet</span></td></tr>
+  {% else %}
+  <tr>
+    <td class="pick"><input type="checkbox" form="batch-actions" name="jd" value="{{ r.jd_id }}" aria-label="Select JD {{ r.jd_id }}"></td>
+    <td>
+      <a class="role" href="/ads/{{ r.jd_id }}">{{ r.title }}</a>
+      <div class="muted small">{{ r.company or "Unknown company" }} <span class="faint">· #{{ r.jd_id }}</span>{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}</div>
+      {% if r.reapply == "same" or r.reapply == "possibly_same" or r.same_requisition_as or r.history_count %}
+      <div class="flags">
+        {% if r.reapply == "same" %}<span class="pill verdict-skip">Same job as an earlier application</span>{% endif %}
+        {% if r.reapply == "possibly_same" %}<span class="pill warn">Possibly the same job</span>{% endif %}
+        {% if r.same_requisition_as %}<span class="pill warn">Same requisition as #{{ jd_of[r.same_requisition_as] }}</span>{% endif %}
+        {% if r.history_count %}<span class="pill muted" title="Earlier ads from this company in JobAgent">{{ r.history_count }} earlier at this company</span>{% endif %}
+      </div>
+      {% endif %}
+    </td>
+    <td class="small" {% if r.posting %}title="{{ r.posting }}"{% endif %}>
+      {{ r.arrangement | replace("_", " ") | capitalize if r.arrangement }}
+      {% if r.salary %}<div class="muted clamp">{{ r.salary }}</div>{% endif %}
+    </td>
+    <td class="small">
+      {% set issues = r.filters | rejectattr(1, "in", ["ok", "note"]) | list %}
+      {% if not r.filters %}<span class="muted">—</span>
+      {% elif not issues %}<span class="filter-ok">✓ All met</span>
+      {% else %}{% for name, state in issues %}
+        <div class="{{ 'filter-bad' if state == 'breach' else 'filter-unknown' }}">{{ '✗' if state == 'breach' else '?' }} {{ FILTER_NAMES.get(name, name) }}{{ ' not stated' if state == 'unknown' }}</div>
+      {% endfor %}{% endif %}
+    </td>
+    <td class="small">
+      {% if r.screen_decision %}<span class="pill {{ 'verdict-skip' if r.screen_decision == 'skip' else 'verdict-apply' }}">{{ "Worth scoring" if r.screen_decision == "score" else "Skip" }}</span>
+        <div class="muted clamp" title="{{ r.screen_reason }}">{{ r.screen_reason }}</div>
+      {% else %}<span class="muted">Not screened</span>{% endif %}
+    </td>
+    <td class="nowrap">
+      {% if r.verdict %}<span class="pill verdict-{{ r.verdict }}">{{ r.verdict | replace("_", " ") }}</span>
+        <div class="tabular small"><span class="fit fit-{{ 'high' if r.overall_score >= 70 else ('mid' if r.overall_score >= 50 else 'low') }}">{{ r.overall_score }}</span> <span class="muted">· {{ r.recruiter_score }}</span></div>
+      {% else %}<span class="muted">Not scored</span>{% endif %}
+    </td>
+    <td>{% include "_status_cell.html" %}
+      {% if r.has_documents %}<a class="docs" href="/ads/{{ r.jd_id }}#documents" aria-label="Documents for JD {{ r.jd_id }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Documents</a>{% endif %}
+    </td>
+  </tr>
+  {% endif %}
+{% endmacro %}
+
+<form id="batch-actions" method="post" class="toolbar batch-actions">
+  <input type="hidden" name="csrf" value="{{ token }}">
+  <span class="muted small">With selected:</span>
+  <button type="submit" formaction="/batch/screen/confirm" title="A cheap first pass; the cost is shown first">Screen…</button>
+  <button type="submit" formaction="/batch/score/confirm" title="The cost is shown first">Score…</button>
+  <button type="submit" formaction="/batch/skip">Mark not applied</button>
+  <span class="detail">Generate documents from each job's page.</span>
+</form>
+
 <div class="table-wrap">
-<table class="ads">
+<table class="ads batch">
   <thead><tr>
-    <th></th><th class="num">#</th><th>Company / role</th><th>Where</th><th>Filters</th>
-    <th>Seen</th><th>Screen</th><th>Verdict</th><th class="num">Score</th><th>State</th>
+    <th class="pick"><input type="checkbox" data-select-all aria-label="Select every job"></th>
+    <th>Role</th><th>Where</th><th title="Hiring status, work type, location and salary against your profile">Filters</th>
+    <th>First-pass screen</th><th>Verdict · Fit</th><th>Status</th>
   </tr></thead>
   <tbody>
-  {% for r in rows %}
-    {% if r.refusal %}
-    <tr>
-      <td></td><td class="num muted">{{ r.number }}</td>
-      <td colspan="7"><code>{{ r.file_name }}</code><div class="detail">{{ describe(r.refusal, r.refusal_detail) }}</div></td>
-      <td><span class="pill verdict-skip">refused</span></td>
-    </tr>
-    {% elif r.jd_id is none %}
-    <tr><td></td><td class="num muted">{{ r.number }}</td><td colspan="7"><code>{{ r.file_name }}</code></td><td class="muted">not parsed yet</td></tr>
-    {% else %}
-    <tr>
-      <td><input type="checkbox" name="jd" value="{{ r.jd_id }}" aria-label="Select JD {{ r.jd_id }}"></td>
-      <td class="num muted">{{ r.number }}</td>
-      <td><a href="/ads/{{ r.jd_id }}"><strong>{{ r.title }}</strong></a>
-        <div class="muted">{{ r.company or "Unknown company" }}{% if r.requisition_id %} · <code>{{ r.requisition_id }}</code>{% endif %}{% if r.added_singly %} · added on its own{% endif %}</div>
-        {% if r.reapply == "same" %}<span class="pill verdict-skip">same job as an earlier application</span>{% endif %}
-        {% if r.reapply == "possibly_same" %}<span class="pill warn">possibly the same job</span>{% endif %}
-        {% if r.same_requisition_as %}<span class="pill warn">same requisition as row {{ r.same_requisition_as }}</span>{% endif %}
-      </td>
-      <td class="detail">{{ r.arrangement }}{% if r.salary %}<br>{{ r.salary }}{% endif %}{% if r.posting %}<br>{{ r.posting }}{% endif %}</td>
-      <td class="nowrap">{% for name, state in r.filters %}<span class="mark {{ {'ok': 'ok', 'breach': 'breach', 'unknown': 'unknown', 'note': 'muted'}[state] }}" title="{{ name }}: {{ state }}">{{ {'ok': '✓', 'breach': '✗', 'unknown': '?', 'note': '·'}[state] }}</span>{% endfor %}</td>
-      <td class="muted">{{ r.history_count or "" }}</td>
-      <td>{% if r.screen_decision %}<span class="pill {{ 'verdict-skip' if r.screen_decision == 'skip' else 'verdict-apply' }}" title="{{ r.screen_reason }}">{{ r.screen_decision }}</span>
-        <div class="detail">{{ r.screen_reason }}</div>{% endif %}</td>
-      <td>{% if r.verdict %}<span class="pill verdict-{{ r.verdict }}">{{ r.verdict | replace("_", " ") }}</span>{% endif %}</td>
-      <td class="num nowrap">{% if r.overall_score is not none %}{{ r.overall_score }} <span class="muted">/ {{ r.recruiter_score }}</span>{% endif %}</td>
-      <td>{{ r.state | replace("_", " ") }}</td>
-    </tr>
-    {% endif %}
-  {% endfor %}
+    <tr class="group"><th colspan="7">Batch {{ batch_id }}{% if batch_started %} · {{ batch_started | local("%-d %b %Y") }}{% endif %} <span class="muted">· {{ in_batch | length }} saved ad{{ "s" if in_batch | length != 1 }}</span></th></tr>
+    {% for r in in_batch %}{{ job_row(r) }}{% endfor %}
   </tbody>
+  {% if since %}
+  <tbody>
+    <tr class="group"><th colspan="7">Added one at a time since <span class="muted">· {{ since | length }} · from Add a job or Alerts, shown here to screen and score with the rest</span></th></tr>
+    {% for r in since %}{{ job_row(r) }}{% endfor %}
+  </tbody>
+  {% endif %}
 </table>
 </div>
-<p>
-  <button type="submit" formaction="/batch/screen/confirm">Screen selected…</button>
-  <button type="submit" formaction="/batch/score/confirm">Score selected…</button>
-  <button type="submit" formaction="/batch/skip">Mark selected not applied</button>
-  <span class="detail">Filters: hiring status, work type, location, salary — ✓ met, ✗ breach, ? not stated, · note. Generate from each job's page.</span>
-</p>
-</form>
+<script src="/static/batch.js" defer></script>
 {% endif %}
 {% endblock %}

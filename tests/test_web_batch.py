@@ -137,7 +137,7 @@ def test_parse_gives_one_row_per_file_with_the_refusal(client, ws, model):
     assert client.post("/batch/parse", data={"csrf": TOKEN, "confirmed": "1"}).status_code == 303
     body = flat(client.get("/batch"))
     assert "Acme Logistics" in body
-    assert "cutoff.pdf" in body and "Cut off at" in body and "refused" in body
+    assert "cutoff.pdf" in body and "Cut off at" in body and "Refused" in body
     assert len(model.parsed) == 1
     runs_sources = [c for c in model.contexts if c[0] == "jd add"]
     assert runs_sources == [("jd add", "ui", None)]
@@ -164,7 +164,7 @@ def test_score_selected_confirms_then_scores(client, ws, model):
     client.post("/batch/score", data={"csrf": TOKEN, "confirmed": "1", "jd": selected})
     assert sorted(model.scored) == sorted(selected)
     body = flat(client.get("/batch"))
-    assert body.count("72 / 64") == 2
+    assert body.count("72 · 64") == 2
 
 
 def test_a_recent_application_is_left_out_of_score_selected(client, ws, model):
@@ -180,7 +180,7 @@ def test_a_recent_application_is_left_out_of_score_selected(client, ws, model):
     save(ws, "fabrikam.txt", AD.format(co="Fabrikam Medical"))
     client.post("/batch/parse", data={"csrf": TOKEN, "confirmed": "1"})
     page = client.get("/batch")
-    assert "possibly the same job" in flat(page)
+    assert "Possibly the same job" in flat(page)
     selected = ids_in(page)
     confirm = flat(client.post("/batch/score/confirm", data={"csrf": TOKEN, "jd": selected}))
     assert "Score 0 job(s)?" in confirm and "a job you applied for recently" in confirm
@@ -275,7 +275,7 @@ def test_screen_selected_confirms_then_screens_and_shows_the_answer(client, ws, 
     done = client.post("/batch/screen", data={"csrf": TOKEN, "confirmed": "1", "jd": selected})
     assert done.status_code == 303 and sorted(screener) == sorted(selected)
     body = flat(client.get("/batch"))
-    assert "Invented reason for Fabrikam Medical." in body and " skip " in f" {body} "
+    assert "Invented reason for Fabrikam Medical." in body and " Skip " in f" {body} "
     assert model.scored == []  # advice only: nothing was scored or skipped for him
 
 

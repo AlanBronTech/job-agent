@@ -1,6 +1,7 @@
 {# The Jobs page's status, changed in place. Saved on change through the same
    guards as the job page's pipeline form; a refusal shows here, in the row. #}
-{% set current = r.status.value if r.status else "" %}
+{# `r.status` is an ApplicationStatus on the Jobs page and a plain string on Batch. #}
+{% set current = (r.status.value if r.status.value is defined else r.status) if r.status else "" %}
 <form class="status-cell" hx-post="/ads/{{ r.jd_id }}/status" hx-trigger="change" hx-swap="outerHTML">
   <input type="hidden" name="csrf" value="{{ token }}">
   <select name="status" aria-label="Status of JD {{ r.jd_id }}" class="status-{{ current or 'none' }}">
