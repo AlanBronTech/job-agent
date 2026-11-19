@@ -101,13 +101,18 @@ class Config(BaseSettings):
 
     db_path: Path = Field(default=Path("~/.job-agent/jobagent.db"))
 
+    # Where a saved ad goes once JobAgent no longer needs the file: the macOS
+    # bin, so it can still be dragged back. Its text stays in the database.
+    trash_dir: Path = Field(default=Path("~/.Trash"))
+
     # `jobagent alerts`: SEEK and LinkedIn alert emails read over IMAP,
     # read-only. A Gmail app password, never the account password.
     gmail_address: str | None = None
     gmail_app_password: str | None = None
 
     @field_validator(
-        "profile_dir", "db_path", "runs_log_path", "output_dir", "jd_dir", mode="after"
+        "profile_dir", "db_path", "runs_log_path", "output_dir", "jd_dir", "trash_dir",
+        mode="after"
     )
     @classmethod
     def _expand_user(cls, value: Path | None) -> Path | None:

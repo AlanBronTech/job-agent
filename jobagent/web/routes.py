@@ -7,7 +7,7 @@ rather than about HTTP, that `if` belongs in `jobagent.services`.
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -25,6 +25,7 @@ from jobagent.services import (
     pipeline,
     readiness,
     reapply,
+    retention,
     revise,
     runs,
     scoring,
@@ -146,6 +147,7 @@ async def pipeline_save(request: Request, jd_id: int):
                            extra={"pipeline_confirm": exc.files})
     except ValueError as exc:
         return _back_to_ad(request, jd_id, f"Not saved: {exc}")
+    retention.bin_closed(ws, jd_id)
     if prepared is not None:
         sent.commit(ws, prepared, sent_on=sent.sent_on_for(ws, jd_id, today),
                     today=today, now=datetime.now())
@@ -172,6 +174,8 @@ async def status_save(request: Request, jd_id: int):
         link = f"/ads/{jd_id}#pipeline"
     except ValueError as exc:
         problem = f"Not saved: {exc}"
+    if problem is None:
+        retention.bin_closed(ws, jd_id)
     row = {"jd_id": jd_id, "status": pipeline.current_status(ws, jd_id)}
     return render(request, "_status_cell.html", {"r": row, "saved": problem is None,
                                                  "problem": problem, "problem_link": link})
@@ -583,6 +587,7 @@ def run_view(request: Request, run_id: int):
 @router.get("/ads/new")
 def add_form(request: Request, problem: str | None = None):
     ws = workspace(request)
+    retention.sweep(ws, datetime.now(timezone.utc))
     newest_path = ads.newest_new_ad(ws)
     newest = newest_path.name if newest_path else None
     return render(request, "add.html", {"nav": "add", "newest": newest, "jd_dir": ws.jd_dir,

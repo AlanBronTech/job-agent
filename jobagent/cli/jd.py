@@ -26,7 +26,8 @@ from jobagent.cli import paths
 from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
-from jobagent.services import ads, reapply
+from jobagent.cli.binned import print_sweep
+from jobagent.services import ads, reapply, retention
 from jobagent.services.refusals import AlreadyAdded, NoSuchAd, UnreadableAd
 from jobagent.services.workspace import Workspace
 from jobagent.core import history, store
@@ -373,6 +374,24 @@ def backfill() -> None:
         console.print(f"  [yellow]JD {jd_id}: same text in {', '.join(names)}; none set[/]")
     if report.unreadable_files:
         console.print(f"[dim]Unreadable saved files skipped: {', '.join(report.unreadable_files)}[/]")
+
+
+@app.command("prune")
+def prune(
+    dry_run: bool = typer.Option(False, "--dry-run", help="List what would move; move nothing."),
+) -> None:
+    """Free: move saved ads JobAgent no longer needs to the bin.
+
+    A saved ad goes when its job closed unsuccessfully or 30 days after it was
+    added; its text stays in the database. Files never added are listed, not moved.
+    `batch` and the UI's Add page run the same sweep.
+    """
+    ws = Workspace.from_config(get_config())
+    result = retention.sweep(ws, datetime.now(timezone.utc), dry_run=dry_run)
+    if not (result.binned or result.failed or result.not_added):
+        console.print("[dim]Nothing to move.[/]")
+        return
+    print_sweep(console, result, dry_run=dry_run, show_not_added=True)
 
 
 @app.command("same")
