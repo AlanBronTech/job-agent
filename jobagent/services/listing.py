@@ -145,11 +145,12 @@ STAGES: dict[str, tuple[str, object]] = {
     "no_reply": ("↳ No reply", lambda r, today: r.status in {S.applied_no_reply, S.ghosted_after_contact}),
     "not_applied": ("↳ Chose not to apply", lambda r, today: r.status is S.not_applied),
     "withdrew": ("↳ Withdrew", lambda r, today: r.status is S.withdrew),
+    "offer_settled": ("↳ Offer accepted or declined", lambda r, today: r.status in {S.accepted, S.declined}),
     "all": ("All", lambda r, today: True),
 }
 DEFAULT_STAGE = "open"
 # The tabs; every other stage sits under "More".
-TAB_STAGES = ("open", "decide", "applied", "progress", "closed", "all")
+TAB_STAGES = ("open", "decide", "applied", "followup", "progress", "closed", "all")
 
 SORTS: dict[str, str] = {
     "date": "newest",

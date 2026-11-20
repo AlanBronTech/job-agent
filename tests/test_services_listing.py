@@ -129,15 +129,17 @@ def test_default_view_is_open_jobs():
 
 
 @pytest.mark.parametrize("stage, expected", [
-    ("decide", [1, 6]), ("applied", [2]), ("progress", [3]), ("closed", [4, 5, 7, 8, 9, 10]),
+    ("decide", [1, 6]), ("applied", [2]), ("progress", [3]), ("closed", [4, 5, 7, 8, 9, 10, 11, 12]),
     ("rejected", [5, 7]), ("rejected_screen", [5]), ("rejected_after_interview", [7]),
-    ("no_reply", [8, 9]), ("not_applied", [4]), ("withdrew", [10]),
+    ("no_reply", [8, 9]), ("not_applied", [4]), ("withdrew", [10]), ("offer_settled", [11, 12]),
+    ("open", [1, 2, 3, 6]),
 ])
 def test_stages(stage, expected):
     rows = [row(1), row(2, status=S.applied), row(3, status=S.offer), row(4, status=S.not_applied),
             row(5, status=S.rejected_screen), row(6, status=S.identified),
             row(7, status=S.rejected_after_interview), row(8, status=S.applied_no_reply),
-            row(9, status=S.ghosted_after_contact), row(10, status=S.withdrew)]
+            row(9, status=S.ghosted_after_contact), row(10, status=S.withdrew),
+            row(11, status=S.accepted), row(12, status=S.declined)]
     got = listing.view_rows(rows, view(stage=stage, sort="oldest"), TODAY)
     assert sorted(ids_of(got)) == expected
 

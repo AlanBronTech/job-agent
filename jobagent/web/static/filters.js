@@ -11,8 +11,13 @@
   var search = form.querySelector("input[type=search]");
   var timer;
   if (search) {
+    // The server trims the search, so submitting on a trailing space would
+    // reload the page without it and eat the space. Submit only when the
+    // trimmed text differs from what this page was loaded with.
+    var shown = search.value.trim();
     search.addEventListener("input", function () {
       clearTimeout(timer);
+      if (search.value.trim() === shown) return;
       timer = setTimeout(function () { form.submit(); }, 500);
     });
     // Back after a search: put the cursor at the end of what was typed.

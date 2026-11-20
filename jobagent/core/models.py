@@ -891,6 +891,11 @@ class ApplicationStatus(str, Enum):
     interview_1 = "interview_1"
     interview_2 = "interview_2"
     offer = "offer"
+    # Terminal: what happened to the offer. `offer` alone is a live one, still
+    # being weighed. Before these existed an accepted offer could only stay
+    # `offer` and sat in the open list forever (Easy Signs, 2026-11-21).
+    accepted = "accepted"
+    declined = "declined"
     # Terminal, and both sit above a screen rejection in depth reached.
     rejected_after_interview = "rejected_after_interview"
     ghosted_after_contact = "ghosted_after_contact"
