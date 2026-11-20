@@ -350,7 +350,9 @@ a.docs:hover { color: var(--ink); text-decoration: none; }
 .status-cell select.status-recruiter_call,
 .status-cell select.status-interview_1,
 .status-cell select.status-interview_2,
-.status-cell select.status-offer { --dot: var(--dot-ok); color: var(--ok); background-color: var(--ok-bg); }
+.status-cell select.status-offer,
+.status-cell select.status-accepted,
+.status-cell select.status-declined { --dot: var(--dot-ok); color: var(--ok); background-color: var(--ok-bg); }
 .status-cell select.status-rejected_screen,
 .status-cell select.status-rejected_after_interview { --dot: var(--dot-bad); color: var(--bad); background-color: var(--bad-bg); }
 .status-cell select {

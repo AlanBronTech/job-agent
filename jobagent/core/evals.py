@@ -71,6 +71,9 @@ _OUTCOME_RANK: dict[ApplicationStatus, int] = {
     ApplicationStatus.rejected_after_interview: 4,
     ApplicationStatus.interview_2: 5,
     ApplicationStatus.offer: 6,
+    # Both reached an offer; what he did with it is not the employer's verdict.
+    ApplicationStatus.accepted: 6,
+    ApplicationStatus.declined: 6,
 }
 
 # `applied` and `identified` are live states, not results — an application

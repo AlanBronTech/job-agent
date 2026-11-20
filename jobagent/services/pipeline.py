@@ -90,6 +90,8 @@ STATUS_LABELS: dict[str, str] = {
     "interview_1": "First interview",
     "interview_2": "Second interview",
     "offer": "Offer",
+    "accepted": "Offer accepted",
+    "declined": "Offer declined",
     "rejected_screen": "Rejected at screening",
     "rejected_after_interview": "Rejected after interview",
     "ghosted_after_contact": "Went quiet after contact",
