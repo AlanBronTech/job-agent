@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Alerts · job-agent{% endblock %}
 {% block main %}
-<script src="/static/window.js" defer></script>
+<script src="{{ static('window.js') }}" defer></script>
 <div class="heading-row">
   <h1>Job alerts {% if show == "pending" %}<span class="muted count">{{ items | length }}</span>{% endif %}</h1>
   <div>

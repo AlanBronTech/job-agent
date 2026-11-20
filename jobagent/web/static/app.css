@@ -318,7 +318,6 @@ details.menu { position: relative; }
 .toolbar .select span::after { content: ":"; }
 .toolbar .select select { field-sizing: content; border: 0; background-color: transparent; font-weight: 600; min-height: 36px; padding-left: 6px; box-shadow: none; }
 .toolbar-gap { flex: 0 0 1px; height: 24px; background: var(--line); }
-html.js .js-hide { display: none; }
 
 .showing { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 13px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--chip); color: var(--ink); }

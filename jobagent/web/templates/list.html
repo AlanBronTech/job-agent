@@ -2,7 +2,7 @@
 {% from "_macros.html" import verdict %}
 {% block title %}Jobs · job-agent{% endblock %}
 {% block main %}
-<script src="/static/filters.js" defer></script>
+<script src="{{ static('filters.js') }}" defer></script>
 <div class="heading-row">
   <h1>Jobs</h1>
   <a class="button primary" href="/ads/new"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add a job</a>
@@ -34,14 +34,16 @@
 </nav>
 
 {# A plain GET form: every view is a URL, so it can be bookmarked and Back works.
-   filters.js applies a choice at once and searches as you type; without it,
-   Enter or the Show button does the same. #}
+   filters.js applies a dropdown choice at once. The search runs only on Enter
+   or the Search button, never while typing: a reload mid-word ate spaces
+   (Alan, 2026-11-21). #}
 <form class="toolbar" method="get" action="/" data-autosubmit>
   {% if view.stage != "open" %}<input type="hidden" name="stage" value="{{ view.stage }}">{% endif %}
   <label class="search">
     <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input type="search" name="q" value="{{ view.q }}" placeholder="Search company, title or requisition" aria-label="Search jobs">
+    <input type="search" name="q" value="{{ view.q }}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search company, title or requisition" aria-label="Search jobs">
   </label>
+  <button type="submit" class="primary">Search</button>
   <label class="select {% if view.days %}on{% endif %}"><span>Added</span>
     <select name="days">
       <option value="">Any time</option>
@@ -66,7 +68,6 @@
       {% for key, label in sorts.items() %}<option value="{{ key }}" {% if view.sort == key %}selected{% endif %}>{{ label | capitalize }}</option>{% endfor %}
     </select>
   </label>
-  <button type="submit" class="js-hide">Show</button>
 </form>
 
 <div class="showing">

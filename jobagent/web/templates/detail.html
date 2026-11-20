@@ -26,7 +26,7 @@
      amending FR-008). The UI still never fetches, embeds or fills in that
      page: it opens in his browser like any link he follows. http(s) only. #}
   {% if jd.source_url and (jd.source_url.startswith("https://") or jd.source_url.startswith("http://")) %}
-    <script src="/static/window.js" defer></script>
+    <script src="{{ static('window.js') }}" defer></script>
     <a class="button primary" href="{{ jd.source_url }}" target="_blank" rel="noopener noreferrer" data-window>Open the ad ↗</a>
     <span class="muted">to apply · <code>{{ jd.source_url }}</code></span>
   {% elif jd.source_url %}Source: <code>{{ jd.source_url }}</code>{% endif %}
