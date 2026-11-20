@@ -52,6 +52,7 @@ def create_app(
     app.state.templates = Jinja2Templates(directory=HERE / "templates")
     app.state.templates.env.globals["csrf_field"] = "csrf"
     app.state.templates.env.globals["describe_choice"] = describe_choice
+    app.state.templates.env.globals["static"] = static_url
     _register_filters(app.state.templates.env)
 
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
@@ -182,3 +183,18 @@ def _ago(moment, today) -> str:
     if days < 7:
         return f"{days} days ago"
     return when.strftime("%-d %b" if when.year == today.year else "%-d %b %Y")
+
+
+def static_url(name: str) -> str:
+    """A static file's address, versioned by its modification time.
+
+    StaticFiles sends no Cache-Control, so a browser may reuse an old copy
+    of a script for hours after it changed: the Jobs page showed the new
+    Search button while still running the old search-as-you-type code
+    (2026-11-21). A new file is a new URL, so the copy is always current.
+    """
+    try:
+        version = int((HERE / "static" / name).stat().st_mtime)
+    except OSError:
+        return f"/static/{name}"
+    return f"/static/{name}?v={version}"

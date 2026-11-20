@@ -1,6 +1,7 @@
-// The Jobs page's toolbar: a choice applies at once, and the search runs as
-// you type, after a short pause. The form is a plain GET, so without
-// JavaScript Enter or the Show button does the same.
+// The Jobs page's toolbar: a dropdown choice applies at once. The search
+// runs only on Enter or the Search button, never while typing; reloading the
+// page mid-word ate the space just typed (Alan, 2026-11-21). The form is a
+// plain GET, so without JavaScript the Search button applies everything.
 (function () {
   var form = document.querySelector("form[data-autosubmit]");
   if (!form) return;
@@ -9,21 +10,15 @@
     if (event.target.tagName === "SELECT") form.submit();
   });
   var search = form.querySelector("input[type=search]");
-  var timer;
+  // The box's own clear (x) empties it; show everything again at once.
   if (search) {
-    // The server trims the search, so submitting on a trailing space would
-    // reload the page without it and eat the space. Submit only when the
-    // trimmed text differs from what this page was loaded with.
-    var shown = search.value.trim();
-    search.addEventListener("input", function () {
-      clearTimeout(timer);
-      if (search.value.trim() === shown) return;
-      timer = setTimeout(function () { form.submit(); }, 500);
+    search.addEventListener("search", function () {
+      if (search.value === "") form.submit();
     });
-    // Back after a search: put the cursor at the end of what was typed.
-    if (search.value) {
-      search.focus();
-      search.setSelectionRange(search.value.length, search.value.length);
-    }
+  }
+  // Back after a search: put the cursor at the end of what was typed.
+  if (search && search.value) {
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
   }
 })();

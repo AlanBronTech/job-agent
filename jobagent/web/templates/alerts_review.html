@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Review alerts · job-agent{% endblock %}
 {% block main %}
-<script src="/static/window.js" defer></script>
-<script src="/static/review.js" defer></script>
+<script src="{{ static('window.js') }}" defer></script>
+<script src="{{ static('review.js') }}" defer></script>
 <div class="heading-row">
   <h1>Review {% if item %}<span class="muted count">{{ left }} left</span>{% endif %}</h1>
   <a href="/alerts">Back to the list</a>

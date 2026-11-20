@@ -122,6 +122,16 @@ def test_list_search_and_nothing_matching(client, ids):
     assert "No jobs match" in client.get("/?q=nothing-like-this").text
 
 
+def test_search_keeps_inner_spaces_and_trims_the_ends(client, ids):
+    """Only the ends are trimmed; the text between is searched as typed."""
+    page = client.get("/?stage=all&q=" + "  Acme Logistics  ".replace(" ", "+"))
+    assert [int(m) for m in re.findall(r'href="/ads/(\d+)"', page.text)] == [ids["acme"]]
+    assert 'name="q" value="Acme Logistics"' in page.text
+    assert ">Search</button>" in page.text
+    # Versioned, so a browser never runs a stale copy of the script.
+    assert re.search(r'src="/static/filters\.js\?v=\d+"', page.text)
+
+
 def test_list_ignores_unknown_values(client, ids):
     assert client.get("/?stage=bogus&sort=bogus&days=12&verdict=x&work=y").status_code == 200
 
