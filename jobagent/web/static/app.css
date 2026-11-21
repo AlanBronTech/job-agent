@@ -365,10 +365,24 @@ a.docs:hover { color: var(--ink); text-decoration: none; }
 /* ------------------------------------------------------------------------- */
 
 /* Pipeline form on a job's page */
-form.pipeline { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
-form.pipeline .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 10px 16px; }
-form.pipeline label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); margin: 0; }
-form.pipeline input.wide { width: 100%; }
+/* Three groups (application, judgment, what was sent), each with a heading
+   and room around it; fields a size up from the rest of the UI. */
+form.pipeline { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 4px; }
+form.pipeline fieldset { border: 0; margin: 0; padding: 20px 0 22px; min-width: 0; }
+form.pipeline fieldset + fieldset { border-top: 1px solid var(--line); }
+form.pipeline legend { float: left; width: 100%; padding: 0; margin: 0 0 14px; font-size: 15px; font-weight: 600; color: var(--ink); }
+form.pipeline legend + * { clear: both; }
+form.pipeline .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 18px 24px; }
+form.pipeline label { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color: var(--muted); margin: 0; }
+form.pipeline input[type="text"], form.pipeline input[type="date"], form.pipeline select { font-size: 15px; min-height: 40px; width: 100%; }
+form.pipeline input[type="file"] { font-size: 14px; }
+form.pipeline .span-2 { grid-column: span 2; }
+form.pipeline .span-all { grid-column: 1 / -1; }
+form.pipeline label.check { display: flex; align-items: center; gap: 0; margin-top: 18px; font-size: 15px; font-weight: 400; color: var(--ink); }
+form.pipeline fieldset > .detail { margin: -6px 0 16px; max-width: 60em; }
+form.pipeline .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 4px 0 0; padding-top: 18px; border-top: 1px solid var(--line); }
+form.pipeline .actions button { min-height: 40px; padding: 8px 22px; font-size: 15px; }
+@media (max-width: 40rem) { form.pipeline .span-2 { grid-column: 1 / -1; } }
 
 .panel.review h2 { margin: 0 0 6px; font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--ink); }
 .panel.review button { margin: 2px 4px 2px 0; }
