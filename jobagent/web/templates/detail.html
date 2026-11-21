@@ -266,6 +266,8 @@
   <form class="pipeline" method="post" action="/ads/{{ jd.id }}/pipeline" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ token }}">
     {% set current = d.application.status.value if d.application else "" %}
+    <fieldset>
+    <legend>Application</legend>
     <div class="fields">
       <label>Status
         <select id="status" name="status">
@@ -283,14 +285,23 @@
           {% for c in pipeline.channels %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
         </select></label>
       <label>Who or where <input type="text" id="channel_detail" name="channel_detail" placeholder="e.g. recruiter's name, agency"></label>
+    </div>
+    </fieldset>
+    <fieldset>
+    <legend>Your judgment</legend>
+    <div class="fields">
       <label>Worth applying?
         <select id="worth" name="worth">
           <option value="">{{ "keep: " ~ pipeline.worth[d.application.worth_applying.value] if d.application else "—" }}</option>
           {% for value, label in pipeline.worth.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
         </select></label>
-      <label>Why <input type="text" id="why" name="why" placeholder="one line, read in the eval report"></label>
+      <label class="span-2">Why <input type="text" id="why" name="why" placeholder="one line, read in the eval report"></label>
+      <label class="span-all">Note <input type="text" id="note" name="note" placeholder="added to the notes, never replacing them"></label>
     </div>
-    <label>Note <input type="text" id="note" name="note" class="wide" placeholder="added to the notes, never replacing them"></label>
+    </fieldset>
+    <fieldset>
+    <legend>What you sent</legend>
+    <p class="detail">Kept in the job's folder under <code>sent/</code>, never replaced, and compared with what was generated. Choose the .docx: a PDF is kept but cannot be compared.</p>
     <div class="fields">
       {% if d.masters %}<label>Master resume sent <select id="master" name="master">
           <option value="">— none, or work it out from the file —</option>
@@ -299,16 +310,16 @@
         </select></label>{% endif %}
       <label>Resume sent <input type="file" id="sent_resume" name="sent_resume" accept=".docx,.pdf"></label>
       <label>Cover letter sent <input type="file" id="sent_letter" name="sent_letter" accept=".docx,.pdf"></label>
-      <label><input type="checkbox" id="sent_as_generated" name="sent_as_generated" value="1">
-        Sent the generated documents unedited</label>
     </div>
-    <p class="detail">The files you sent are kept in the job's folder under <code>sent/</code>, never replaced, and compared with what was generated. Choose the .docx: a PDF is kept but cannot be compared.</p>
+    <label class="check"><input type="checkbox" id="sent_as_generated" name="sent_as_generated" value="1">
+      Sent the generated documents unedited</label>
+    </fieldset>
     {% if pipeline_confirm %}
     <div class="banner bad">These documents still have blockers: {{ pipeline_confirm | join(", ") }}.
       <label><input type="checkbox" id="confirm_blockers" name="confirm_blockers" value="1">
         I fixed them by hand, or I am sending them anyway: record Applied.</label></div>
     {% endif %}
-    <p><button type="submit" class="primary">Save</button>
+    <p class="actions"><button type="submit" class="primary">Save</button>
       <span class="detail">Free. Nothing changes until you choose. Applied with no date gets today's.</span></p>
   </form>
 </div>
