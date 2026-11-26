@@ -182,6 +182,12 @@ def generate(
             "or --custom --long-profile."
         )
         raise typer.Exit(code=2)
+    except MasterProfileMissing as refusal:
+        err_console.print(
+            f"[bold red]Cannot place a longer profile in the {refusal.master} master.[/] "
+            f"{refusal.detail} Nothing was spent."
+        )
+        raise typer.Exit(code=2)
 
     if planned.history is not None:
         render_company_history(err_console, planned.history)

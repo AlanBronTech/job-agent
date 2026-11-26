@@ -446,6 +446,10 @@ def kinds_reaching_the_service(monkeypatch) -> list:
     (["--long-profile", "--no-master"], "custom_profile", None),
 ])
 def test_long_profile_reaches_the_service_as_a_resume_kind(with_masters, monkeypatch, args, kind, master):
+    from tests.test_agency_resume import build_master
+
+    for name in ("Sam-Resume-Manager.docx", "Sam-Resume-AI.docx"):
+        build_master(with_masters.profile_dir / "resumes" / name)
     jd_id = seed_manager_role(with_masters)
     seen = kinds_reaching_the_service(monkeypatch)
     result = runner.invoke(app, ["generate", str(jd_id), *args])
@@ -463,4 +467,11 @@ def test_long_profile_on_a_not_a_target_job_is_refused(with_masters) -> None:
         ))
     result = runner.invoke(app, ["generate", str(jd_id), "--long-profile"])
     assert result.exit_code == 2 and "--custom" in result.output
+    assert out_files(with_masters) == []
+
+
+def test_long_profile_on_a_master_without_a_profile_section_is_refused(with_masters) -> None:
+    jd_id = seed_manager_role(with_masters)  # the fixture's masters are not real .docx files
+    result = runner.invoke(app, ["generate", str(jd_id), "--long-profile"])
+    assert result.exit_code == 2 and "Nothing was spent" in result.output
     assert out_files(with_masters) == []

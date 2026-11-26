@@ -46,11 +46,13 @@ def folder_files(ws):
 
 def test_the_form_ticks_the_recommended_master_and_the_letter_not_custom(client, ids):
     page = " ".join(client.get(f"/ads/{ids['acme']}").text.split())
-    assert '<input type="checkbox" name="use_master" value="1" checked>' in page
+    assert '<input type="radio" name="resume_kind" value="master" checked>' in page
     assert '<option value="manager" selected>Engineering Manager (recommended)</option>' in page
-    assert '<input type="checkbox" name="resume" value="1" > Custom resume' in page
-    assert '<input type="checkbox" name="cover" value="1" checked>' in page
-    assert "Not recommended:" in flat(client.get(f"/ads/{ids['acme']}"))
+    assert '<input type="radio" name="resume_kind" value="custom" > Custom resume' in page
+    assert 'value="master_profile" data-long-profile>' in page
+    assert 'value="custom_profile" data-long-profile>' in page
+    assert '<input type="checkbox" name="cover" value="1" checked data-cover>' in page
+    assert "Custom resume not recommended:" in flat(client.get(f"/ads/{ids['acme']}"))
 
 
 def test_master_only_copies_it_into_the_folder_and_calls_no_model(client, ws, ids, model):  # noqa: F811

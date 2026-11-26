@@ -138,6 +138,8 @@ def plan(
     loaded = _load(ws, jd_id) if resume_kind is not None else None
     if resume_kind is not None:
         resume, master, _base = _resume_choice(ws, loaded.jd, jd_id, resume_kind, master)
+        if _base is not None:
+            _check_profile_slot(_base)
         resume = resume or _base is not None
     if not (resume or cover or answers or master):
         raise NothingSelected()

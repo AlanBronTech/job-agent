@@ -45,6 +45,7 @@ def generate(
     review: bool = True,
     limit: int | None = None,
     master: str | None = None,
+    resume_kind=None,
 ):
     def work() -> dict:
         try:
@@ -54,6 +55,7 @@ def generate(
                 overrule=overrule, supersede=supersede,
                 today=today, now=datetime.now(),
                 check_claims=check_claims, review=review, limit=limit, master=master,
+                resume_kind=resume_kind,
             )
         except GenerationFailed as failure:
             message = f"{_STAGE[failure.stage]}: {failure.cause}"
