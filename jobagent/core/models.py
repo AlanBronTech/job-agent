@@ -25,6 +25,34 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 
+class ResumeKind(str, Enum):
+    """Which resume a generate run makes (spec 005).
+
+    `master` copies the chosen master unchanged; `master_profile` copies it
+    with only its PROFILE replaced by a longer one written for the ad;
+    `custom` and `custom_profile` are generated, with the short or the longer
+    PROFILE.
+    """
+
+    master = "master"
+    master_profile = "master_profile"
+    custom = "custom"
+    custom_profile = "custom_profile"
+
+    @property
+    def uses_master(self) -> bool:
+        return self in (ResumeKind.master, ResumeKind.master_profile)
+
+    @property
+    def long_profile(self) -> bool:
+        return self in (ResumeKind.master_profile, ResumeKind.custom_profile)
+
+    @property
+    def generated(self) -> bool:
+        """A model writes something for it."""
+        return self is not ResumeKind.master
+
+
 class Visibility(str, Enum):
     """Controls how a profile entry is rendered.
 
@@ -962,6 +990,9 @@ class Application(_Base):
     # override can be told from agreement when the masters are read back.
     resume_master: str | None = None
     resume_suggested: str | None = None
+    # Whether that resume carried the longer, agency PROFILE (spec 005): True
+    # or False when recorded, None before 2026-11-26 or when unknown.
+    resume_long_profile: bool | None = None
 
     updated_at: datetime
 

@@ -149,22 +149,33 @@
 
 {% if a is not none %}
 <h2>Generate</h2>
+<script src="{{ static('generate.js') }}" defer></script>
 <form class="panel" method="post" action="/ads/{{ jd.id }}/generate/confirm">
   <input type="hidden" name="csrf" value="{{ token }}">
   {% set suggested = d.master.master.id if d.master and d.master.master else none %}
+  {% set default_kind = "master" if suggested else ("none" if d.masters else "custom") %}
+  <fieldset class="resume-kind">
+  <legend>Resume</legend>
   {% if d.masters %}
-  <label><input type="checkbox" name="use_master" value="1" {% if suggested %}checked{% endif %}>
-    Master resume <select name="master">
+  <label>Master <select name="master">
     {% for m in d.masters %}<option value="{{ m.id }}" {% if m.id == suggested %}selected{% endif %}>{{ m.label }}{% if m.id == suggested %} (recommended){% endif %}</option>{% endfor %}
     </select></label>
-  <p class="detail">Copied unchanged into the job folder, free, so it is there to send.</p>
+  {% if not suggested and d.master %}<p class="detail">{{ d.master.reason }} Pick a master above to use one anyway.</p>{% endif %}
   {% endif %}
-  <label><input type="checkbox" name="resume" value="1" {% if not d.masters %}checked{% endif %}> Custom resume <span class="muted">(generated, paid)</span></label>
+  <label class="check"><input type="radio" name="resume_kind" value="none" {% if default_kind == "none" %}checked{% endif %}> No resume</label>
+  {% if d.masters %}
+  <label class="check"><input type="radio" name="resume_kind" value="master" {% if default_kind == "master" %}checked{% endif %}> The master, as is <span class="muted">(copied unchanged, free)</span></label>
+  <label class="check"><input type="radio" name="resume_kind" value="master_profile" data-long-profile> The master with a longer profile for this ad <span class="muted">(only PROFILE is written, paid)</span></label>
+  {% endif %}
+  <label class="check"><input type="radio" name="resume_kind" value="custom" {% if default_kind == "custom" %}checked{% endif %}> Custom resume <span class="muted">(generated, paid)</span></label>
+  <label class="check"><input type="radio" name="resume_kind" value="custom_profile" data-long-profile> Custom resume with a longer profile <span class="muted">(generated, paid)</span></label>
+  <p class="detail">A longer profile (up to 250 words) stands in for a cover letter, as recruitment agencies prefer.</p>
   {% if d.custom and d.custom.recommended is not none %}
-  <p class="detail"><strong>{{ "Recommended" if d.custom.recommended else "Not recommended" }}:</strong>
+  <p class="detail"><strong>Custom resume {{ "recommended" if d.custom.recommended else "not recommended" }}:</strong>
     {{ d.custom.reason.split(": ", 1)[-1] if d.custom.reason.startswith("Custom resume") else d.custom.reason }}</p>
   {% elif d.custom %}<p class="detail">{{ d.custom.reason }}</p>{% endif %}
-  <label><input type="checkbox" name="cover" value="1" checked> Cover letter</label>
+  </fieldset>
+  <label><input type="checkbox" name="cover" value="1" checked data-cover> Cover letter</label>
   <details>
     <summary>Application questions (optional)</summary>
     <p class="detail">One per line, pasted from the application form. Answers are written to <code>answers.md</code> to paste back.</p>
@@ -249,7 +260,7 @@
 {% endif %}
   {% if pipeline_saved %}<p class="detail"><strong>Saved.</strong></p>{% endif %}
   {% if d.application and d.application.resume_master %}<p class="detail"><strong>Resume sent:</strong>
-    {% if d.application.resume_master == "custom" %}a custom resume{% else %}{% for m in d.masters if m.id == d.application.resume_master %}{{ m.label }} master{% else %}master '{{ d.application.resume_master }}'{% endfor %}{% endif %}</p>{% endif %}
+    {% if d.application.resume_master == "custom" %}a custom resume{% else %}{% for m in d.masters if m.id == d.application.resume_master %}{{ m.label }} master{% else %}master '{{ d.application.resume_master }}'{% endfor %}{% endif %}{% if d.application.resume_long_profile %} with a longer profile{% endif %}</p>{% endif %}
   {% if pipeline_problem %}<div class="banner bad">{{ pipeline_problem }}</div>{% endif %}
   {% if d.sent %}
   <p><strong>Sent</strong> <span class="muted">against what was generated</span> · <a href="/ads/{{ jd.id }}/diff">every change</a></p>
@@ -306,7 +317,9 @@
       {% if d.masters %}<label>Master resume sent <select id="master" name="master">
           <option value="">— none, or work it out from the file —</option>
           {% for m in d.masters %}<option value="{{ m.id }}">{{ m.label }}{% if d.master and d.master.master and d.master.master.id == m.id %} (suggested){% endif %}</option>{% endfor %}
+          {% for m in d.masters %}<option value="{{ m.id }}+profile">{{ m.label }} with a longer profile</option>{% endfor %}
           <option value="custom">A custom resume</option>
+          <option value="custom+profile">A custom resume with a longer profile</option>
         </select></label>{% endif %}
       <label>Resume sent <input type="file" id="sent_resume" name="sent_resume" accept=".docx,.pdf"></label>
       <label>Cover letter sent <input type="file" id="sent_letter" name="sent_letter" accept=".docx,.pdf"></label>

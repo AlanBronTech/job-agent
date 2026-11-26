@@ -90,6 +90,9 @@ class GenerateResult:
     resume_pages: float | None = None
     # Only a master resume was copied in: no model ran, so nothing to review.
     copied_only: bool = False
+    # Which resume was generated (spec 005): (a master's id or "custom",
+    # longer PROFILE?); None when no resume was generated.
+    resume_base: tuple[str, bool] | None = None
 
 
 @dataclass

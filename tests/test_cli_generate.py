@@ -419,3 +419,59 @@ def test_custom_and_no_master_reach_the_model(with_masters) -> None:
         result = runner.invoke(app, ["generate", str(jd_id), *args])
         assert isinstance(result.exception, AssertionError), args
     assert out_files(with_masters) == []
+
+
+# --------------------------------------------------------------------------- #
+# Spec 005: --long-profile
+# --------------------------------------------------------------------------- #
+
+
+def kinds_reaching_the_service(monkeypatch) -> list:
+    from jobagent.services import documents
+
+    seen = []
+
+    def stop(*a, **k):
+        seen.append((k.get("resume_kind"), k.get("master")))
+        raise SystemExit(0)
+
+    monkeypatch.setattr(documents, "generate", stop)
+    return seen
+
+
+@pytest.mark.parametrize("args, kind, master", [
+    (["--long-profile"], "master_profile", "manager"),
+    (["--long-profile", "--master", "ai"], "master_profile", "ai"),
+    (["--long-profile", "--custom"], "custom_profile", None),
+    (["--long-profile", "--no-master"], "custom_profile", None),
+])
+def test_long_profile_reaches_the_service_as_a_resume_kind(with_masters, monkeypatch, args, kind, master):
+    from tests.test_agency_resume import build_master
+
+    for name in ("Sam-Resume-Manager.docx", "Sam-Resume-AI.docx"):
+        build_master(with_masters.profile_dir / "resumes" / name)
+    jd_id = seed_manager_role(with_masters)
+    seen = kinds_reaching_the_service(monkeypatch)
+    result = runner.invoke(app, ["generate", str(jd_id), *args])
+    assert seen and seen[0][0].value == kind and seen[0][1] == master, result.output
+    assert "longer profile" in result.output
+
+
+def test_long_profile_on_a_not_a_target_job_is_refused(with_masters) -> None:
+    with store.open_store(with_masters.db_path) as conn:
+        jd_id = store.add_jd(conn, make_jd("Senior Software Engineer"))
+        store.add_assessment(conn, FitAssessment(
+            jd_id=jd_id, overall_score=70, recruiter_screen_score=60, verdict=Verdict.apply,
+            rationale="Invented.", target_role_match=True, target_role_note="Invented.",
+            scored_at=NOW,
+        ))
+    result = runner.invoke(app, ["generate", str(jd_id), "--long-profile"])
+    assert result.exit_code == 2 and "--custom" in result.output
+    assert out_files(with_masters) == []
+
+
+def test_long_profile_on_a_master_without_a_profile_section_is_refused(with_masters) -> None:
+    jd_id = seed_manager_role(with_masters)  # the fixture's masters are not real .docx files
+    result = runner.invoke(app, ["generate", str(jd_id), "--long-profile"])
+    assert result.exit_code == 2 and "Nothing was spent" in result.output
+    assert out_files(with_masters) == []

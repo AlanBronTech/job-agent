@@ -64,6 +64,16 @@ from jobagent.core.validation import (
 
 RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
+
+# Rule 7 of the resume prompt by default: the masters' two short paragraphs.
+# Spec 005 swaps it for prompts/long_profile_rules.md when a longer, agency
+# PROFILE is asked for; the default text is unchanged from resume prompt v10.
+SHORT_PROFILE_RULE = '**PROFILE is two short paragraphs, in the first person**, as the master\n   writes them: "Engineering leader and three-time co-founder. I have led\n   teams of up to 15 …". The first says what Alan is and the single strongest\n   thing he has done that matters to *this* ad. The second says what he is\n   doing now and where it points. Never "Alan", "he" or "his" about him: that\n   is rejected. Highlights are written the same way, or with no pronoun, as\n   the experience bullets are. Blunt, factual, specific. No\n   adjectives that could be said of anyone.'
+
+# Spec 005: the longer PROFILE, for agencies (Alan, 2026-11-25).
+LONG_PROFILE_MAX_WORDS = 250
+PROFILE_PROMPT = "generate_profile"
+LONG_PROFILE_RULES = "long_profile_rules"
 CONTEXT_PROMPT = "context"
 CONTRACT_PROMPT = "contract_writing"
 # A contract's letter is shorter than a permanent one (350), not a stub: at
@@ -276,6 +286,9 @@ class GeneratedResume:
     # The prose the model wrote — each PROFILE paragraph and highlight — with
     # what it cites, for the claim check. Bullets are copied, so not here.
     sentences: list[Sentence] = field(default_factory=list)
+    # Written to the longer, agency PROFILE rule (spec 005): its word limit
+    # is checked again when a repair changes a paragraph.
+    long_profile: bool = False
 
 
 @dataclass
@@ -312,6 +325,7 @@ def build_resume(
     feedback: str | None = None,
     length: ResumeLength = FULL_TIME_LENGTH,
     skills_order: list[str] | None = None,
+    long_profile: bool = False,
 ) -> GeneratedResume:
     """Select and order profile content for one ad, and assemble the resume.
 
@@ -322,7 +336,8 @@ def build_resume(
     `feedback` is the claim check's verdict on an earlier draft, sent the same way.
     `skills_order` is the chosen master's CORE SKILLS order (spec 004): every
     category it names, in that order, over the model's choice and the role
-    kind's order.
+    kind's order. `long_profile` asks for the longer, agency PROFILE (spec 005):
+    the agency rules replace rule 7, and over 250 words is a blocker.
     """
     instructions = "\n\n".join(part for part in (instructions, feedback) if part) or None
     excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
@@ -339,11 +354,11 @@ def build_resume(
         selection = _ask_for_selection(
             jd, profile, assessment, catalogue, client=client, kind=kind,
             excluded=excluded, retry_note=retry_note, instructions=instructions,
-            length=length,
+            length=length, long_profile=long_profile,
         )
         built = _check_resume(
             selection, jd, profile, assessment, catalogue, citable, excluded, kind,
-            today=today or date.today(), skills_order=skills_order,
+            today=today or date.today(), skills_order=skills_order, long_profile=long_profile,
         )
         # Repetition is repaired in code where it can be: dropping a duplicate
         # bullet costs nothing, and a rewrite for it cost $0.19-0.28.
@@ -353,6 +368,7 @@ def build_resume(
                 again = _check_resume(
                     repaired, jd, profile, assessment, catalogue, citable, excluded, kind,
                     today=today or date.today(), skills_order=skills_order,
+                    long_profile=long_profile,
                 )
                 if _blockers(again) < _blockers(built):
                     again.issues += [
@@ -366,14 +382,18 @@ def build_resume(
         rejected.append(failures)
         retry_note = _rewrite_instruction(failures, json_output=True)
     built.rejected = rejected
+    built.long_profile = long_profile
     return built
 
 
 def _check_resume(
     selection, jd, profile, assessment, catalogue, citable, excluded, kind, *, today,
     skills_order: list[str] | None = None,
+    long_profile: bool = False,
 ) -> GeneratedResume:
     issues: list[ValidationIssue] = _uncited_paragraphs(selection)
+    if long_profile:
+        issues += profile_length_issues(selection.profile_paragraphs)
     for paragraph in [selection.tagline, *selection.profile_paragraphs]:
         issues += validate_prose(paragraph, profile, context="the PROFILE section")
         # Solely about him, so "he" and "his" are third person too.
@@ -423,6 +443,20 @@ def _check_resume(
         },
         sentences=resume_sentences(selection),
     )
+
+
+def profile_length_issues(paragraphs: list[str], limit: int = LONG_PROFILE_MAX_WORDS) -> list[ValidationIssue]:
+    """The longer PROFILE over its word limit (spec 005): a blocker."""
+    words = sum(len(p.split()) for p in paragraphs)
+    if words <= limit:
+        return []
+    return [
+        ValidationIssue(
+            rule="PROFILE length",
+            severity=Severity.blocker,
+            detail=f"The PROFILE is {words} words against a {limit}-word limit. Cut it to {limit} or fewer.",
+        )
+    ]
 
 
 def resume_sentences(selection: _ResumeSelection) -> list[Sentence]:
@@ -563,6 +597,7 @@ def _ask_for_selection(
     retry_note: str | None = None,
     instructions: str | None = None,
     length: ResumeLength = FULL_TIME_LENGTH,
+    long_profile: bool = False,
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
@@ -577,6 +612,7 @@ def _ask_for_selection(
             skills=", ".join(profile.roles.skills),
             voice=profile.voice,
             length_rule=length.rule,
+            profile_rule=profile_rule(long_profile),
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
@@ -598,6 +634,13 @@ def _ask_for_selection(
         raise GenerateError(
             f"The model's selection did not match the contract.\n{exc}"
         ) from exc
+
+
+def profile_rule(long_profile: bool) -> str:
+    """Rule 7 of the resume prompt: the masters' short PROFILE, or the agency one."""
+    if not long_profile:
+        return SHORT_PROFILE_RULE
+    return load_prompt(LONG_PROFILE_RULES).strip()
 
 
 def _assemble(
@@ -883,6 +926,76 @@ def build_cover_letter(
     )
 
 
+def build_profile(
+    jd: JobDescription,
+    profile: Profile,
+    assessment: FitAssessment,
+    *,
+    client: LLMClient,
+    kind: RoleClassification | None = None,
+    on_page: dict[str, str] | None = None,
+    feedback: str | None = None,
+    instructions: str | None = None,
+    max_words: int = LONG_PROFILE_MAX_WORDS,
+) -> GeneratedText:
+    """The longer, agency PROFILE for a copy of a master resume (spec 005).
+
+    Written as cited sentences on the cover letter's machinery, so the same
+    code checks, claim check and sentence repair apply. `on_page` is what the
+    master already says (its highlights and bullets): the profile may point at
+    the same evidence but must not repeat a line of it. `instructions` is
+    Alan's context note; `feedback` what a later check found (claims, length).
+    """
+    excluded = kinds.excluded_ids(profile, kinds.kinds_of(kind), jd)
+    try:
+        prompt = load_prompt(
+            PROFILE_PROMPT,
+            jd_json=_jd_summary(jd),
+            assessment_json=_assessment_summary(assessment),
+            role_kind=role_kind_block(kind),
+            catalogue=_render_catalogue(profile, build_catalogue(profile, excluded), excluded),
+            stories=_render_stories(profile, excluded),
+            must_have_gaps="\n".join(f"- {g}" for g in must_have_gaps(jd, assessment))
+            or "(none)",
+            on_page="\n".join(f"- [{ref}] {' '.join(text.split())}"
+                               for ref, text in (on_page or {}).items())
+            or "(nothing to compare)",
+            long_profile_rules=load_prompt(LONG_PROFILE_RULES).strip(),
+            voice=profile.voice,
+        )
+    except PromptError as exc:
+        raise GenerateError(str(exc)) from exc
+    if instructions:
+        prompt = f"{prompt}\n\n{instructions}"
+    if feedback:
+        prompt = f"{prompt}\n\n{feedback}"
+
+    def first_person(paragraphs: list[list[Sentence]]) -> list[ValidationIssue]:
+        # Solely about him, as the short PROFILE is: "he" and "his" too.
+        return [
+            issue
+            for paragraph in paragraphs
+            for issue in check_third_person(
+                " ".join(s.text for s in paragraph), "the PROFILE section",
+                name=False, pronouns=True,
+            )
+        ]
+
+    return _write_cited(
+        client,
+        prompt,
+        PROFILE_PROMPT,
+        profile,
+        known=known_citations(profile, excluded),
+        max_words=max_words,
+        context="The PROFILE section",
+        ad_text=jd.raw_text,
+        on_resume=on_page or {},
+        extra_checks=first_person,
+        what="PROFILE",
+    )
+
+
 def build_answers(
     questions: list[str],
     jd: JobDescription,
@@ -1109,8 +1222,14 @@ def _write_cited(
     context: str,
     ad_text: str | None = None,
     on_resume: dict[str, str] | None = None,
+    extra_checks: Callable[[list[list[Sentence]]], list[ValidationIssue]] | None = None,
+    what: str = "letter",
 ) -> GeneratedText:
     """Write as cited sentences, check them in code, regenerate once on blockers.
+
+    `extra_checks` adds checks of its own (the longer PROFILE's third person,
+    spec 005); they run again on repaired sentences, as the rest do. `what`
+    names the document in the repeat check's message.
 
     The text is rebuilt from the sentences for rendering, so the .docx is the
     same shape as before. Furniture the model added anyway — a salutation, a
@@ -1140,7 +1259,9 @@ def _write_cited(
         )
         if ad_text is not None:
             issues += check_company_sentences(paragraphs, ad_text)
-        issues += _repeats_resume(paragraphs, on_resume or {})
+        issues += _repeats_resume(paragraphs, on_resume or {}, what=what)
+        if extra_checks is not None:
+            issues += extra_checks(paragraphs)
         return issues
 
     for attempt in range(REWRITE_ATTEMPTS + 1):
@@ -1208,6 +1329,8 @@ def apply_resume_repairs(built: GeneratedResume, repairs: dict[str, str], profil
     sentences = [
         s.model_copy(update={"text": repairs.get(s.text.strip(), s.text)}) for s in built.sentences
     ]
+    if built.long_profile:
+        issues = [i for i in issues if i.rule != "PROFILE length"] + profile_length_issues(paragraphs)
     return replace(
         built,
         content=replace(content, profile_paragraphs=paragraphs, highlights=highlights),
@@ -2161,7 +2284,7 @@ def _firm_part(must_have: str) -> str:
     return _SOFTENER.split(must_have, maxsplit=1)[0]
 
 
-def _repeats_resume(paragraphs, on_resume: dict[str, str]) -> list[ValidationIssue]:
+def _repeats_resume(paragraphs, on_resume: dict[str, str], *, what: str = "letter") -> list[ValidationIssue]:
     """A letter sentence that copies a line the resume already carries.
 
     The letter is written after the resume and is told what is on it; this is
@@ -2176,10 +2299,10 @@ def _repeats_resume(paragraphs, on_resume: dict[str, str]) -> list[ValidationIss
                 if overlap(sentence.text, text) >= REPEAT_OVERLAP:
                     issues.append(
                         ValidationIssue(
-                            rule="letter repeats the resume",
+                            rule=f"{what} repeats the resume",
                             severity=Severity.blocker,
                             detail=(
-                                f"A letter sentence restates the resume's {ref}. Tell "
+                                f"A {what} sentence restates the resume's {ref}. Tell "
                                 "it differently or use evidence the resume does not show."
                             ),
                             excerpt=sentence.text[:120],

@@ -445,6 +445,8 @@ blamed for noise. Repeat the case before believing the delta.
 
 ### D51. Pick, don't compose: hand-written masters, chosen in code
 
+(See D53 for the one generated section a master copy may carry.)
+
 Composing a new resume for every ad produced documents that were honest but
 not persuasive, and each one led with something different: a reader who saw
 two would not know what the candidate is. From 2026-11-16 the resume is one
@@ -471,6 +473,24 @@ Interview prep still sees it, because a question asked in the room deserves
 a true answer.
 
 ---
+
+
+### D53. A master with a longer profile is a recorded variant, not a composed resume
+
+Recruitment agencies read the resume, not a letter, and its opening profile
+is what a consultant uses to decide whether to put the candidate forward. From
+2026-11-26 a resume can be a copy of the chosen master with only its PROFILE
+paragraphs replaced by a profile of up to 250 words written for the ad (spec
+005, `generate --long-profile`). A custom resume can carry the same longer
+profile.
+
+This bends D51 without reopening it. The master file is never written; every
+other line of the copy is the person's own approved text. The one generated
+section is held to every rule a generated PROFILE already meets: cited
+sentences, the code checks, the claim check with sentence repair, the
+three-page measurement. And what went is recorded beside what was suggested
+(`applications.resume_long_profile`, schema v20), so plain masters and
+longer-profile copies can be compared once there are enough sends.
 
 ## Testing
 

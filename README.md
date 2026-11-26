@@ -47,12 +47,14 @@ including the `?t=…` part, or the buttons will be refused.
   capture cut off at "…more" is refused, and a thin one is flagged.
 - **Score.** A button on every ad, and *Re-score* on a scored or stale one. A
   stub needs a box ticked before it will score, as `--force` does.
-- **Generate.** With master resumes, the form starts with the recommended
-  master ticked (a drop-down to pick another), the cover letter ticked, and
-  *Custom resume* unticked, with a line saying whether a custom one is
-  recommended (see *Master resumes*). The ticked master is copied, unchanged
-  and free, into the job's folder in `OUTPUT_DIR`, so the file to send sits
-  beside the letter; on its own it calls no model and moves nothing aside.
+- **Generate.** The resume is one choice: no resume, the master as is (the
+  default when one is recommended; a drop-down picks another), the master with
+  a longer profile for this ad, a custom resume, or a custom resume with a
+  longer profile. A line says whether a custom one is recommended (see
+  *Master resumes*). The master as is is copied, unchanged and free, into the
+  job's folder in `OUTPUT_DIR`, so the file to send sits beside the letter; on
+  its own it calls no model and moves nothing aside. Choosing a longer profile
+  unticks the cover letter (see *Agency ads*); tick it again if you want both.
   Paste application questions if there are any, and you get a confirmation
   page first: the files it will write, the
   measured cost, the scorer's reasons if it said skip (with a box to overrule
@@ -382,7 +384,22 @@ jobagent generate 22 --resume             # just the master copied in; no model,
 jobagent generate 22 --cover --master ai  # copy a different master
 jobagent generate 22 --custom --cover     # a tailored resume as well (paid)
 jobagent generate 22 --cover --no-master  # no master copied
+jobagent generate 22 --long-profile       # agency ad: the master with a longer profile (paid)
+jobagent generate 22 --custom --long-profile  # a custom resume with a longer profile (paid)
 ```
+
+**Agency ads.** Recruitment agencies read the resume, not a letter.
+`--long-profile` writes a copy of the suggested master (or `--master <id>`)
+with only its PROFILE replaced by one of up to 250 words written for this ad;
+the master itself is never changed, and the plain master is not copied as
+well. Every sentence cites your profile and goes through the claim check. If
+the copy renders over 3 pages the profile is rewritten shorter once; still
+over, the file is named `_NOT-READY`. The copy is a .docx like any generated
+resume: export the PDF yourself. The command prints its expected cost first;
+until the profile prompt has run once it names it as not yet measured. Check
+what it actually costs with `jobagent spend`. `revise --resume` will not
+touch a master copy: add a context note and generate it again with
+`--supersede`.
 
 `--resume` means "a resume": the suggested master when there is one. It is
 generated only when there is no `masters.yaml` at all, or with `--no-master`.
@@ -586,6 +603,7 @@ Which resume went is recorded too, so the masters can be compared later:
 ```
 jobagent apply 22 --channel linkedin                  # sent the suggested master
 jobagent apply 22 --channel linkedin --master ai      # sent a different master
+jobagent apply 22 --channel seek --master em --long-profile  # the master copy with a longer profile
 jobagent apply 22 --channel linkedin --master custom --sent-resume ~/Desktop/AlanBron_Resume_Acme_202611.docx
 ```
 

@@ -311,3 +311,40 @@ def test_status_shows_the_resume_column(with_masters) -> None:
     runner.invoke(app, ["apply", str(jd_id), "--master", "ai"])
     out = runner.invoke(app, ["status"]).output
     assert "resume" in out and " ai " in f" {' '.join(out.split())} "
+
+
+# --------------------------------------------------------------------------- #
+# Spec 005: --long-profile
+# --------------------------------------------------------------------------- #
+
+
+def test_apply_master_with_long_profile(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    result = runner.invoke(app, ["apply", str(jd_id), "--master", "manager", "--long-profile"])
+    assert result.exit_code == 0, result.output
+    application = stored(with_masters, jd_id)
+    assert (application.resume_master, application.resume_long_profile) == ("manager", True)
+    # The master's own file is not the resume that went.
+    assert sent_rows(with_masters, jd_id) == []
+    assert "with a longer profile" in result.output
+
+
+def test_apply_long_profile_without_a_master_is_refused(with_masters) -> None:
+    jd_id = seed_em(with_masters)
+    result = runner.invoke(app, ["apply", str(jd_id), "--long-profile"])
+    assert result.exit_code == 2 and "--master" in result.output
+    assert stored(with_masters, jd_id) is None
+
+
+def test_status_labels_the_long_profile() -> None:
+    from jobagent.cli.apply import resume_label
+    from jobagent.core.models import Application
+
+    def app_with(**kw):
+        return Application(jd_id=1, updated_at=NOW, **kw)
+
+    assert resume_label(app_with(resume_master="manager", resume_long_profile=True)) == "manager+profile"
+    assert resume_label(app_with(resume_master="custom", resume_long_profile=True)) == "custom+profile"
+    assert resume_label(app_with(resume_master="manager", resume_long_profile=False)) == "manager"
+    assert resume_label(app_with(resume_master="manager")) == "manager"
+    assert resume_label(app_with()) == "—"

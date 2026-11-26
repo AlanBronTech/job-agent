@@ -22,8 +22,13 @@ from pathlib import Path
 from jobagent.adapters.docx_reader import DocxReadError, read_sections
 from jobagent.core import store
 from jobagent.core.models import DocumentKind, JobDescription, RevisionNote
-from jobagent.services import documents, sent
-from jobagent.services.refusals import EditedByHand, NoGeneratedCopy, NoSuchAd
+from jobagent.services import documents, masters, sent
+from jobagent.services.refusals import (
+    EditedByHand,
+    MasterCopyNotRevisable,
+    NoGeneratedCopy,
+    NoSuchAd,
+)
 from jobagent.services.results import GenerateResult
 from jobagent.services.workspace import Workspace
 
@@ -52,6 +57,11 @@ def plan(ws: Workspace, jd_id: int, kind: DocumentKind, today: date) -> Revision
     kept = sent.latest_generated(ws, jd, current.name, kind, today)
     if kept is None:
         raise NoGeneratedCopy(label, current.name)
+    if kind is DocumentKind.resume:
+        base = documents.latest_resume_kind(ws, jd, today)
+        if base is not None and base[0] != "custom":
+            label = next((m.label for m in masters.registry(ws) if m.id == base[0]), base[0])
+            raise MasterCopyNotRevisable(label)
     kept_path = ws.documents.local_path(jd, current.name, kept, today)
     name = Path(kept).name
     visible = name if name in {f.name for f in current.files} else None
@@ -75,7 +85,7 @@ def revisable(ws: Workspace, jd_id: int, today: date) -> list[RevisionPlan]:
     for kind in DocumentKind:
         try:
             plans.append(plan(ws, jd_id, kind, today))
-        except NoGeneratedCopy:
+        except (NoGeneratedCopy, MasterCopyNotRevisable):
             continue
     return plans
 

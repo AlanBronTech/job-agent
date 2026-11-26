@@ -155,3 +155,13 @@ def test_a_new_label_without_samples_names_itself_beside_the_measured_part(tmp_p
     assert est.total_usd is None
     line = costs.describe(est)
     assert "$0.08 for what has been measured" in line and "review_documents" in line
+
+
+def test_longer_profile_is_named_until_measured(tmp_path):
+    """Spec 005: the longer PROFILE's own prompt has no runs yet; it is named, never $0."""
+    ws = workspace(tmp_path)
+    write_log(ws, call("check_claims", 0.02, "a"))
+    est = estimate(ws, config(tmp_path), "generate", profile=True, check_claims=True)
+    assert list(est.per_label) == ["generate_profile", "check_claims"]
+    assert est.total_usd is None
+    assert "No measurement yet for generate_profile" in costs.describe(est)

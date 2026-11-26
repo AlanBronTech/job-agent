@@ -213,8 +213,12 @@ def assessment_markdown(
     coverage=None,
     by_document: dict[str, list[ValidationIssue]] | None = None,
     master=None,
+    resume_base: str | None = None,
 ) -> str:
     """The assessment as a readable record, kept with the documents it shaped.
+
+    `resume_base` says which resume this run generated ("copy of the …
+    master with a longer profile", spec 005), beside the suggestion.
 
     `by_document` ("resume", "cover letter", "answers") replaces the flat
     `issues` list with one section per document, each the latest run of it.
@@ -246,6 +250,8 @@ def assessment_markdown(
         from jobagent.core.masters import describe_choice
 
         lines += [f"**Resume:** {describe_choice(master)}", ""]
+    if resume_base is not None:
+        lines += [f"**Resume generated:** {resume_base}", ""]
 
     if jd.source_url:
         lines += [f"Ad: {jd.source_url}", ""]

@@ -34,6 +34,7 @@ _LABEL_CALL = {
     "score_fit": CallType.score,
     "generate_resume": CallType.generate,
     "generate_cover_letter": CallType.generate,
+    "generate_profile": CallType.generate,
     "generate_answers": CallType.generate,
     "interview_prep": CallType.prep,
     "classify_role": CallType.classify,
@@ -85,6 +86,7 @@ def labels_for(
     classify=False,
     check_claims=False,
     review=False,
+    profile=False,
 ) -> list[str]:
     """The prompt labels an action will run. `classify` adds the role-kind call
     an unclassified ad needs first; the two checks follow generate (spec 003)."""
@@ -101,10 +103,12 @@ def labels_for(
         return ["screen_fit"]
     if action == "generate":
         # Every document has checked prose now: the resume's PROFILE and highlights too.
-        prose = resume or cover or answers
+        prose = resume or cover or answers or profile
         return (
             first
             + (["generate_resume"] if resume else [])
+            # The longer PROFILE on a master copy (spec 005).
+            + (["generate_profile"] if profile else [])
             + (["generate_cover_letter"] if cover else [])
             + (["generate_answers"] if answers else [])
             + (["check_claims"] if check_claims and prose else [])
@@ -123,6 +127,7 @@ def estimate(
     answers=False,
     check_claims=False,
     review=False,
+    profile=False,
     jd_id: int | None = None,
     price_lookup=None,
 ) -> CostEstimate:
@@ -150,6 +155,7 @@ def estimate(
         classify=classify,
         check_claims=check_claims,
         review=review,
+        profile=profile,
     )
     try:
         model = resolve_route(config, _CALL_TYPE[action]).model

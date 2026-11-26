@@ -707,4 +707,33 @@ def test_v18_database_gains_the_resume_columns(tmp_path):
         loaded = store.get_application(conn, jd_id)
         assert loaded.resume_master is None
         version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-        assert version == "19"
+        assert version == str(store.SCHEMA_VERSION)
+
+
+# -- v20: whether the resume sent had the longer profile (spec 005) -------------
+
+
+def test_the_long_profile_flag_round_trips(conn) -> None:
+    for flag in (True, False, None):
+        jd_id = store.add_jd(conn, make_jd())
+        store.save_application(conn, make_application(
+            jd_id, resume_master="manager", resume_long_profile=flag))
+        assert store.get_application(conn, jd_id).resume_long_profile is flag
+
+
+def test_v19_database_gains_the_long_profile_column(tmp_path):
+    path = tmp_path / "v19.db"
+    with store.open_store(path) as conn:
+        jd_id = store.add_jd(conn, _seed_jd("Engineering Manager", "Contoso Health", 1))
+        store.save_application(conn, make_application(jd_id, resume_master="manager"))
+    raw = _sqlite3.connect(path)
+    raw.execute("ALTER TABLE applications DROP COLUMN resume_long_profile")
+    raw.execute("UPDATE meta SET value = '19' WHERE key = 'schema_version'")
+    raw.commit()
+    raw.close()
+
+    with store.open_store(path) as conn:
+        loaded = store.get_application(conn, jd_id)
+        assert loaded.resume_master == "manager" and loaded.resume_long_profile is None
+        version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+        assert version == "20"

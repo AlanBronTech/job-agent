@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from jobagent.adapters.llm import RunContext
-from jobagent.core.models import ApplicationStatus, DocumentKind
+from jobagent.core.models import ApplicationStatus, DocumentKind, ResumeKind
 from jobagent.services import (
     ads,
     batches,
@@ -35,6 +35,9 @@ from jobagent.services import (
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
+    MasterCopyNotRevisable,
+    MasterProfileMissing,
+    NoMasterForProfile,
     NoGeneratedCopy,
     NoModel,
     NoSuchAd,
@@ -95,6 +98,9 @@ def ad_page(request: Request, jd_id: int, saved: int = 0):
     )
 
 
+PROFILE_SUFFIX = "+profile"
+
+
 @router.post("/ads/{jd_id:int}/pipeline")
 async def pipeline_save(request: Request, jd_id: int):
     """Record where an application stands, and what was sent, as `apply` does. Free.
@@ -106,10 +112,15 @@ async def pipeline_save(request: Request, jd_id: int):
     ws = workspace(request)
     today = request.app.state.today()
     chosen = str(form.get("master") or "") or None
+    # "manager+profile": that master with the longer profile (spec 005).
+    long_profile = bool(chosen and chosen.endswith(PROFILE_SUFFIX))
+    if long_profile:
+        chosen = chosen.removesuffix(PROFILE_SUFFIX)
     resume = None
     try:
         if chosen:
-            resume = masters.resolve_sent(ws, jd_id, chosen=chosen)
+            resume = masters.resolve_sent(ws, jd_id, chosen=chosen, long_profile=long_profile,
+                                          today=today)
         prepared = await _sent_files(form, ws, jd_id, today,
                                      master_file=resume.file if resume else None)
         if resume is None and prepared is not None:
@@ -119,7 +130,7 @@ async def pipeline_save(request: Request, jd_id: int):
             if given is not None or form.get("sent_as_generated") == "1":
                 resume = masters.resolve_sent(
                     ws, jd_id, sent_resume=given,
-                    sent_as_generated=given is None)
+                    sent_as_generated=given is None, today=today)
     except UnknownMaster as exc:
         return _back_to_ad(request, jd_id, f"Not saved: no master resume called '{exc.name}'.")
     except NoSuchAd:
@@ -146,6 +157,7 @@ async def pipeline_save(request: Request, jd_id: int):
             sent_files=prepared is not None,
             resume_master=resume.master if resume else None,
             resume_suggested=resume.suggested if resume else None,
+            resume_long_profile=resume.long_profile if resume else None,
         )
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
@@ -247,6 +259,8 @@ def _revise_confirm(request: Request, jd_id: int, choice: dict, problem: str | N
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except MasterCopyNotRevisable as exc:
+        return _back_to_ad(request, jd_id, _sentence_of(exc))
     except NoGeneratedCopy:
         return _back_to_ad(request, jd_id, "Nothing to revise: no generated copy is kept for that "
                            "document. Revise works on documents generated from 2026-10-21 on.")
@@ -289,7 +303,7 @@ async def revise_start(request: Request, jd_id: int):
     today = request.app.state.today()
     try:
         plan = revise.plan(ws, jd_id, choice["kind"], today)
-    except (NoSuchAd, NoGeneratedCopy):
+    except (NoSuchAd, NoGeneratedCopy, MasterCopyNotRevisable):
         return _revise_confirm(request, jd_id, choice)
     # Checked again by the service; here so the page can say so before a run exists.
     if not choice["note"]:
@@ -414,11 +428,33 @@ def _generate_choice(form, config) -> dict:
     # configured default.
     from_confirm = form.get("checks_shown") == "1"
     master = str(form.get("master") or "").strip() or None
+    resume = form.get("resume") == "1"
+    use_master = form.get("use_master") == "1"
+    # Spec 005: one choice of resume. The two tick boxes it replaced still
+    # read the same, so an older form or bookmark posts what it meant.
+    resume_kind, bad_kind = None, None
+    raw = str(form.get("resume_kind") or "").strip()
+    if raw == "none":
+        resume, use_master = False, False
+    elif raw:
+        try:
+            chosen = ResumeKind(raw)
+        except ValueError:
+            bad_kind = raw
+        else:
+            resume, use_master = chosen is ResumeKind.custom, chosen is ResumeKind.master
+            if chosen.long_profile:
+                resume_kind = chosen
+                resume = chosen is ResumeKind.custom_profile
+                use_master = chosen is ResumeKind.master_profile
     return {
-        "resume": form.get("resume") == "1",
+        "resume": resume,
         "cover": form.get("cover") == "1",
-        # A master resume copied into the folder: free, never generated.
-        "master": master if form.get("use_master") == "1" else None,
+        # A master resume copied into the folder: free, never generated. With
+        # a longer profile, the master the copy is made from.
+        "master": master if use_master else None,
+        "resume_kind": resume_kind,
+        "bad_kind": bad_kind,
         "questions": questions,
         "overrule": form.get("overrule") == "1",
         "supersede": form.get("supersede") == "1",
@@ -442,13 +478,18 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
     ws = workspace(request)
     config = config_of(request)
     today = request.app.state.today()
+    if choice["bad_kind"]:
+        return _back_to_ad(request, jd_id, f"Unknown resume choice '{choice['bad_kind']}'.")
     try:
         plan = documents.plan(
             ws, jd_id, resume=choice["resume"], cover=choice["cover"],
             answers=bool(choice["questions"]), when=today, master=choice["master"],
+            resume_kind=choice["resume_kind"],
         )
     except NothingSelected:
         return _back_to_ad(request, jd_id, "Choose at least one document to generate.")
+    except (NoMasterForProfile, MasterProfileMissing) as exc:
+        return _back_to_ad(request, jd_id, _sentence_of(exc))
     except UnknownMaster as exc:
         return _back_to_ad(request, jd_id, f"No master resume called '{exc.name}'.")
     except NotScored:
@@ -457,10 +498,11 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
     # Copying a master alone calls no model: no checks, no classifier.
-    model = bool(choice["resume"] or choice["cover"] or choice["questions"])
+    model = _needs_model(choice)
     estimate = costs.estimate(
         ws, config, "generate",
         resume=choice["resume"], cover=choice["cover"], answers=bool(choice["questions"]),
+        profile=choice["resume_kind"] is ResumeKind.master_profile,
         check_claims=choice["check_claims"] and model, review=choice["review"] and model,
         jd_id=jd_id if model else None,
     )
@@ -480,14 +522,38 @@ def _generate_confirm(request: Request, jd_id: int, choice: dict, problem: str |
             "review_cost": costs.label_cost(checks_cost, "review_documents"),
             "missing": _missing_for(ws, config, choice),
             "problem": problem,
+            "resume_line": _resume_line(ws, choice),
         },
         status_code=409 if problem else 200,
     )
 
 
+def _needs_model(choice: dict) -> bool:
+    return bool(choice["resume"] or choice["cover"] or choice["questions"]
+                or choice["resume_kind"] is ResumeKind.master_profile)
+
+
+def _resume_line(ws, choice: dict) -> str | None:
+    """What the confirm page says about a resume with a longer profile (spec 005)."""
+    kind = choice["resume_kind"]
+    if kind is ResumeKind.custom_profile:
+        return "A custom resume with a longer profile for this ad."
+    if kind is ResumeKind.master_profile:
+        label = next((m.label for m in masters.registry(ws) if m.id == choice["master"]),
+                     choice["master"])
+        return (f"A copy of the {label} master with a longer profile for this ad. "
+                "Only its PROFILE changes; the master itself is not touched.")
+    return None
+
+
+def _sentence_of(exc: Exception) -> str:
+    text = str(exc)
+    return text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")
+
+
 def _missing_for(ws, config, choice: dict) -> list[str]:
     """What generate needs that is not set up. Copying a master alone needs no model."""
-    if not (choice["resume"] or choice["cover"] or choice["questions"]):
+    if not _needs_model(choice):
         return []
     return readiness.missing(ws, config, "generate")
 
@@ -518,12 +584,16 @@ async def generate_start(request: Request, jd_id: int):
     ws = workspace(request)
     config = config_of(request)
     today = request.app.state.today()
+    if choice["bad_kind"]:
+        return _generate_confirm(request, jd_id, choice)
     try:
         plan = documents.plan(
             ws, jd_id, resume=choice["resume"], cover=choice["cover"],
             answers=bool(choice["questions"]), when=today, master=choice["master"],
+            resume_kind=choice["resume_kind"],
         )
-    except (NothingSelected, NotScored, NoSuchAd, UnknownMaster):
+    except (NothingSelected, NotScored, NoSuchAd, UnknownMaster,
+            NoMasterForProfile, MasterProfileMissing):
         return _generate_confirm(request, jd_id, choice)
     # The same refusals the service would raise, checked here only so the page
     # can say so before a run exists. The service checks them again.
@@ -552,6 +622,7 @@ async def generate_start(request: Request, jd_id: int):
                 "resume": choice["resume"],
                 "cover": choice["cover"],
                 "master": choice["master"],
+                "resume_kind": choice["resume_kind"].value if choice["resume_kind"] else None,
                 "answers": len(choice["questions"]),
                 "overrule": choice["overrule"],
                 "supersede": choice["supersede"],
@@ -564,6 +635,7 @@ async def generate_start(request: Request, jd_id: int):
                 overrule=choice["overrule"], supersede=choice["supersede"], today=today,
                 check_claims=choice["check_claims"], review=choice["review"],
                 limit=choice["limit"], master=choice["master"],
+                resume_kind=choice["resume_kind"],
             ),
         )
     except RunInProgress:
