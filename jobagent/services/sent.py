@@ -99,7 +99,7 @@ def prepare(
         if path is not None:
             _check(path, (".docx",))
 
-    folder = _existing_folder(ws, jd, today)
+    folder = existing_folder(ws, jd, today)
     plans: list[tuple[DocumentKind, Path | None, Path | None, str | None]] = []
     for kind, given, original in (
         (DocumentKind.resume, resume, generated_resume),
@@ -301,7 +301,7 @@ def latest_generated(
     return copies[0] if copies else None
 
 
-def _existing_folder(ws: Workspace, jd: JobDescription, today: date) -> str | None:
+def existing_folder(ws: Workspace, jd: JobDescription, today: date) -> str | None:
     """Where the application's records belong: this month's folder, else the
     newest earlier month's, else the newest superseded one. The documents that
     were sent are in one of those."""

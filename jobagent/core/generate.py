@@ -64,6 +64,16 @@ from jobagent.core.validation import (
 
 RESUME_PROMPT = "generate_resume"
 COVER_PROMPT = "generate_cover_letter"
+
+# Rule 7 of the resume prompt by default: the masters' two short paragraphs.
+# Spec 005 swaps it for prompts/long_profile_rules.md when a longer, agency
+# PROFILE is asked for; the default text is unchanged from resume prompt v10.
+SHORT_PROFILE_RULE = '**PROFILE is two short paragraphs, in the first person**, as the master\n   writes them: "Engineering leader and three-time co-founder. I have led\n   teams of up to 15 …". The first says what Alan is and the single strongest\n   thing he has done that matters to *this* ad. The second says what he is\n   doing now and where it points. Never "Alan", "he" or "his" about him: that\n   is rejected. Highlights are written the same way, or with no pronoun, as\n   the experience bullets are. Blunt, factual, specific. No\n   adjectives that could be said of anyone.'
+
+# Spec 005: the longer PROFILE, for agencies (Alan, 2026-11-25).
+LONG_PROFILE_MAX_WORDS = 250
+PROFILE_PROMPT = "generate_profile"
+LONG_PROFILE_RULES = "long_profile_rules"
 CONTEXT_PROMPT = "context"
 CONTRACT_PROMPT = "contract_writing"
 # A contract's letter is shorter than a permanent one (350), not a stub: at
@@ -563,6 +573,7 @@ def _ask_for_selection(
     retry_note: str | None = None,
     instructions: str | None = None,
     length: ResumeLength = FULL_TIME_LENGTH,
+    long_profile: bool = False,
 ) -> _ResumeSelection:
     try:
         prompt = load_prompt(
@@ -577,6 +588,7 @@ def _ask_for_selection(
             skills=", ".join(profile.roles.skills),
             voice=profile.voice,
             length_rule=length.rule,
+            profile_rule=profile_rule(long_profile),
         )
     except PromptError as exc:
         raise GenerateError(str(exc)) from exc
@@ -598,6 +610,13 @@ def _ask_for_selection(
         raise GenerateError(
             f"The model's selection did not match the contract.\n{exc}"
         ) from exc
+
+
+def profile_rule(long_profile: bool) -> str:
+    """Rule 7 of the resume prompt: the masters' short PROFILE, or the agency one."""
+    if not long_profile:
+        return SHORT_PROFILE_RULE
+    return load_prompt(LONG_PROFILE_RULES).strip()
 
 
 def _assemble(

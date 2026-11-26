@@ -754,6 +754,7 @@ _DOCUMENTS = ("resume", "cover letter", "answers")
 def _records(
     ws: Workspace, jd, today: date, now: datetime, found: dict, coverage,
     warnings: list[str], rewrites: dict | None = None,
+    resume_base: tuple[str, bool] | None = None,
 ):
     """Issues by document for `assessment.md`: this run's, and the latest kept for the rest.
 
@@ -782,6 +783,10 @@ def _records(
             }
             if document == "resume":
                 record["coverage"] = [vars(row).copy() for row in coverage]
+                if resume_base is not None:
+                    # Which resume this was (spec 005): what `apply` records
+                    # when the generated copy, or an edit of it, is sent.
+                    record["base"], record["long_profile"] = resume_base
             try:
                 ws.documents.keep_record(jd, today, now, key, record)
             except docs.DocsError as exc:
@@ -799,6 +804,27 @@ def _records(
         if document == "resume" and not coverage:
             coverage_shown = [CoverageRow(**row) for row in record.get("coverage", [])]
     return by_document, coverage_shown
+
+
+def latest_resume_kind(ws: Workspace, jd, today: date) -> tuple[str, bool] | None:
+    """(base, long profile) of the newest generated resume for this job, or None.
+
+    `base` is a master's id or "custom". Read from the record kept beside the
+    run's copies (D19: the folder is the state), in the folder `apply` reads.
+    None for resumes generated before spec 005, whose records lack the keys.
+    """
+    from jobagent.services.sent import existing_folder
+
+    folder = existing_folder(ws, jd, today)
+    if folder is None:
+        return None
+    latest = None
+    for name, _run, document, data in ws.documents.all_records():
+        if name == folder and document == "resume":
+            latest = data
+    if not latest or "base" not in latest:
+        return None
+    return str(latest["base"]), bool(latest.get("long_profile", False))
 
 
 def _issue_dict(issue) -> dict:

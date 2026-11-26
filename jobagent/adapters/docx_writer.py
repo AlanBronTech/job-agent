@@ -366,3 +366,66 @@ def docx_text(path: Path) -> str | None:
         for row in table.rows:
             lines += [cell.text for cell in row.cells]
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# A master resume with its PROFILE replaced (spec 005)
+# --------------------------------------------------------------------------- #
+
+PROFILE_HEADING = "PROFILE"
+
+
+def replace_profile(master: Path, target: Path, paragraphs: list[str]) -> Path:
+    """Copy `master` to `target` with only the PROFILE paragraphs replaced.
+
+    The master is read, never written. PROFILE runs from the paragraph whose
+    text is exactly PROFILE to the next heading (`docx_reader`'s rule: short,
+    all capitals, not a list item). The first body paragraph is cloned once
+    per new paragraph, keeping its paragraph and first-run formatting, so the
+    copy looks as the person formatted the master; nothing is re-derived
+    from the measurements at the top of this file. Refuses, writing nothing,
+    when the heading is missing, appears twice, or has nothing under it.
+    """
+    from jobagent.adapters.docx_reader import _is_heading, _is_list
+
+    master = Path(master)
+    try:
+        doc = Document(str(master))
+    except Exception as exc:  # noqa: BLE001 - python-docx raises several kinds
+        raise DocxError(f"Could not read the master {master.name}: {exc}") from exc
+    paras = doc.paragraphs
+    headings = [n for n, p in enumerate(paras) if p.text.strip() == PROFILE_HEADING]
+    if not headings:
+        raise DocxError(f"{master.name} has no {PROFILE_HEADING} heading to replace under.")
+    if len(headings) > 1:
+        raise DocxError(f"{master.name} has more than one {PROFILE_HEADING} heading.")
+    body: list[Paragraph] = []
+    for para in paras[headings[0] + 1:]:
+        text = para.text.strip()
+        if text and not _is_list(para) and _is_heading(text):
+            break
+        if text:
+            body.append(para)
+    if not body:
+        raise DocxError(f"{master.name} has no paragraph under {PROFILE_HEADING} to replace.")
+
+    model = body[0]._p
+    for text in paragraphs:
+        clone = copy.deepcopy(model)
+        runs = clone.findall(qn("w:r"))
+        for extra in runs[1:]:
+            clone.remove(extra)
+        # Anything that is not the paragraph's properties or its first run
+        # (hyperlinks, bookmarks, a second run's field) goes too.
+        for child in list(clone):
+            if child.tag not in (qn("w:pPr"), qn("w:r")):
+                clone.remove(child)
+        new = Paragraph(clone, model.getparent())
+        if new.runs:
+            new.runs[0].text = text
+        else:
+            new.add_run(text)
+        model.addprevious(clone)
+    for para in body:
+        para._p.getparent().remove(para._p)
+    return _save(doc, Path(target))

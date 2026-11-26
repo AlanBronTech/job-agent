@@ -88,6 +88,32 @@ def file_to_send(master: MasterResume) -> Path:
     return master.pdf or master.docx
 
 
+def master_on_page(path: Path) -> dict[str, str]:
+    """What a master's page already says, for the longer PROFILE not to repeat (spec 005).
+
+    Its CAREER HIGHLIGHTS and EXPERIENCE bullets, keyed "master highlight 1",
+    "master bullet 1", …. Empty when the file cannot be read: the check is
+    then weaker, never a reason to stop.
+    """
+    from jobagent.adapters.docx_reader import DocxReadError, read_sections
+
+    try:
+        sections = read_sections(path, "resume")
+    except DocxReadError:
+        return {}
+    out: dict[str, str] = {}
+    highlights = bullets = 0
+    for section in sections:
+        for text in section.paragraphs:
+            if section.name == "CAREER HIGHLIGHTS":
+                highlights += 1
+                out[f"master highlight {highlights}"] = text
+            elif section.name.startswith("EXPERIENCE"):
+                bullets += 1
+                out[f"master bullet {bullets}"] = text
+    return out
+
+
 def find(ws: Workspace, master_id: str) -> MasterResume:
     """The registry's master with this id; UnknownMaster otherwise."""
     listed = registry(ws)
