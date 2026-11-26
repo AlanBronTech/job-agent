@@ -185,6 +185,13 @@ suggested. It never edits a master. A tailored resume stays available
 - Replacing a master: the old files go to `old-resumes/` with the retirement
   date in the name; the .docx is re-uploaded to his Drive backup.
 - The cover letter is still generated per ad.
+- **Longer profile (spec 005, D53):** `generate --long-profile` writes a copy
+  of the chosen master with only PROFILE replaced by an ad-specific profile of
+  at most 250 words (cited sentences, claim-checked, within 3 pages, else
+  `_NOT-READY`); `--custom --long-profile` puts it on a custom resume. For
+  agencies, instead of a letter. Recorded on apply (`--long-profile`, schema
+  v20); the UI offers it as one of five resume choices. `revise` refuses a
+  master copy.
 
 ## LLM usage
 
@@ -294,6 +301,8 @@ it protects.
   skipped is the number to keep (D39).
 - A guard that fires when nothing is at risk stops being a guard (D40).
 - A variable informs nothing unless it was observable at decision time (D41).
+- A master copy may carry one generated section, a longer PROFILE, checked
+  and recorded like any generated prose (D53).
 - Pick, don't compose: hand-written masters chosen in code, and what went
   recorded beside what was suggested (D51).
 - `never_in_documents` keeps evidence out of every written document, whatever

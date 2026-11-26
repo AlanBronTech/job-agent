@@ -112,9 +112,9 @@ each.
 ## Phase 8: Polish & cross-cutting
 
 - [X] T029 [P] `revise --resume` refusal in `jobagent/services/revise.py` (research R8): when `latest_resume_kind` has a master base, raise a typed refusal; word it in `jobagent/cli/revise.py` and the UI per `contracts/cli.md`. Test.
-- [ ] T030 [P] `docs/decisions.md`: add D53 (research R10), and link it from D51.
-- [ ] T031 [P] `CLAUDE.md`: under *Master resumes*, one paragraph on the longer-profile variant, the 250-word cap, the record, and D53; add D53 to *Design invariants* as one line. `README.md`: the loop for an agency ad (`generate <id> --long-profile`, the UI choice, `apply --long-profile`), with what it costs read from `jobagent spend` after the first runs, never quoted from memory.
-- [ ] T032 Full suite; `git diff main --stat` and a read of the whole diff for real names, figures or profile text (Constitution VI) before the merge.
+- [X] T030 [P] `docs/decisions.md`: add D53 (research R10), and link it from D51.
+- [X] T031 [P] `CLAUDE.md`: under *Master resumes*, one paragraph on the longer-profile variant, the 250-word cap, the record, and D53; add D53 to *Design invariants* as one line. `README.md`: the loop for an agency ad (`generate <id> --long-profile`, the UI choice, `apply --long-profile`), with what it costs read from `jobagent spend` after the first runs, never quoted from memory.
+- [X] T032 Full suite; `git diff main --stat` and a read of the whole diff for real names, figures or profile text (Constitution VI) before the merge.
 - [ ] T033 By hand, paid, once (quickstart "By hand"): state the expected cost first; run on one real agency ad with each master that fits; record the page counts in spec SC-003 (as numbers only, no employer names) and the cost comparison for SC-004.
 
 ---
