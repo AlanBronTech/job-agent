@@ -144,6 +144,8 @@ class SentResume:
     file: Path | None = None
     # True when nothing was named and the suggestion was taken as what went.
     assumed: bool = False
+    # Whether it had the longer, agency PROFILE (spec 005); None when unknown.
+    long_profile: bool | None = None
 
     @property
     def overrode(self) -> bool:
@@ -162,6 +164,8 @@ def resolve_sent(
     chosen: str | None = None,
     sent_resume: Path | None = None,
     sent_as_generated: bool = False,
+    long_profile: bool = False,
+    today=None,
 ) -> SentResume:
     """Which resume went with this application. Free; writes nothing.
 
@@ -170,6 +174,11 @@ def resolve_sent(
     generated copies are custom, and with nothing named at all the suggested
     master is assumed, with its file to record as sent. Raises UnknownMaster
     for a name the registry does not list, before anything is written.
+
+    Spec 005: `long_profile` goes with `chosen` (the resume named had the
+    longer PROFILE). The generated copies, or a file that is not a master
+    (an edit of them), take the base and flag of the job's latest generated
+    resume when its record has them.
     """
     with store.open_store(ws.db_path) as conn:
         jd = store.get_jd(conn, jd_id)
@@ -189,16 +198,28 @@ def resolve_sent(
     def file_of(master) -> Path:
         return master.pdf or master.docx
 
+    def generated() -> SentResume:
+        from datetime import date
+
+        from jobagent.services.documents import latest_resume_kind
+
+        kind_of = latest_resume_kind(ws, jd, today or date.today())
+        if kind_of is None:
+            return SentResume(master=CUSTOM, suggested=suggested)
+        return SentResume(master=kind_of[0], suggested=suggested, long_profile=kind_of[1])
+
     if chosen == CUSTOM:
-        return SentResume(master=CUSTOM, suggested=suggested)
+        return SentResume(master=CUSTOM, suggested=suggested, long_profile=long_profile)
     if chosen is not None:
         master = next((m for m in registry if m.id == chosen), None)
         if master is None:
             raise UnknownMaster(chosen, [m.id for m in registry])
-        return SentResume(master=master.id, suggested=suggested,
-                          file=None if sent_resume else file_of(master))
+        # A copy with a longer profile is not the master's own file.
+        keep = None if sent_resume or long_profile else file_of(master)
+        return SentResume(master=master.id, suggested=suggested, file=keep,
+                          long_profile=long_profile)
     if sent_as_generated:
-        return SentResume(master=CUSTOM, suggested=suggested)
+        return generated()
     if sent_resume is not None:
         # A missing or unreadable file is refused by the sent check that
         # follows; here it can only be custom.
@@ -207,9 +228,9 @@ def resolve_sent(
         for master in registry if digest else []:
             for path in (master.pdf, master.docx):
                 if path is not None and _sha256(path) == digest:
-                    return SentResume(master=master.id, suggested=suggested)
-        return SentResume(master=CUSTOM, suggested=suggested)
+                    return SentResume(master=master.id, suggested=suggested, long_profile=False)
+        return generated()
     if choice is not None and choice.master is not None:
         return SentResume(master=choice.master.id, suggested=suggested,
-                          file=file_of(choice.master), assumed=True)
+                          file=file_of(choice.master), assumed=True, long_profile=False)
     return SentResume(master=None, suggested=suggested)

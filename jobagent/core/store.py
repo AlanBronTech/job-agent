@@ -42,7 +42,7 @@ from jobagent.core.models import (
     SentDocument,
 )
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 # Columns added after v1. CREATE TABLE IF NOT EXISTS will not add a column to a
 # table that already exists, so additive changes are applied explicitly. This is
@@ -62,6 +62,8 @@ _ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # v19 — which master resume was sent, and which was suggested.
         ("resume_master", "TEXT"),
         ("resume_suggested", "TEXT"),
+        # v20 — whether that resume had the longer, agency PROFILE (spec 005).
+        ("resume_long_profile", "INTEGER"),
     ],
     "job_descriptions": [
         ("source_url", "TEXT"),
@@ -294,6 +296,7 @@ CREATE TABLE IF NOT EXISTS applications (
     overrode_scorer INTEGER NOT NULL DEFAULT 0,
     resume_master  TEXT,
     resume_suggested TEXT,
+    resume_long_profile INTEGER,
     updated_at     TEXT NOT NULL
 );
 """
@@ -761,8 +764,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
             INSERT INTO applications (
                 jd_id, status, applied_on, channel, reposted_on, notes,
                 worth_applying, worth_why, worth_derived, overrode_scorer,
-                resume_master, resume_suggested, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                resume_master, resume_suggested, resume_long_profile, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(jd_id) DO UPDATE SET
                 status = excluded.status,
                 applied_on = excluded.applied_on,
@@ -775,6 +778,7 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 overrode_scorer = excluded.overrode_scorer,
                 resume_master = excluded.resume_master,
                 resume_suggested = excluded.resume_suggested,
+                resume_long_profile = excluded.resume_long_profile,
                 updated_at = excluded.updated_at
             """,
             (
@@ -792,6 +796,8 @@ def save_application(conn: sqlite3.Connection, application: Application) -> int:
                 int(application.overrode_scorer),
                 application.resume_master,
                 application.resume_suggested,
+                None if application.resume_long_profile is None
+                else int(application.resume_long_profile),
                 _to_iso(application.updated_at),
             ),
         )
@@ -848,6 +854,8 @@ def _row_to_application(row: sqlite3.Row) -> Application:
         "overrode_scorer": bool(row["overrode_scorer"]),
         "resume_master": row["resume_master"],
         "resume_suggested": row["resume_suggested"],
+        "resume_long_profile": None if row["resume_long_profile"] is None
+        else bool(row["resume_long_profile"]),
         "updated_at": row["updated_at"],
     }
     try:

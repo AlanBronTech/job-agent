@@ -28,6 +28,7 @@ def save(
     notes: str = "",
     resume_master: str | None = None,
     resume_suggested: str | None = None,
+    resume_long_profile: bool | None = None,
 ) -> tuple[JobDescription, Application]:
     """Create or update the ad's application row. Notes are appended, never replaced.
 
@@ -59,6 +60,10 @@ def save(
             application.resume_master = resume_master
         if resume_suggested is not None:
             application.resume_suggested = resume_suggested
+        if resume_master is not None:
+            # Spec 005: recorded with the resume it describes, so a new
+            # resume never inherits an old one's flag.
+            application.resume_long_profile = resume_long_profile
         if notes:
             application.notes = (
                 f"{application.notes}\n{notes}".strip() if application.notes else notes
@@ -155,6 +160,7 @@ def update_from_form(
     sent_files: bool = False,
     resume_master: str | None = None,
     resume_suggested: str | None = None,
+    resume_long_profile: bool | None = None,
 ) -> tuple[JobDescription, Application | None]:
     """The UI's pipeline form, validated, as one `save`.
 
@@ -216,4 +222,5 @@ def update_from_form(
         notes=note.strip(),
         resume_master=resume_master,
         resume_suggested=resume_suggested,
+        resume_long_profile=resume_long_profile,
     )

@@ -580,3 +580,55 @@ def test_no_claim_check_when_switched_off(mws, mids, monkeypatch):
     monkeypatch.setattr(documents.checks, "check_claims", lambda *a, **k: pytest.fail("checked"))
     result = go(mws, mids["acme"], resume_kind=ResumeKind.master_profile, check_claims=False)
     assert result.claims is None
+
+
+# --------------------------------------------------------------------------- #
+# T024: what went is resolved with the longer-profile flag
+# --------------------------------------------------------------------------- #
+
+from jobagent.services.masters import resolve_sent
+
+
+def test_named_master_with_long_profile(mws, mids):
+    sent = resolve_sent(mws, mids["acme"], chosen="manager", long_profile=True, today=TODAY)
+    assert (sent.master, sent.long_profile, sent.file) == ("manager", True, None)
+    assert sent.suggested == "manager"
+
+
+def test_named_custom_with_long_profile(mws, mids):
+    sent = resolve_sent(mws, mids["acme"], chosen="custom", long_profile=True, today=TODAY)
+    assert (sent.master, sent.long_profile) == ("custom", True)
+
+
+def test_nothing_named_is_the_suggested_master_without_it(mws, mids):
+    sent = resolve_sent(mws, mids["acme"], today=TODAY)
+    assert (sent.master, sent.long_profile, sent.assumed) == ("manager", False, True)
+
+
+def test_sent_as_generated_reads_the_generated_record(mws, mids, monkeypatch):
+    Model(monkeypatch)
+    go(mws, mids["acme"], resume_kind=ResumeKind.master_profile, master="ai")
+    sent = resolve_sent(mws, mids["acme"], sent_as_generated=True, today=TODAY)
+    assert (sent.master, sent.long_profile) == ("ai", True)
+
+
+def test_an_edited_copy_reads_the_generated_record(mws, mids, monkeypatch, tmp_path):
+    Model(monkeypatch)
+    result = go(mws, mids["acme"], resume_kind=ResumeKind.master_profile)
+    edited = tmp_path / "edited.docx"
+    edited.write_bytes(resume_file(result).read_bytes() + b"edit")
+    sent = resolve_sent(mws, mids["acme"], sent_resume=edited, today=TODAY)
+    assert (sent.master, sent.long_profile) == ("manager", True)
+
+
+def test_a_file_identical_to_a_master_is_that_master(mws, mids, monkeypatch):
+    Model(monkeypatch)
+    go(mws, mids["acme"], resume_kind=ResumeKind.master_profile)
+    master = build_master(mws.profile_dir / "resumes" / "Sam-Resume-AI.docx", body=3)
+    sent = resolve_sent(mws, mids["acme"], sent_resume=master, today=TODAY)
+    assert (sent.master, sent.long_profile) == ("ai", False)
+
+
+def test_without_a_record_a_generated_resume_is_custom(mws, mids):
+    sent = resolve_sent(mws, mids["acme"], sent_as_generated=True, today=TODAY)
+    assert (sent.master, sent.long_profile) == ("custom", None)

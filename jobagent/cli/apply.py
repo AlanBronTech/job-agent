@@ -75,6 +75,12 @@ def apply(
         "or 'custom'. Left out: a file identical to a master is that master, any "
         "other is custom, and with no file the suggested master is recorded.",
     ),
+    long_profile: bool = typer.Option(
+        False,
+        "--long-profile",
+        help="The resume sent had the longer, agency profile (generate --long-profile). "
+        "With --master.",
+    ),
 ) -> None:
     """Record that you applied for a job, and what you sent."""
     applied_on = _parse_date(on) if on else date.today()
@@ -86,8 +92,15 @@ def apply(
             "you applied cannot postdate the application."
         )
         raise typer.Exit(code=2)
+    if long_profile and master is None:
+        err_console.print(
+            "[bold red]--long-profile says which resume went; name it.[/] "
+            "Pass --master <id> --long-profile (or --master custom --long-profile). "
+            "With --sent-as-generated or --sent-resume it is read from what was generated."
+        )
+        raise typer.Exit(code=2)
     ws = Workspace.from_config(get_config())
-    resume = _which_resume(ws, jd_id, master, sent_resume, sent_as_generated)
+    resume = _which_resume(ws, jd_id, master, sent_resume, sent_as_generated, long_profile)
     sent_resume = sent_resume or (resume.file if resume else None)
     if sent_resume or sent_letter or sent_as_generated:
         # First: a refused file stops the run before the status is recorded.
@@ -104,16 +117,18 @@ def apply(
         notes=note,
         resume_master=resume.master if resume else None,
         resume_suggested=resume.suggested if resume else None,
+        resume_long_profile=resume.long_profile if resume else None,
     )
     if resume is not None:
         _say_which_resume(resume, jd_id)
 
 
-def _which_resume(ws, jd_id, chosen, sent_resume, sent_as_generated):
+def _which_resume(ws, jd_id, chosen, sent_resume, sent_as_generated, long_profile=False):
     """Which resume went, resolved before anything is written; None if unknowable."""
     try:
         return masters.resolve_sent(ws, jd_id, chosen=chosen, sent_resume=sent_resume,
-                                    sent_as_generated=sent_as_generated)
+                                    sent_as_generated=sent_as_generated,
+                                    long_profile=long_profile)
     except NoSuchAd:
         err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
         raise typer.Exit(code=1)
@@ -136,6 +151,8 @@ def _say_which_resume(resume, jd_id: int) -> None:
                           f"`jobagent apply {jd_id} --master <id>` records one.[/]")
         return
     line = "a custom resume" if resume.master == masters.CUSTOM else f"master '{resume.master}'"
+    if resume.long_profile:
+        line += " with a longer profile"
     if resume.assumed:
         line += (" (suggested; recorded because no resume was named). If you sent "
                  f"something else, `jobagent apply {jd_id} --master <id|custom>`")
@@ -228,7 +245,7 @@ def status_command(
             f"[{style}]{application.status.value}[/]",
             application.applied_on.isoformat() if application.applied_on else "—",
             application.channel or "—",
-            application.resume_master or "—",
+            resume_label(application),
             application.worth_applying.value,
         )
     console.print(table)
@@ -299,6 +316,13 @@ def _parse_date(value: str) -> date:
     return parsed
 
 
+def resume_label(application) -> str:
+    """`manager`, `manager+profile`, `custom+profile`, or — when not recorded."""
+    if not application.resume_master:
+        return "—"
+    return application.resume_master + ("+profile" if application.resume_long_profile else "")
+
+
 def _save(
     jd_id: int,
     *,
@@ -311,6 +335,7 @@ def _save(
     notes: str = "",
     resume_master: str | None = None,
     resume_suggested: str | None = None,
+    resume_long_profile: bool | None = None,
 ) -> None:
     config = get_config()
     ws = Workspace.from_config(config)
@@ -327,6 +352,7 @@ def _save(
             notes=notes,
             resume_master=resume_master,
             resume_suggested=resume_suggested,
+            resume_long_profile=resume_long_profile,
         )
     except NoSuchAd:
         err_console.print(f"[bold red]No job description with id {jd_id}.[/]")
