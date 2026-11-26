@@ -632,3 +632,21 @@ def test_a_file_identical_to_a_master_is_that_master(mws, mids, monkeypatch):
 def test_without_a_record_a_generated_resume_is_custom(mws, mids):
     sent = resolve_sent(mws, mids["acme"], sent_as_generated=True, today=TODAY)
     assert (sent.master, sent.long_profile) == ("custom", None)
+
+
+# --------------------------------------------------------------------------- #
+# T029: revise does not rebuild a master copy as a custom resume
+# --------------------------------------------------------------------------- #
+
+from jobagent.core.models import DocumentKind
+from jobagent.services import revise
+from jobagent.services.refusals import MasterCopyNotRevisable
+
+
+def test_revise_refuses_a_master_copy(mws, mids, monkeypatch):
+    Model(monkeypatch)
+    go(mws, mids["acme"], resume_kind=ResumeKind.master_profile)
+    with pytest.raises(MasterCopyNotRevisable) as refused:
+        revise.plan(mws, mids["acme"], DocumentKind.resume, TODAY)
+    assert refused.value.master == "Engineering Manager"
+    assert revise.revisable(mws, mids["acme"], TODAY) == []

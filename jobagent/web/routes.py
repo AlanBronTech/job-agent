@@ -35,6 +35,7 @@ from jobagent.services import (
 from jobagent.services.refusals import (
     AdNotFound,
     BadUpload,
+    MasterCopyNotRevisable,
     MasterProfileMissing,
     NoMasterForProfile,
     NoGeneratedCopy,
@@ -258,6 +259,8 @@ def _revise_confirm(request: Request, jd_id: int, choice: dict, problem: str | N
     except NoSuchAd:
         return render(request, "error.html", {"heading": "No such job",
                       "detail": f"There is no job description with id {jd_id}."}, status_code=404)
+    except MasterCopyNotRevisable as exc:
+        return _back_to_ad(request, jd_id, _sentence_of(exc))
     except NoGeneratedCopy:
         return _back_to_ad(request, jd_id, "Nothing to revise: no generated copy is kept for that "
                            "document. Revise works on documents generated from 2026-10-21 on.")
@@ -300,7 +303,7 @@ async def revise_start(request: Request, jd_id: int):
     today = request.app.state.today()
     try:
         plan = revise.plan(ws, jd_id, choice["kind"], today)
-    except (NoSuchAd, NoGeneratedCopy):
+    except (NoSuchAd, NoGeneratedCopy, MasterCopyNotRevisable):
         return _revise_confirm(request, jd_id, choice)
     # Checked again by the service; here so the page can say so before a run exists.
     if not choice["note"]:

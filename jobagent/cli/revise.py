@@ -24,6 +24,7 @@ from jobagent.services import revise as revise_service
 from jobagent.services.documents import GenerationFailed
 from jobagent.services.refusals import (
     EditedByHand,
+    MasterCopyNotRevisable,
     NoGeneratedCopy,
     NoModel,
     NoSuchAd,
@@ -79,6 +80,13 @@ def revise(
         _refuse(f"No job description with id {jd_id}.", code=1)
     except NotScored:
         _refuse(f"JD {jd_id} has not been scored.")
+    except MasterCopyNotRevisable as refusal:
+        _refuse(
+            f"This resume is a copy of the {refusal.master} master with a longer profile. "
+            f"Revise would rebuild it as a custom resume. Generate it again with a context "
+            f"note (`jobagent context {jd_id} \"…\"` then `jobagent generate {jd_id} "
+            "--long-profile --supersede`). Nothing was spent."
+        )
     except NoGeneratedCopy as refusal:
         _refuse(
             f"No generated {refusal.kind} is kept in {refusal.folder}. Revise works on "

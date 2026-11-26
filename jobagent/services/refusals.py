@@ -225,3 +225,18 @@ class MasterProfileMissing(Refusal):
         super().__init__(f"cannot place a longer profile in the {master} master: {detail}")
         self.master = master
         self.detail = detail
+
+
+class MasterCopyNotRevisable(Refusal):
+    """`revise --resume` on a copy of a master with a longer profile (spec 005).
+
+    Revise rebuilds a custom resume from the previous draft, which would turn
+    the master copy into a custom resume without saying so.
+    """
+
+    def __init__(self, master: str) -> None:
+        super().__init__(
+            f"this resume is a copy of the {master} master with a longer profile; revise "
+            "would rebuild it as a custom resume. Generate it again with a context note instead"
+        )
+        self.master = master
