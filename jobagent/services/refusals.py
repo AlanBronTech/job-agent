@@ -205,3 +205,23 @@ class UnknownMaster(Refusal):
         super().__init__(name)
         self.name = name
         self.known = known
+
+
+class NoMasterForProfile(Refusal):
+    """A longer PROFILE on a master was asked for, and no master fits the job (spec 005)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"no master to put a longer profile on: {reason} Name a master, or "
+            "ask for a custom resume with a longer profile"
+        )
+        self.reason = reason
+
+
+class MasterProfileMissing(Refusal):
+    """The master's PROFILE section cannot be found to replace (spec 005)."""
+
+    def __init__(self, master: str, detail: str) -> None:
+        super().__init__(f"cannot place a longer profile in the {master} master: {detail}")
+        self.master = master
+        self.detail = detail

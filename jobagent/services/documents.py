@@ -24,6 +24,8 @@ from jobagent.adapters.pages import count_pages
 from jobagent.adapters.docx_writer import (
     CoverLetterContent,
     DocxError,
+    docx_text,
+    replace_profile,
     write_cover_letter,
     write_resume,
 )
@@ -36,6 +38,7 @@ from jobagent.core.generate import (
     GenerateError,
     build_answers,
     build_cover_letter,
+    build_profile,
     build_resume,
     citizenship_line,
     salutation_for,
@@ -49,11 +52,13 @@ from jobagent.core.generate import (
     resume_text,
 )
 from jobagent.core.validation import banned_phrases
-from jobagent.core.models import Application, JobDescription, Verdict
+from jobagent.core.models import Application, JobDescription, ResumeKind, Verdict
 from jobagent.core.profile import ProfileError, load_profile
 from jobagent.core.store import StoreError
 from jobagent.services.refusals import (
     AlreadyGenerated,
+    MasterProfileMissing,
+    NoMasterForProfile,
     NoModel,
     NoSuchAd,
     NothingSelected,
@@ -124,13 +129,20 @@ def planned_names(
 
 def plan(
     ws: Workspace, jd_id: int, *, resume: bool, cover: bool, answers: bool, when: date,
-    master: str | None = None,
+    master: str | None = None, resume_kind: ResumeKind | None = None,
 ) -> GeneratePlan:
-    """What a run would do. Spends nothing; the UI shows it before asking to confirm."""
+    """What a run would do. Spends nothing; the UI shows it before asking to confirm.
+
+    `resume_kind` (spec 005) overrides `resume` and `master` as `generate` does.
+    """
+    loaded = _load(ws, jd_id) if resume_kind is not None else None
+    if resume_kind is not None:
+        resume, master, _base = _resume_choice(ws, loaded.jd, jd_id, resume_kind, master)
+        resume = resume or _base is not None
     if not (resume or cover or answers or master):
         raise NothingSelected()
     master_file = masters.file_to_send(masters.find(ws, master)).name if master else None
-    loaded = _load(ws, jd_id)
+    loaded = loaded or _load(ws, jd_id)
     names = planned_names(loaded.jd, when, resume=resume, cover=cover, answers=answers,
                           master_file=master_file)
     return GeneratePlan(
@@ -168,6 +180,7 @@ def generate(
     limit: int | None = None,
     revisions: dict[str, tuple[str, str]] | None = None,
     master: str | None = None,
+    resume_kind: ResumeKind | None = None,
 ) -> GenerateResult:
     """Run generate. `before_spend` is called once every refusal has passed and
     immediately before the first model call: the CLI prints its cost line there.
@@ -176,18 +189,28 @@ def generate(
     "cover_letter" to (previous draft text, Alan's note): `services.revise`.
     `master` is a master resume's id: its file is copied into the folder
     unchanged, free, and a custom resume takes its skills order.
+
+    `resume_kind` (spec 005), when given, decides the resume and overrides
+    `resume`: `master` copies the master named or suggested; `master_profile`
+    writes a copy of it with a longer PROFILE instead; `custom` and
+    `custom_profile` generate one, with the short or the longer PROFILE.
     """
     if supersede and overwrite:
         raise ValueError("supersede and overwrite are mutually exclusive")
     # None means "as configured"; both checks are on unless switched off.
     check_claims = config.check_claims if check_claims is None else check_claims
     review = config.review if review is None else review
-    if not (resume or cover or questions or master):
+    loaded = _load(ws, jd_id) if resume_kind is not None else None
+    profile_master = None  # the master a longer PROFILE goes on (spec 005)
+    long_profile = bool(resume_kind and resume_kind.long_profile)
+    if resume_kind is not None:
+        resume, master, profile_master = _resume_choice(ws, loaded.jd, jd_id, resume_kind, master)
+    if not (resume or cover or questions or master or profile_master):
         raise NothingSelected()
     chosen_master = masters.find(ws, master) if master else None
-    needs_model = bool(resume or cover or questions)
+    needs_model = bool(resume or cover or questions or profile_master)
 
-    loaded = _load(ws, jd_id)
+    loaded = loaded or _load(ws, jd_id)
     jd, assessment = loaded.jd, loaded.assessment
     refuse_if_reapplying(ws, jd_id, today)
     with store.open_store(ws.db_path) as conn:
@@ -216,8 +239,8 @@ def generate(
     check_claims = check_claims and needs_model
     master_file = masters.file_to_send(chosen_master).name if chosen_master else None
     names = planned_names(
-        jd, today, resume=resume, cover=cover, answers=bool(questions), review=review,
-        master_file=master_file,
+        jd, today, resume=resume or profile_master is not None, cover=cover,
+        answers=bool(questions), review=review, master_file=master_file,
     )
     # The master copy is never "at risk": it is the same file every time.
     names = [n for n in names if n != master_file]
@@ -233,6 +256,8 @@ def generate(
         profile = load_profile(ws.profile_dir)
     except ProfileError as exc:
         raise ProfileInvalid(str(exc)) from exc
+    if profile_master is not None:
+        _check_profile_slot(profile_master)
 
     kind = role_kind.stored(ws, jd_id)
     try:
@@ -289,7 +314,26 @@ def generate(
         except role_kind.RoleKindFailed as exc:
             raise GenerationFailed("classify", exc, written) from exc
 
+    resume_base: tuple[str, bool] | None = None
+    if profile_master is not None:
+        done = _write_master_profile(
+            ws, config, ctx, jd, profile, assessment, profile_master,
+            client=client, review_client=review_client, kind=kind,
+            check_claims=check_claims, today=today, now=now,
+            instructions=instructions("resume", "resume"), written=written, warnings=warnings,
+        )
+        if done.found is not None:
+            claims = merge_claims(claims, done.found)
+        issues += done.issues
+        per_document["resume"] = done.issues
+        rewrites["resume"] = done.rewrites
+        rendered["resume"] = done.rendered
+        on_resume = done.on_page
+        resume_pages = done.pages
+        resume_base = (profile_master.id, True)
+
     if resume:
+        resume_base = ("custom", long_profile)
         # A contract matched to an offer gets the shorter contractor CV.
         length = resume_length(contract_block(profile, assessment.contract_offer, letter=False) is not None)
         # The chosen master's CORE SKILLS order, so a custom resume reads like
@@ -303,7 +347,7 @@ def generate(
                 return build_resume(
                     jd, profile, assessment, client=client, today=today, kind=kind,
                     instructions=instructions("resume", "resume"), feedback=feedback,
-                    length=length, skills_order=skills_order,
+                    length=length, skills_order=skills_order, long_profile=long_profile,
                 )
             except GenerateError as exc:
                 raise GenerationFailed("resume", exc, written) from exc
@@ -343,7 +387,7 @@ def generate(
         pages = measure_pages(built.content)
         if pages is not None and (pages > length.limit or pages < length.low):
             rewrites["resume"] += [[length_issue(pages, length)]]
-            built = select(length_feedback(pages, length))
+            built = select(length_feedback(pages, length, long_profile=long_profile))
             rewrites["resume"] += list(getattr(built, "rejected", []))
             found = claim_check(built)
             pages = measure_pages(built.content)
@@ -375,51 +419,21 @@ def generate(
             if contract_block(profile, assessment.contract_offer, letter=True)
             else COVER_LETTER_MAX_WORDS
         )
-        try:
-            letter = build_cover_letter(
-                jd, profile, assessment, client=client, kind=kind, on_resume=on_resume,
-                instructions=instructions("cover_letter", "cover letter"),
-                max_words=letter_words,
-            )
-        except GenerateError as exc:
-            raise GenerationFailed("cover", exc, written) from exc
-        sentences = getattr(letter, "sentences", [])
-        rewrites["cover letter"] = list(getattr(letter, "rejected", []))
-        found = None
-        if check_claims and sentences:
-            found = checks.check_claims(
-                config, ctx, sentences, profile, client_factory=lambda: review_client
-            )
-            if isinstance(found, list) and found:
-                repaired = _repair(
-                    config, ctx, profile, found, sentences,
-                    apply=lambda fixes: apply_text_repairs(letter, fixes),
-                    sentences_of=lambda doc: doc.sentences,
-                    check=lambda changed: checks.check_claims(
-                        config, ctx, changed, profile, client_factory=lambda: review_client),
+        def write_letter(feedback: str | None):
+            try:
+                return build_cover_letter(
+                    jd, profile, assessment, client=client, kind=kind, on_resume=on_resume,
+                    instructions=instructions("cover_letter", "cover letter"),
+                    max_words=letter_words, feedback=feedback,
                 )
-                if repaired is not None:
-                    letter, found = repaired, []
-            if isinstance(found, list) and found:
-                rejected_claims = found
-                # A mismatch is a blocker, and a blocker means write it again:
-                # once, with the mismatches named, then check the new draft.
-                try:
-                    letter = build_cover_letter(
-                        jd, profile, assessment, client=client, kind=kind,
-                        feedback=claims_feedback(found, "letter"), on_resume=on_resume,
-                        instructions=instructions("cover_letter", "cover letter"),
-                        max_words=letter_words,
-                    )
-                except GenerateError as exc:
-                    raise GenerationFailed("cover", exc, written) from exc
-                # The claim check's rejection is a rewrite like any other.
-                rewrites["cover letter"] += [claim_issues(rejected_claims)]
-                rewrites["cover letter"] += list(getattr(letter, "rejected", []))
-                found = checks.check_claims(
-                    config, ctx, getattr(letter, "sentences", []), profile,
-                    client_factory=lambda: review_client,
-                )
+            except GenerateError as exc:
+                raise GenerationFailed("cover", exc, written) from exc
+
+        letter, found, rewrites["cover letter"] = _checked_text(
+            write_letter, "letter", check_claims=check_claims, config=config, ctx=ctx,
+            profile=profile, review_client=review_client,
+        )
+        if found is not None:
             claims = merge_claims(claims, found)
         letter_issues = list(letter.issues) + claim_issues(found)
         issues += letter_issues
@@ -496,7 +510,8 @@ def generate(
         )
 
     by_document, coverage_shown = _records(
-        ws, jd, today, now, per_document, coverage, warnings, rewrites
+        ws, jd, today, now, per_document, coverage, warnings, rewrites,
+        resume_base=resume_base,
     )
     written.append(
         _write(
@@ -507,6 +522,7 @@ def generate(
                 docs.assessment_markdown(
                     assessment, jd, issues, role_kind=kind, coverage=coverage_shown,
                     by_document=by_document, master=masters.choose(ws, jd, kind),
+                    resume_base=describe_base(ws, resume_base),
                 ),
             ),
             written,
@@ -529,7 +545,179 @@ def generate(
         review=reviewed,
         ready=is_ready(issues, claims, reviewed),
         resume_pages=resume_pages,
+        resume_base=resume_base,
     )
+
+
+# --------------------------------------------------------------------------- #
+# The resume kinds of spec 005
+# --------------------------------------------------------------------------- #
+
+
+def _resume_choice(ws: Workspace, jd, jd_id: int, resume_kind: ResumeKind, master: str | None):
+    """(generate a custom resume?, master to copy unchanged, master to put a longer PROFILE on).
+
+    The master is the one named, else the one suggested for the job. A master
+    kind with neither is refused before anything is spent.
+    """
+    if not resume_kind.uses_master:
+        return True, None, None
+    if master is not None:
+        base = masters.find(ws, master)
+    else:
+        choice = masters.choose(ws, jd, role_kind.stored(ws, jd_id))
+        base = choice.master if choice is not None else None
+        if base is None:
+            reason = choice.reason if choice is not None else "no master resumes are listed."
+            raise NoMasterForProfile(reason if reason.endswith(".") else reason + ".")
+    if resume_kind is ResumeKind.master:
+        return False, base.id, None
+    return False, None, base
+
+
+def _check_profile_slot(master) -> None:
+    """Refuse, before any spend, a master whose PROFILE cannot be replaced."""
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            replace_profile(master.docx, Path(tmp) / "probe.docx", ["probe"])
+        except DocxError as exc:
+            raise MasterProfileMissing(master.label, str(exc)) from exc
+
+
+# Lines on a full page and words on a full line of the masters (measured
+# 2026-11-25: about 46 lines a page, 12-13 words a line at 10.5pt Calibri).
+PAGE_LINES = 46
+LINE_WORDS = 12
+MIN_PROFILE_WORDS = 80
+
+
+def profile_target_words(words: int, pages: float, limit: float) -> int:
+    """How long the longer PROFILE may be for the resume to come back under `limit`."""
+    import math
+
+    over = math.ceil((pages - limit) * PAGE_LINES * LINE_WORDS)
+    return max(MIN_PROFILE_WORDS, words - over - 10)
+
+
+@dataclass
+class _ProfileDone:
+    issues: list
+    rewrites: list
+    found: object
+    rendered: str
+    on_page: dict[str, str]
+    pages: float | None
+
+
+def _write_master_profile(
+    ws, config, ctx, jd, profile, assessment, master, *, client, review_client, kind,
+    check_claims, today, now, instructions, written, warnings,
+) -> _ProfileDone:
+    """A copy of `master` with a longer PROFILE: written, checked, measured, saved."""
+    on_page = masters.master_on_page(master.docx)
+    length = resume_length(False)
+
+    def write(note: str | None):
+        def attempt(feedback: str | None):
+            try:
+                return build_profile(
+                    jd, profile, assessment, client=client, kind=kind, on_page=on_page,
+                    instructions=instructions,
+                    feedback="\n\n".join(part for part in (note, feedback) if part) or None,
+                )
+            except GenerateError as exc:
+                raise GenerationFailed("resume", exc, written) from exc
+
+        return _checked_text(
+            attempt, "PROFILE", check_claims=check_claims, config=config, ctx=ctx,
+            profile=profile, review_client=review_client,
+        )
+
+    def paragraphs_of(text) -> list[str]:
+        return [p.strip() for p in text.text.split("\n\n") if p.strip()]
+
+    def measure(text) -> float | None:
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                probe = replace_profile(master.docx, Path(tmp) / "resume.docx", paragraphs_of(text))
+            except DocxError:
+                return None
+            return count_pages(probe)
+
+    text, found, rewrites = write(None)
+    pages = measure(text)
+    if pages is not None and pages > length.limit:
+        target = profile_target_words(len(text.text.split()), pages, length.limit)
+        rewrites += [[length_issue(pages, length)]]
+        text, found, more = write(
+            f"## Too long\n\nThe resume renders at {pages:.2f} pages; the limit is "
+            f"{length.limit:g}. Write the PROFILE again in at most {target} words."
+        )
+        rewrites += more
+        pages = measure(text)
+    profile_issues = list(text.issues) + claim_issues(found)
+    if pages is not None and pages > length.limit:
+        profile_issues.append(length_issue(pages, length))
+    path = ws.documents.path_for_write(
+        jd, today, _name("Resume", jd, today, blocked=_blocked(profile_issues))
+    )
+    written.append(_write(lambda: replace_profile(master.docx, path, paragraphs_of(text)), written))
+    _keep_generated(ws, jd, today, path, now, warnings)
+    page_text = docx_text(path) or ""
+    return _ProfileDone(
+        issues=profile_issues, rewrites=rewrites, found=found, rendered=page_text,
+        on_page={**on_page, **{f"profile {n}": p for n, p in enumerate(paragraphs_of(text), 1)}},
+        pages=pages,
+    )
+
+
+def describe_base(ws: Workspace, base: tuple[str, bool] | None) -> str | None:
+    """"copy of the Engineering Manager master with a longer profile", for assessment.md."""
+    if base is None:
+        return None
+    master_id, long_profile = base
+    if master_id == "custom":
+        return "a custom resume" + (" with a longer profile" if long_profile else "")
+    label = next((m.label for m in masters.registry(ws) if m.id == master_id), master_id)
+    return f"copy of the {label} master" + (" with a longer profile" if long_profile else "")
+
+
+def _checked_text(write, document: str, *, check_claims, config, ctx, profile, review_client):
+    """Write cited prose, claim-check it, repair, and rewrite once: the letter's loop.
+
+    Shared by the cover letter and the longer PROFILE (spec 005). `write`
+    takes the claim check's feedback (None the first time) and returns a
+    GeneratedText. Returns (text, what the last claim check found or None
+    when it did not run, the blockers of each draft written again).
+    """
+    text = write(None)
+    rewrites = list(getattr(text, "rejected", []))
+    sentences = getattr(text, "sentences", [])
+    if not (check_claims and sentences):
+        return text, None, rewrites
+
+    def check(changed):
+        return checks.check_claims(config, ctx, changed, profile, client_factory=lambda: review_client)
+
+    found = check(sentences)
+    if isinstance(found, list) and found:
+        # The flagged sentences first, on the cheap repair route.
+        repaired = _repair(
+            config, ctx, profile, found, sentences,
+            apply=lambda fixes: apply_text_repairs(text, fixes),
+            sentences_of=lambda doc: doc.sentences,
+            check=check,
+        )
+        if repaired is not None:
+            text, found = repaired, []
+    if isinstance(found, list) and found:
+        # A mismatch is a blocker, and a blocker means write it again: once,
+        # with the mismatches named, then check the new draft.
+        rewrites += [claim_issues(found)]
+        text = write(claims_feedback(found, document))
+        rewrites += list(getattr(text, "rejected", []))
+        found = check(getattr(text, "sentences", []))
+    return text, found, rewrites
 
 
 def _repair(config, ctx, profile, found, sentences, *, apply, sentences_of, check):
@@ -632,8 +820,15 @@ def length_issue(pages: float, length: ResumeLength):
     )
 
 
-def length_feedback(pages: float, length: ResumeLength) -> str:
-    if pages > length.limit:
+def length_feedback(pages: float, length: ResumeLength, *, long_profile: bool = False) -> str:
+    if pages > length.limit and long_profile:
+        # Spec 005: the longer PROFILE is the first thing to give back.
+        ask = (
+            f"It must come down to {length.low:g}-{length.high:g} pages: shorten "
+            "the PROFILE first, then drop the role bullets and earlier-career "
+            "lines that answer this ad least (bullets are copied verbatim)."
+        )
+    elif pages > length.limit:
         ask = (
             f"It must come down to {length.low:g}-{length.high:g} pages: drop the "
             "role bullets and earlier-career lines that answer this ad least, and "

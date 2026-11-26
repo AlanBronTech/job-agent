@@ -15,12 +15,15 @@ from jobagent.cli.estimate import print_estimate
 from jobagent.cli.history import render_company_history
 from jobagent.config import get_config
 from jobagent.core.generate import UnusedEntry
+from jobagent.core.models import ResumeKind
 from jobagent.core.store import StoreError
 from jobagent.core.validation import Severity, ValidationIssue
 from jobagent.services import documents
 from jobagent.services.documents import GenerationFailed
 from jobagent.services.refusals import (
     AlreadyGenerated,
+    MasterProfileMissing,
+    NoMasterForProfile,
     NoModel,
     NoSuchAd,
     NotScored,
@@ -57,6 +60,12 @@ def generate(
     no_master: bool = typer.Option(
         False, "--no-master",
         help="Do not copy a master into the job folder.",
+    ),
+    long_profile: bool = typer.Option(
+        False, "--long-profile",
+        help="Replace the resume's PROFILE with a longer one (up to 250 words) written "
+        "for this ad, for recruitment agencies. With a master (the default), a copy of "
+        "the master; with --custom or --no-master, a custom resume. Paid.",
     ),
     cover: bool = typer.Option(False, "--cover", help="Write a cover letter."),
     answers: Path | None = typer.Option(
@@ -123,10 +132,10 @@ def generate(
     if master and no_master:
         err_console.print("[bold red]--master and --no-master contradict each other.[/]")
         raise typer.Exit(code=2)
-    if not (resume or custom or master or cover or answers):
+    if not (resume or custom or master or cover or answers or long_profile):
         err_console.print(
             "[bold red]Nothing to generate.[/] Pass --resume, --custom, --master, "
-            "--cover, or --answers."
+            "--long-profile, --cover, or --answers."
         )
         raise typer.Exit(code=2)
 
@@ -138,13 +147,21 @@ def generate(
     ws = Workspace.from_config(config)
     today = date.today()
 
-    master_id, custom = _which_resume(ws, jd_id, resume=resume, custom=custom,
+    master_id, custom = _which_resume(ws, jd_id, resume=resume or long_profile, custom=custom,
                                       master=master, no_master=no_master)
+    resume_kind = None
+    if long_profile:
+        # Spec 005: the longer PROFILE goes on the master that would be copied,
+        # else on a custom resume.
+        resume_kind = ResumeKind.custom_profile if custom or master_id is None else ResumeKind.master_profile
+        if resume_kind is ResumeKind.custom_profile:
+            master_id, custom = None, True
+        _say_long_profile(ws, resume_kind, master_id)
 
     try:
         planned = documents.plan(
             ws, jd_id, resume=custom, cover=cover, answers=answers is not None, when=today,
-            master=master_id,
+            master=master_id, resume_kind=resume_kind,
         )
     except StoreError as exc:
         err_console.print(f"[bold red]{exc}[/]")
@@ -157,6 +174,12 @@ def generate(
             f"[bold red]JD {jd_id} has not been scored.[/] "
             f"Run `jobagent score {jd_id}` first — generation is shaped by the "
             "assessment."
+        )
+        raise typer.Exit(code=2)
+    except NoMasterForProfile as refusal:
+        err_console.print(
+            f"[bold red]No master to copy for this job.[/] {refusal.reason} Pass --master <id>, "
+            "or --custom --long-profile."
         )
         raise typer.Exit(code=2)
 
@@ -182,6 +205,7 @@ def generate(
             cover=cover,
             questions=questions,
             master=master_id,
+            resume_kind=resume_kind,
             overrule=force,
             supersede=supersede,
             overwrite=overwrite,
@@ -191,6 +215,7 @@ def generate(
                 config,
                 "generate",
                 resume=custom,
+                profile=resume_kind is ResumeKind.master_profile,
                 cover=cover,
                 answers=bool(questions),
                 check_claims=check_claims,
@@ -229,6 +254,12 @@ def generate(
     except NoModel as refusal:
         err_console.print(f"[bold red]No model available for generation.[/] {refusal.detail}")
         raise typer.Exit(code=2)
+    except MasterProfileMissing as refusal:
+        err_console.print(
+            f"[bold red]Cannot place a longer profile in the {refusal.master} master.[/] "
+            f"{refusal.detail} Nothing was spent."
+        )
+        raise typer.Exit(code=2)
     except GenerationFailed as failure:
         err_console.print(f"[bold red]{_FAILED[failure.stage]}[/] {failure.cause}")
         if failure.written:
@@ -250,12 +281,28 @@ def generate(
         console.print("\n[dim]Master copied unchanged; nothing was generated, so nothing to review.[/]")
         return
     _report(result.folder, result.written, result.issues, result.unused)
+    if result.resume_base is not None and result.resume_base[1]:
+        console.print(f"Resume: {documents.describe_base(ws, result.resume_base)}.")
     if result.resume_pages is not None:
         console.print(f"Resume: {result.resume_pages:.2f} pages, measured.")
     if result.copied_only:
         console.print("\n[dim]Master copied unchanged; nothing was generated, so nothing to review.[/]")
         return
     _report_readiness(result)
+
+
+def _say_long_profile(ws, resume_kind: ResumeKind, master_id: str | None) -> None:
+    """Which resume the longer profile goes on, said before anything is spent."""
+    from jobagent.services import masters
+
+    if resume_kind is ResumeKind.custom_profile:
+        console.print("[bold]Resume:[/] a custom resume with a longer profile (paid).")
+        return
+    label = next((m.label for m in masters.registry(ws) if m.id == master_id), master_id)
+    console.print(
+        f"[bold]Resume:[/] copy of the {label} master with a longer profile (paid); "
+        "the master itself is not changed."
+    )
 
 
 def _which_resume(ws, jd_id: int, *, resume: bool, custom: bool, master: str | None,
