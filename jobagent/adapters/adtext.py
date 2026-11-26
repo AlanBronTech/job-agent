@@ -13,6 +13,22 @@ Nothing in this module reads a file or makes a network request.
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
+# Webmail hosts. An email saved as PDF carries the mailbox's address in the
+# print footer, not the job's: every recruiter email printed from Gmail reads
+# https://mail.google.com/mail/u/0 (2026-11-26, two emails refused as JD 86).
+_MAILBOX_HOSTS = ("mail.google.com", "outlook.live.com", "outlook.office.com",
+                  "outlook.office365.com", "mail.yahoo.com")
+
+
+def is_mailbox_url(url: str | None) -> bool:
+    """True for a webmail address: it says where the ad was read, not which job it is."""
+    if not url:
+        return False
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in _MAILBOX_HOSTS)
+
 import re
 import unicodedata
 from dataclasses import dataclass
