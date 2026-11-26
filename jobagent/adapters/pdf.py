@@ -33,6 +33,7 @@ from pypdf import PdfReader
 
 from jobagent.adapters.adtext import (
     ExtractedAd,
+    is_mailbox_url,
     find_posting_metadata,
     isolate_ad,
     looks_truncated,
@@ -142,6 +143,7 @@ def _source_url(urls: list[str]) -> str | None:
     page one's footer into ".../4395924490/O". Five clean copies outvote it.
     A single-page print has no such vote and keeps whatever it has.
     """
+    urls = [url for url in urls if not is_mailbox_url(url)]
     if not urls:
         return None
     ranked = Counter(url.split("?")[0].rstrip("/") for url in urls)

@@ -317,9 +317,14 @@ def already_stored(conn, ad: AdInput) -> tuple[int, str] | None:
     """
     from jobagent.core.alerts import job_key
 
-    key = job_key(ad.source_url)
+    from jobagent.adapters.adtext import is_mailbox_url
+
+    # A mailbox address is where the ad was read, not which job it is: two
+    # recruiter emails printed from Gmail share it (2026-11-26).
+    url = None if is_mailbox_url(ad.source_url) else ad.source_url
+    key = job_key(url)
     for jd in store.list_jds(conn):
-        if ad.source_url and (jd.source_url == ad.source_url or (key and job_key(jd.source_url) == key)):
+        if url and (jd.source_url == url or (key and job_key(jd.source_url) == key)):
             return jd.id, "same job link"
         if ad.name and jd.source_file == ad.name:
             return jd.id, "same saved file"
